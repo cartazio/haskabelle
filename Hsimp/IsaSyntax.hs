@@ -1,21 +1,23 @@
-module IsaSyntax (
+module Hsimp.IsaSyntax (
                   Cmd(..), Theory(..),
                   TypeSpec(..), TypeSig(..), Type(..), 
-                  Name(..), Literal(..), Term(..)
+                  Name(..), Literal(..), Term(..), Assoc(..), Prio
                  ) where
 
 newtype Theory = Theory String
   deriving (Eq, Ord, Show)
 
-data Name      = QName   Theory String | Name String 
+data Name      = QName Theory String | Name String 
   deriving (Eq, Show)
 
 type VarName   = Name
 type ConName   = Name
-
+type OpName    = Name
 
 data Cmd = 
-    TheoryCmd Theory [Cmd]
+    Block [Cmd]
+
+    | TheoryCmd Theory [Cmd]
     --
     -- datatype ('a, 'b) typeconstr = Constr1 | Constr2 'a 'b 
     --
@@ -33,8 +35,22 @@ data Cmd =
     -- | "fib (Suc (Suc n)) = fib n + fib (Suc n)"
     --
     | FunCmd VarName TypeSig [(Pattern, Term)]
+    --
+    -- definition id :: "'a ⇒ 'a"
+    -- where 
+    --   "id a = a"
+    --
+    | DefinitionCmd VarName TypeSig (Pattern, Term)
+    | VarCmd Term Term
+    | InfixDeclCmd OpName Assoc Prio
     | Comment String
   deriving (Show)
+
+
+type Prio = Int
+
+data Assoc = AssocNone | AssocLeft | AssocRight
+  deriving (Show, Eq, Ord)
 
 type Pattern = [Term]
 
@@ -52,19 +68,23 @@ data Type = TyVar VarName
   deriving (Show)
 
 
-data Literal = Int Integer | Float Rational 
+data Literal = Int Integer
   deriving (Show)
 
 
 type Const = String
-type Op = Name
 
 data Term = Const ::: Type
           | Literal Literal
           | Var VarName
+          | Con VarName
           | Lambda (VarName, Type) Term 
           | App Term Term
+          | InfixApp Term Term Term
+          | If Term Term Term
           | Parenthesized Term
   deriving (Show)
 
 
+
+ 
