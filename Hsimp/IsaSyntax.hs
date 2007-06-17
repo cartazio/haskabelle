@@ -1,7 +1,9 @@
 module Hsimp.IsaSyntax (
                   Cmd(..), Theory(..),
                   TypeSpec(..), TypeSig(..), Type(..), 
-                  Name(..), Literal(..), Term(..), Assoc(..), Prio
+                  Name(..), Literal(..), Term(..), Assoc(..),
+                  Prio, ConSpec(..),
+                  cons, nil, list,
                  ) where
 
 newtype Theory = Theory String
@@ -19,10 +21,16 @@ data Cmd =
 
     | TheoryCmd Theory [Cmd]
     --
-    -- datatype ('a, 'b) typeconstr = Constr1 | Constr2 'a 'b 
+    -- datatype "('a, 'b) typeconstr" = Constr1 | Constr2 "'a list" 'b 
     --
-    | DatatypeCmd TypeSpec [(ConName, [Type])]
+    | DatatypeCmd TypeSpec [ConSpec]
+    -- 
+    -- record point
+    --   Xcoord :: int
+    --   Ycoord :: int
     --
+    | RecordCmd TypeSpec [(VarName, Type)]
+    -- 
     -- types 'a synonym1       = type1
     --       ('a, 'b) synonym2 = type2
     --
@@ -67,8 +75,10 @@ data Type = TyVar VarName
 
   deriving (Show)
 
+data ConSpec = Constructor ConName [Type]
+  deriving (Show)
 
-data Literal = Int Integer
+data Literal = Int Integer | String String
   deriving (Show)
 
 
@@ -78,13 +88,16 @@ data Term = Const ::: Type
           | Literal Literal
           | Var VarName
           | Con VarName
-          | Lambda (VarName, Type) Term 
+          | Lambda [Term] Term 
           | App Term Term
           | InfixApp Term Term Term
           | If Term Term Term
           | Parenthesized Term
+          | RecConstr VarName [(Name, Term)]
+          | RecUpdate Term [(Name, Term)]
   deriving (Show)
 
 
-
- 
+cons = Name "#"
+nil  = Name "[]"
+list = Name "list"

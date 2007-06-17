@@ -9,6 +9,10 @@ import Language.Haskell.Hsx
 
 import qualified Hsimp.IsaSyntax as Isa
 
+convertFile fp = readFile fp >>= (return . convertFileContents)
+
+cnvFile fp = readFile fp >>= cnvFileContents
+
 data Context    = Context 
     {
       -- alist of (function name, its type signature) 
@@ -17,12 +21,13 @@ data Context    = Context
       -- alist of (operator name, (its association kind, binding priority)
     , _optable     :: [(Isa.Name, (Isa.Assoc, Isa.Prio))]  
     , _warnings    :: [Warning]
-    , _currentExpr :: String
-    
+    , _backtrace   :: [String]
     }
 
-emptyContext = Context { _fsignatures = [], _optable = [], _warnings = [],
-                         _currentExpr = "" }
+emptyContext = Context { _fsignatures = [], 
+                         _optable     = [], 
+                         _warnings    = [],
+                         _backtrace   = [] }
 
 
 type FieldSurrogate field = (Context -> field, Context -> field -> Context)
@@ -30,7 +35,7 @@ type FieldSurrogate field = (Context -> field, Context -> field -> Context)
 fsignatures = (_fsignatures, \c f -> c { _fsignatures = f })
 optable     = (_optable,     \c f -> c { _optable     = f })
 warnings    = (_warnings,    \c f -> c { _warnings    = f })
-currentExpr = (_currentExpr, \c f -> c { _currentExpr = f })
+backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
 
 
 data ContextM v = ContextM (Context -> (v, Context)) 
@@ -73,8 +78,10 @@ warn :: String -> ContextM ()
 warn msg = updateContext warnings (\warnings -> warnings ++ [(Warning msg)])
       
 die :: String -> ContextM t
-die msg = do contextstr <- queryContext currentExpr
-             error (msg ++ "\n" ++ contextstr)
+die msg = do backtrace <- queryContext backtrace
+             error $ msg ++ "\n\n" 
+                         ++ "Backtrace:\n" 
+                         ++ foldr1 (++) (map (++"\n\n") (reverse backtrace))
 
 barf str obj = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
 
@@ -90,7 +97,8 @@ prettyShow obj = prettyShow' "foo" obj
 class Show a => Convert a b | a -> b where
     convert' :: (Convert a b) => a -> ContextM b
     convert  :: (Convert a b) => a -> ContextM b
-    convert hsexpr = withUpdatedContext currentExpr (\_ -> prettyShow' "context" hsexpr)
+    convert hsexpr = withUpdatedContext backtrace (\bt -> let frameName = "frame" ++ show (length bt)
+                                                          in prettyShow' frameName hsexpr : bt)
                           $ convert' hsexpr
 
 data Convertion a = ConvSuccess a [Warning] | ConvFailed String
@@ -98,13 +106,13 @@ data Convertion a = ConvSuccess a [Warning] | ConvFailed String
 
 converter                        :: ParseResult HsModule -> Convertion Isa.Cmd
 converter (ParseFailed loc msg)  = ConvFailed (show loc ++ " -- " ++ msg)
-converter (ParseOk parseRes)     = let ContextM cf = convert parseRes
+converter (ParseOk parseRes)     = let ContextM cf        = convert parseRes
                                        (result, context)  = cf emptyContext
                                    in ConvSuccess result (_warnings context)
 
 cnvFileContents str 
     = let (ConvSuccess res warnings) = converter (parseModule str)
-	  str2 = "warnings = " ++ show warnings ++ "\n" ++ "parseResult = " ++ show res
+	  str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
 	  (ParseOk foo) = parseModule str2
       in do putStrLn (prettyPrint foo)
 
@@ -138,8 +146,8 @@ instance Convert HsQName Isa.Name where
     convert' (Special spcon)   = convert spcon 
 
 instance Convert HsSpecialCon Isa.Name where
-    convert' (HsListCon)    = return (Isa.Name "[]")
-    convert' (HsCons)       = return (Isa.Name "cons")
+    convert' (HsListCon)    = return Isa.nil
+    convert' (HsCons)       = return Isa.cons
     convert' junk           = barf "HsSpecialCon -> Isa.Name" junk
 
 instance Convert HsAssoc Isa.Assoc where
@@ -156,16 +164,21 @@ instance Convert HsDecl Isa.Cmd where
              return (Isa.TypesCmd [(Isa.TypeSpec tyvars tycon, typ')])
 
     convert' (HsDataDecl _loc _context tyconN tyvarNs condecls _deriving)
-        = do tyvars    <- mapM convert tyvarNs
-             tycon     <- convert tyconN
-             condecls' <- mapM cnvt condecls
-             return (Isa.DatatypeCmd (Isa.TypeSpec tyvars tycon) condecls')
-           where cnvt (HsQualConDecl _loc _FIXME _context decl)
-                     = case decl of
-                         HsConDecl name types -> do name'  <- convert name
-                                                    tyvars <- mapM convert types
-                                                    return (name', tyvars)
-                         -- HsRecDecl ; FIXME: Record types.
+        = let unstrip (HsQualConDecl _loc _FIXME _context decl) = decl
+              decls = map unstrip condecls
+          in if isRecDecls decls then
+                 createRecordCmd tyconN tyvarNs decls
+             else do tyvars <- mapM convert tyvarNs
+                     tycon  <- convert tyconN
+                     decls' <- mapM cnvt decls
+                     return (Isa.DatatypeCmd (Isa.TypeSpec tyvars tycon) decls')
+                 where cnvt (HsConDecl name types) 
+                           = do name'  <- convert name
+                                tyvars <- mapM convert types
+                                return $ Isa.Constructor name' tyvars
+                       cnvt junk = barf ("Internal Error: " ++
+                                         "HsRecDecl should be dealt with elsewhere already.") 
+                                        junk
 
     convert' (HsInfixDecl _loc assoc prio ops)
         = do assoc' <- convert assoc
@@ -183,7 +196,7 @@ instance Convert HsDecl Isa.Cmd where
 
     convert' (HsFunBind matchs)
         = let (names, patterns, rhss) = unzip3 (map splitMatch matchs)
-          in do assert (and (map (== head names) (tail names))) (return ()) 
+          in do assert (all (== head names) (tail names)) (return ()) 
                 fname'    <- convert (names!!0)            -- as all names are equal, pick first one.
                 patterns' <- mapM (mapM convert) patterns  -- each pattern is a list of HsPat.
                 rhss'     <- mapM convert rhss
@@ -202,11 +215,33 @@ instance Convert HsDecl Isa.Cmd where
     convert' junk = barf "HsDecl -> Isa.Cmd" junk
 
 
+isRecDecls :: [HsConDecl] -> Bool
+isRecDecls decls 
+    = case decls of
+        -- We only support data decls with exactly one record
+        -- definition within it.
+        (HsRecDecl _ _):rest -> assert (null rest) True
+        decls                -> assert (all (not.isRecDecl) decls) False
+    where isRecDecl (HsRecDecl _ _) = True
+          isRecDecl _               = False
+
+createRecordCmd :: HsName -> [HsName] -> [HsConDecl] -> ContextM Isa.Cmd
+createRecordCmd tyconN tyvarNs [HsRecDecl name slots]
+    = do tycon  <- convert tyconN
+         tyvars <- mapM convert tyvarNs
+         slots' <- liftM concat (mapM cnvtSlot slots)
+         return $ Isa.RecordCmd (Isa.TypeSpec tyvars tycon) slots'
+    where cnvtSlot (names, typ)
+              = do names' <- mapM convert names
+                   typ'   <- convert typ
+                   return (zip names' (cycle [typ']))
+         
+
 instance Convert HsType Isa.Type where
     convert' (HsTyVar name)        = (convert name)  >>= (\n -> return (Isa.TyVar n))
     convert' (HsTyCon qname)       = (cnv qname)     >>= (\n -> return (Isa.TyCon n []))
-                                     where cnv (Special HsListCon) = return (Isa.Name "list") 
-                                           cnv (Special HsCons)    = return (Isa.Name "cons")
+                                     where cnv (Special HsListCon) = return Isa.list
+                                           cnv (Special HsCons)    = return Isa.cons
                                            cnv etc  = (convert etc)
 
     convert' (HsTyFun type1 type2) = do type1' <- convert type1
@@ -247,7 +282,8 @@ instance Convert HsBangType Isa.Type where
 -- reduce some code bloat. 
 --
 instance Convert HsPat Isa.Term where
-    convert' anything = convertHsPat anything >>= convert
+    convert' (HsPWildCard) = return $ Isa.Var (Isa.Name "_")
+    convert' anything      = convertHsPat anything >>= convert
 
 convertHsPat :: HsPat -> ContextM HsExp
 convertHsPat (HsPLit literal) = return $ HsLit literal
@@ -290,8 +326,9 @@ instance Convert HsOp Isa.Name where
     -- convert' junk = barf "HsOp -> Isa.Name" junk
 
 instance Convert HsLiteral Isa.Literal where
-    convert' (HsInt i) = return (Isa.Int i)
-    convert' junk = barf "HsLiteral -> Isa.Literal" junk
+    convert' (HsInt i)      = return (Isa.Int i)
+    convert' (HsString str) = return (Isa.String str)
+    convert' junk           = barf "HsLiteral -> Isa.Literal" junk
 
 
 instance Convert HsExp Isa.Term where
@@ -299,12 +336,27 @@ instance Convert HsExp Isa.Term where
     convert' (HsVar qname)     = (convert qname) >>= (\n -> return (Isa.Var n))
     convert' (HsCon qname)     = (convert qname) >>= (\n -> return (Isa.Con n))
     convert' (HsParen exp)     = (convert exp)   >>= (\e -> return (Isa.Parenthesized e))
-    convert' (HsList exps)     = convert_list exps
-                                 where convert_list [] = return $ Isa.Var (Isa.Name "[]")
-                                       convert_list (exp:exps) = do
-                                         exp' <- convert exp
-                                         exps' <- convert_list exps
-                                         return $ Isa.App (Isa.App (Isa.Var (Isa.Name ":")) exp') exps'
+    convert' (HsList exps)     = cnvList exps
+                                 where cnvList [] = return $ Isa.Var Isa.nil
+                                       cnvList (exp:exps) = do
+                                         exp'  <- convert exp
+                                         exps' <- cnvList exps
+                                         return $ Isa.App (Isa.App (Isa.Var Isa.cons) exp') exps'
+
+    convert' (HsRecConstr qname updates)
+        = do qname'   <- convert qname
+             updates' <- mapM convert updates
+             return $ Isa.RecConstr qname' updates'
+
+    convert' (HsRecUpdate exp updates)
+        = do exp'     <- convert exp
+             updates' <- mapM convert updates
+             return $ Isa.RecUpdate exp' updates'
+
+    convert' (HsLambda _loc pats exp)
+        = do pats'  <- mapM convert pats
+             exp'   <- convert exp
+             return $ Isa.Lambda pats' exp' 
 
 
     -- convert' (HsList [])       = return (Isa.Var (Isa.Name "[]"))
@@ -321,7 +373,7 @@ instance Convert HsExp Isa.Term where
     convert' orig@(HsInfixApp exp1 op exp2) 
         = do exp1' <- convert exp1
              exp2' <- convert exp2
-             op'   <- convert op
+3             op'   <- convert op
              fixup (Isa.InfixApp exp1' op' exp2')
 
     convert' (HsIf t1 t2 t3)
@@ -329,7 +381,6 @@ instance Convert HsExp Isa.Term where
              return (Isa.If t1' t2' t3')
                     
     convert' junk = barf "HsExp -> Isa.Term" junk
-
 
 
 fixup :: Isa.Term -> ContextM Isa.Term
@@ -346,7 +397,7 @@ fixup origExpr@(Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3)
                      die ("Associativity mismatch: " ++ (show op2) ++ " has " ++ (show assoc2)
                             ++ ", whereas " ++ (show op1) ++ " has " ++ (show assoc1) ++ ".")
                  else case assoc2 of
-                        Isa.AssocLeft  -> return (Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3) -- origExpr
+                        Isa.AssocLeft  -> return (Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3) -- i.e. origExpr
                         Isa.AssocRight -> return (Isa.InfixApp e1 op1 (Isa.InfixApp e2 op2 e3))
                         Isa.AssocNone  -> die ("No associativity for " ++ (show op2) ++ ", " ++ (show op1))
 fixup expr@(Isa.InfixApp _ _ _) = return expr
@@ -367,3 +418,10 @@ lookupSig fname
          case (lookup fname seensigs) of
            Nothing        -> die ("Missing function signature for " ++ (show fname) ++ " (FIXME)")
            Just signature -> return signature
+
+
+instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
+    convert' (HsFieldUpdate qname exp)
+        = do qname' <- convert qname
+             exp'   <- convert exp
+             return (qname', exp')
