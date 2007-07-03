@@ -7,16 +7,17 @@ Toplevel interface to importer.
 module Main (
   module Importer.Convert,
   module Importer.IsaSyntax,
-  module Importer.Printer, -- especially `pprint'
-  convertFile, cnvFile
+  module Importer.Printer,
+  convertFile, importFile, cnvFile
 ) where
 
-import System.Environment
-import Text.PrettyPrint
+import Control.Monad
+import System.Environment (getArgs)
+import Text.PrettyPrint (render)
 
 import Importer.Convert
-import Importer.IsaSyntax
-import Importer.Printer
+import Importer.IsaSyntax (Cmd)
+import Importer.Printer (pprint)
 
 -- The main function, takes a path to a Haskell source file and
 -- returns its convertion, that is an AST for Isar/HOL as defined in
@@ -30,19 +31,19 @@ import Importer.Printer
 --    do (ConvSuccess ast _) <- convertFile "/path/foo.hs"
 --       return (pprint ast)
 --
-convertFile :: FilePath -> IO (Convertion Importer.IsaSyntax.Cmd)
-convertFile fp = readFile fp >>= (return . convertFileContents)
+convertFile :: FilePath -> IO (Convertion Cmd)
+convertFile = liftM convertFileContents . readFile
 
--- Like `convertFile' but returns the textual representation of the
--- AST itself. 
-cnvFile :: FilePath -> IO String
-cnvFile fp = readFile fp >>= cnvFileContents
-
-importFile :: String -> String -> IO ()
+importFile :: FilePath -> FilePath -> IO ()
 importFile src dst = do
   ConvSuccess abstract _ <- convertFile src
   let concrete = (render . pprint) abstract ++ "\n"
   writeFile dst concrete
+
+-- Like `convertFile' but returns the textual representation of the
+-- AST itself. 
+cnvFile :: FilePath -> IO String
+cnvFile = liftM cnvFileContents . readFile
 
 main :: IO ()
 main = do
@@ -50,4 +51,3 @@ main = do
   case args of
     [src, dst] -> importFile src dst
     _ -> ioError (userError "exactly two arguments expected")
-  return ()

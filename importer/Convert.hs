@@ -16,10 +16,6 @@ import Language.Haskell.Hsx
 
 import qualified Importer.IsaSyntax as Isa
 
-convertFile fp = readFile fp >>= (return . convertFileContents)
-
-cnvFile fp = readFile fp >>= cnvFileContents
-
 data Context    = Context 
     {
       -- alist of (function name, its type signature) 
@@ -114,22 +110,21 @@ class Show a => Convert a b | a -> b where
 data Convertion a = ConvSuccess a [Warning] | ConvFailed String
   deriving (Eq, Ord, Show)
 
-converter                        :: ParseResult HsModule -> Convertion Isa.Cmd
-converter (ParseFailed loc msg)  = ConvFailed (show loc ++ " -- " ++ msg)
-converter (ParseOk parseRes)     = let ContextM cf        = convert parseRes
-                                       (result, context)  = cf emptyContext
-                                   in ConvSuccess result (_warnings context)
+converter :: ParseResult HsModule -> Convertion Isa.Cmd
+converter (ParseOk parseRes) = let
+    ContextM cf = convert parseRes
+    (result, context) = cf emptyContext
+  in ConvSuccess result (_warnings context)
+converter (ParseFailed loc msg) =
+  ConvFailed (show loc ++ " -- " ++ msg)
 
-cnvFileContents str 
-    = let (ConvSuccess res warnings) = converter (parseModule str)
-	  str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
-	  (ParseOk foo) = parseModule str2
-      in return (prettyPrint foo)
+convertFileContents = converter . parseModule
 
-convertFileContents str 
-    = converter (parseModule str)
-
-
+cnvFileContents str = let
+    (ConvSuccess res warnings) = convertFileContents str
+    str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
+    (ParseOk foo) = parseModule str2
+  in prettyPrint foo
 
 
 
