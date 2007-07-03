@@ -22,8 +22,9 @@ size :: Foo a -> Nat
 size (Tip a) = Succ Zero
 size (Pair x y) = plus (size x) (size y)
 
+cons :: a -> Foo a -> Foo a
 cons x (Tip y) = Pair (Tip x) (Tip y)
-cons x (Pair y z) = if less_eq (size x) (size y)
+cons x (Pair y z) = if less_eq (size y) (size z)
   then Pair (cons x y) z
   else Pair y (cons x z)
 

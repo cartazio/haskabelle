@@ -202,7 +202,7 @@ instance Printer Isa.Cmd where
                                 hsep (map pprint' pattern) <+> equals <+> pprint' term)
 
     pprint' (Isa.FunCmd vname tysig matchs)
-        = blankline $ 
+        = blankline $
           text "fun" <+> pprint' vname <+> text "::" <+> pprint' tysig $$
           text "where" $$
           vcat (zipWith (<+>) (space : repeat (char '|')) 

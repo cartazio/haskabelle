@@ -325,10 +325,9 @@ convertHsPat (HsPInfixApp pat1 qname pat2)
          pat2' <- convertHsPat pat2
          return $ HsInfixApp pat1' (HsQConOp qname) pat2'
 
-convertHsPat (HsPApp qname (pat1:pats))
-    = do pat1' <- convertHsPat pat1
-         pats' <- mapM convertHsPat pats
-         return $ foldl HsApp (HsApp (HsCon qname) pat1') pats'
+convertHsPat (HsPApp qname pats)
+    = do pats' <- mapM convertHsPat pats
+         return $ foldl HsApp (HsCon qname) pats'
 
 convertHsPat junk = barf "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" junk
 
