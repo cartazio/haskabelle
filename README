@@ -23,6 +23,6 @@ Examples:
 
     ex/src_hs
 
-Importing all examples:
+Importing all examples (to ex/dst_thy):
 
-    bin/test_all
+    bin/import_all
