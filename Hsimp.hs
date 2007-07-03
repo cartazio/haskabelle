@@ -1,10 +1,13 @@
 
-module Hsimp (
-    module Hsimp.Convert, 
-    module Hsimp.IsaSyntax,
-    module Hsimp.Printer, -- especially `pprint'
-    convertFile, cnvFile
- ) where
+module Main (
+  module Hsimp.Convert,
+  module Hsimp.IsaSyntax,
+  module Hsimp.Printer, -- especially `pprint'
+  convertFile, cnvFile
+) where
+
+import System.Environment
+import Text.PrettyPrint
 
 import Hsimp.Convert
 import Hsimp.IsaSyntax
@@ -30,4 +33,16 @@ convertFile fp = readFile fp >>= (return . convertFileContents)
 cnvFile :: FilePath -> IO String
 cnvFile fp = readFile fp >>= cnvFileContents
 
+importFile :: String -> String -> IO ()
+importFile src dst = do
+  ConvSuccess abstract _ <- convertFile src
+  let concrete = (render . pprint) abstract ++ "\n"
+  writeFile dst concrete
+
 main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [src, dst] -> importFile src dst
+    _ -> ioError (userError "exactly two arguments expected")
+  return ()
