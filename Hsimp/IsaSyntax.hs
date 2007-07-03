@@ -3,7 +3,7 @@ module Hsimp.IsaSyntax (
                   TypeSpec(..), TypeSig(..), Type(..), 
                   Name(..), Literal(..), Term(..), Assoc(..),
                   Prio, ConSpec(..),
-                  cons, nil, list,
+                  nil, consOp, pairOp, listOp, mknil, mkcons, mkpair, mkPairType
                  ) where
 
 newtype Theory = Theory String
@@ -42,14 +42,13 @@ data Cmd =
     -- | "fib (Suc 0) = 1"
     -- | "fib (Suc (Suc n)) = fib n + fib (Suc n)"
     --
-    | FunCmd VarName TypeSig [(Pattern, Term)]
+    | FunCmd VarName TypeSig [([Pat], Term)]
     --
     -- definition id :: "'a ⇒ 'a"
     -- where 
     --   "id a = a"
     --
-    | DefinitionCmd VarName TypeSig (Pattern, Term)
-    | VarCmd Term Term
+    | DefinitionCmd VarName TypeSig ([Pat], Term)
     | InfixDeclCmd OpName Assoc Prio
     | Comment String
   deriving (Show)
@@ -60,7 +59,7 @@ type Prio = Int
 data Assoc = AssocNone | AssocLeft | AssocRight
   deriving (Show, Eq, Ord)
 
-type Pattern = [Term]
+type Pat = Term
 
 data TypeSpec = TypeSpec [VarName] ConName
   deriving (Show)
@@ -71,7 +70,8 @@ data TypeSig = TypeSig Name Type
 data Type = TyVar VarName
           | TyCon ConName [Type]
           | TyFun Type Type
-          | TyApp Type Type  -- FIXME: maybe unneccesary
+          | TyApp Type Type
+          | TyTuple [Type]
 
   deriving (Show)
 
@@ -84,20 +84,28 @@ data Literal = Int Integer | String String
 
 type Const = String
 
-data Term = Const ::: Type
-          | Literal Literal
-          | Var VarName
+data Term = Literal Literal
+          | Var VarName 
           | Con VarName
           | Lambda [Term] Term 
           | App Term Term
-          | InfixApp Term Term Term
+          | InfixApp Term Term Term -- FIXME: Is only used as
+                                    -- immediate holding pace in
+                                    -- Convert.hs
           | If Term Term Term
           | Parenthesized Term
           | RecConstr VarName [(Name, Term)]
           | RecUpdate Term [(Name, Term)]
+          | Case Term [(Pat, Term)]
   deriving (Show)
 
+nil      = Name "[]"
+consOp   = Name "#"
+listOp   = Name "list"
+pairOp   = Name ("Isa.*")
 
-cons = Name "#"
-nil  = Name "[]"
-list = Name "list"
+mknil       = Var nil
+mkcons x y  = App (App (Var consOp) x) y
+mkpair x y  = App (App (Var pairOp) x) y
+
+mkPairType x y = TyApp (TyApp (TyVar pairOp) x) y

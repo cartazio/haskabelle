@@ -4,7 +4,9 @@ module Hsimp.Convert (Convertion(..), convertFileContents, cnvFileContents) wher
 import Control.Exception (assert) -- FIXME
 import Debug.Trace (trace)        -- FIXME
 
+import List
 import Monad
+import Random
 import Language.Haskell.Hsx
 
 import qualified Hsimp.IsaSyntax as Isa
@@ -19,15 +21,17 @@ data Context    = Context
       _fsignatures :: [(Isa.Name, Isa.TypeSig)]   
 
       -- alist of (operator name, (its association kind, binding priority)
-    , _optable     :: [(Isa.Name, (Isa.Assoc, Isa.Prio))]  
+    , _optable     :: [(Isa.Name, (Isa.Assoc, Isa.Prio))] 
     , _warnings    :: [Warning]
     , _backtrace   :: [String]
+    , _gensymcount :: Int
     }
 
 emptyContext = Context { _fsignatures = [], 
                          _optable     = [], 
                          _warnings    = [],
-                         _backtrace   = [] }
+                         _backtrace   = [],
+                         _gensymcount = 0 }
 
 
 type FieldSurrogate field = (Context -> field, Context -> field -> Context)
@@ -36,6 +40,7 @@ fsignatures = (_fsignatures, \c f -> c { _fsignatures = f })
 optable     = (_optable,     \c f -> c { _optable     = f })
 warnings    = (_warnings,    \c f -> c { _warnings    = f })
 backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
+gensymcount = (_gensymcount, \c f -> c { _gensymcount = f })
 
 
 data ContextM v = ContextM (Context -> (v, Context)) 
@@ -114,7 +119,7 @@ cnvFileContents str
     = let (ConvSuccess res warnings) = converter (parseModule str)
 	  str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
 	  (ParseOk foo) = parseModule str2
-      in do putStrLn (prettyPrint foo)
+      in return (prettyPrint foo)
 
 convertFileContents str 
     = converter (parseModule str)
@@ -147,7 +152,12 @@ instance Convert HsQName Isa.Name where
 
 instance Convert HsSpecialCon Isa.Name where
     convert' (HsListCon)    = return Isa.nil
-    convert' (HsCons)       = return Isa.cons
+    convert' (HsCons)       = return Isa.consOp
+    -- HOL only got pairs, and tuples are representated as nested pairs.
+    -- Thus we have no general n-tuple type or data constructor; we fetch
+    -- applications of those earlier, and transform them into something
+    -- we can handle instead.
+    convert' (HsTupleCon 2) = return Isa.pairOp
     convert' junk           = barf "HsSpecialCon -> Isa.Name" junk
 
 instance Convert HsAssoc Isa.Assoc where
@@ -158,14 +168,14 @@ instance Convert HsAssoc Isa.Assoc where
 
 instance Convert HsDecl Isa.Cmd where
     convert' (HsTypeDecl _loc tyconN tyvarNs typ)
-        = do tyvars <- (mapM convert tyvarNs) 
-             tycon  <- (convert tyconN)
-             typ'   <- (convert typ)
+        = do tyvars <- mapM convert tyvarNs
+             tycon  <- convert tyconN
+             typ'   <- convert typ
              return (Isa.TypesCmd [(Isa.TypeSpec tyvars tycon, typ')])
 
     convert' (HsDataDecl _loc _context tyconN tyvarNs condecls _deriving)
-        = let unstrip (HsQualConDecl _loc _FIXME _context decl) = decl
-              decls = map unstrip condecls
+        = let strip (HsQualConDecl _loc _FIXME _context decl) = decl
+              decls = map strip condecls
           in if isRecDecls decls then
                  createRecordCmd tyconN tyvarNs decls
              else do tyvars <- mapM convert tyvarNs
@@ -195,15 +205,16 @@ instance Convert HsDecl Isa.Cmd where
              return (Isa.Comment (prettyShow' "typeSigs" newsigs)) -- show type sigs in comment; FIXME
 
     convert' (HsFunBind matchs)
-        = let (names, patterns, rhss) = unzip3 (map splitMatch matchs)
+        = let (names, patterns, rhss, wbinds) = unzip4 (map splitMatch matchs)
           in do assert (all (== head names) (tail names)) (return ()) 
                 fname'    <- convert (names!!0)            -- as all names are equal, pick first one.
                 patterns' <- mapM (mapM convert) patterns  -- each pattern is a list of HsPat.
                 rhss'     <- mapM convert rhss
+                wbinds'   <- liftM concat $ mapM convert wbinds -- FIXME: alpha convert (also: rhss)
                 fsig      <- lookupSig fname'
-                return (Isa.FunCmd fname' fsig (zip patterns' rhss'))
-            where splitMatch (HsMatch _loc name patterns rhs _wherebinds)
-                      = (name, patterns, rhs)
+                return $ Isa.Block (wbinds' ++ [Isa.FunCmd fname' fsig (zip patterns' rhss')])
+            where splitMatch (HsMatch _loc name patterns rhs wherebind)
+                      = (name, patterns, rhs, wherebind)
 
     convert' (HsPatBind _loc pat@(HsPVar name) rhs _wherebinds)
         = do name' <- convert name
@@ -215,11 +226,17 @@ instance Convert HsDecl Isa.Cmd where
     convert' junk = barf "HsDecl -> Isa.Cmd" junk
 
 
+instance Convert HsBinds [Isa.Cmd] where
+    convert' (HsBDecls decls) = mapM convert decls
+
 isRecDecls :: [HsConDecl] -> Bool
 isRecDecls decls 
     = case decls of
-        -- We only support data decls with exactly one record
-        -- definition within it.
+        -- Haskell allows that a data declaration may be mixed up arbitrarily
+        -- by normal data constructor declarations and record declarations.
+        -- As HOL does not support that kind of mishmash, we require that a
+        -- data declaration either consists of exactly one record definition,
+        -- or arbitrarily many data constructor definitions.
         (HsRecDecl _ _):rest -> assert (null rest) True
         decls                -> assert (all (not.isRecDecl) decls) False
     where isRecDecl (HsRecDecl _ _) = True
@@ -240,8 +257,10 @@ createRecordCmd tyconN tyvarNs [HsRecDecl name slots]
 instance Convert HsType Isa.Type where
     convert' (HsTyVar name)        = (convert name)  >>= (\n -> return (Isa.TyVar n))
     convert' (HsTyCon qname)       = (cnv qname)     >>= (\n -> return (Isa.TyCon n []))
-                                     where cnv (Special HsListCon) = return Isa.list
-                                           cnv (Special HsCons)    = return Isa.cons
+                                     -- Type constructors may be differently named than 
+                                     -- their respective data constructors.
+                                     where cnv (Special HsListCon) = return Isa.listOp
+                                           cnv (Special HsCons)    = return Isa.consOp
                                            cnv etc  = (convert etc)
 
     convert' (HsTyFun type1 type2) = do type1' <- convert type1
@@ -269,6 +288,14 @@ instance Convert HsType Isa.Type where
                          Isa.TyCon con [] -> return $ Isa.TyCon con tyargs' 
               grovel junk _ = barf "HsType -> Isa.Type (grovel HsTyApp)" junk
 
+    convert' (HsTyTuple Boxed types)
+        = do types' <- mapM convert types
+             return $ Isa.TyTuple types'
+
+    -- convert' (HsTyTuple Boxed types) 
+    --     = do types' <- mapM convert types 
+    --          return $ foldr1 Isa.mkPairType types'
+
     convert' junk = barf "HsType -> Isa.Type" junk
 
 instance Convert HsBangType Isa.Type where
@@ -278,8 +305,9 @@ instance Convert HsBangType Isa.Type where
 
 
 -- As we convert to Isa.Term anyway, we can translate each HsPat
--- type to a HsExp first, and then convert that on in order to
--- reduce some code bloat. 
+-- type to a HsExp first, and then convert that in order to
+-- reduce some code bloat. (Although it comes at cost of making
+-- backtraces a bit confusing perhaps.)
 --
 instance Convert HsPat Isa.Term where
     convert' (HsPWildCard) = return $ Isa.Var (Isa.Name "_")
@@ -331,17 +359,35 @@ instance Convert HsLiteral Isa.Literal where
     convert' junk           = barf "HsLiteral -> Isa.Literal" junk
 
 
+instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
+    convert' (HsFieldUpdate qname exp)
+        = do qname' <- convert qname
+             exp'   <- convert exp
+             return (qname', exp')
+
+
+instance Convert HsAlt (Isa.Term, Isa.Term) where
+    convert' (HsAlt _loc pat (HsUnGuardedAlt exp) _wherebinds)
+        = do pat' <- convert pat; exp' <- convert exp; return (pat', exp')
+
+
 instance Convert HsExp Isa.Term where
-    convert' (HsLit lit)       = (convert lit)   >>= (\l -> return (Isa.Literal l))
-    convert' (HsVar qname)     = (convert qname) >>= (\n -> return (Isa.Var n))
-    convert' (HsCon qname)     = (convert qname) >>= (\n -> return (Isa.Con n))
-    convert' (HsParen exp)     = (convert exp)   >>= (\e -> return (Isa.Parenthesized e))
-    convert' (HsList exps)     = cnvList exps
-                                 where cnvList [] = return $ Isa.Var Isa.nil
-                                       cnvList (exp:exps) = do
-                                         exp'  <- convert exp
-                                         exps' <- cnvList exps
-                                         return $ Isa.App (Isa.App (Isa.Var Isa.cons) exp') exps'
+    convert' (HsLit lit)       = convert lit   >>= (\l -> return (Isa.Literal l))
+    convert' (HsVar qname)     = convert qname >>= (\n -> return (Isa.Var n))
+    convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Con n))
+    convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
+
+    convert' (HsApp exp1 exp2) 
+        = do exp1' <- cnv exp1 ; exp2' <- cnv exp2
+             return (Isa.App exp1' exp2')
+          where cnv (HsCon (Special (HsTupleCon n))) = makeTupleDataCon n
+                cnv etc = convert etc
+
+    convert' app@(HsInfixApp exp1 op exp2) 
+        = fixInfixApp app >>= (return . infix2prefix)
+          where infix2prefix (Isa.InfixApp exp1 op exp2)
+                    = Isa.App (Isa.App op (infix2prefix exp1)) (infix2prefix exp2)
+                infix2prefix etc = etc
 
     convert' (HsRecConstr qname updates)
         = do qname'   <- convert qname
@@ -356,38 +402,88 @@ instance Convert HsExp Isa.Term where
     convert' (HsLambda _loc pats exp)
         = do pats'  <- mapM convert pats
              exp'   <- convert exp
-             return $ Isa.Lambda pats' exp' 
+             if all isVar pats' then return $ Isa.Lambda pats' exp'
+                                else makePatternMatchingLambda pats' exp'
+          where isVar (Isa.Var _) = True
+                isVar _           = False
 
+    convert' (HsList []) = return (Isa.Var (Isa.Name "[]"))
+    convert' (HsList exps)     
+        = do exps' <- mapM convert exps
+             return $ foldr Isa.mkcons Isa.mknil exps'
 
-    -- convert' (HsList [])       = return (Isa.Var (Isa.Name "[]"))
-    -- convert' (HsList exps)     = do exps' <- mapM convert exps
-    --                                 let exp1'  = head exps'
-    --                                 let exps'  = tail exps'
-    --                                 let listOp = (Isa.Var (Isa.Name "[]"))
-    --                                 return (foldl Isa.App (Isa.App listOp exp1') exps')
+    convert' (HsTuple exps)
+        = do exps' <- mapM convert exps
+             return $ foldr1 Isa.mkpair exps' 
                                     
-    convert' (HsApp exp1 exp2) 
-        = do exp1' <- convert exp1; exp2' <- convert exp2
-             return (Isa.App exp1' exp2')
-
-    convert' orig@(HsInfixApp exp1 op exp2) 
-        = do exp1' <- convert exp1
-             exp2' <- convert exp2
-3             op'   <- convert op
-             fixup (Isa.InfixApp exp1' op' exp2')
-
     convert' (HsIf t1 t2 t3)
         = do t1' <- convert t1; t2' <- convert t2; t3' <- convert t3
              return (Isa.If t1' t2' t3')
+
+    convert' (HsCase exp alts)
+        = do exp'  <- convert exp
+             alts' <- mapM convert alts
+             return $ Isa.Case exp' alts'
                     
     convert' junk = barf "HsExp -> Isa.Term" junk
 
 
-fixup :: Isa.Term -> ContextM Isa.Term
 
+gensym :: String -> ContextM String
+gensym prefix = do count <- queryContext gensymcount
+                   updateContext gensymcount (\count -> count + 1)
+                   return $ prefix ++ (show count)
+
+genvar :: String -> ContextM Isa.Term
+genvar prefix = gensym prefix >>= (\sym -> return $ Isa.Var (Isa.Name sym))
+
+
+-- Since HOL doesn't have true n-tuple constructors (it uses nested
+-- pairs to represent n-tuples), we simply return a lambda expression
+-- that takes n parameters and constructs the nested pairs within its
+-- body.
+makeTupleDataCon :: Int -> ContextM Isa.Term
+makeTupleDataCon n
+    = do args <- mapM genvar (replicate n "_arg") 
+         return $ Isa.Parenthesized (Isa.Lambda args (foldr1 Isa.mkpair args))
+
+-- HOL does not support pattern matching directly within a lambda
+-- expression, so we transform a `HsLambda pat1 pat2 .. patn -> body' to
+--
+--   Isa.Lambda g1 . 
+--     Isa.Case g1 of pat1' => 
+--       Isa.Lambda g2 . 
+--         Isa.Case g2 of pat2' => ... => Isa.Lambda gn . 
+--                                          Isa.Case gn of patn' => body'
+-- 
+--   where g1, ..., gn are fresh identifiers.
+--
+makePatternMatchingLambda :: [Isa.Term] -> Isa.Term -> ContextM Isa.Term
+makePatternMatchingLambda patterns theBody
+    = foldM mkMatchingLambda theBody (reverse patterns) -- foldM is a left fold.
+      where mkMatchingLambda body pat 
+                = do g <- (genvar "_arg")
+                     return $ Isa.Lambda [g] (Isa.Case g [(pat, body)])
+
+
+-- Hsx parses every infix application simply from left to right without
+-- taking operator associativity or binding priority into account. So
+-- we gotta fix that up ourselves. (We also properly consider infix
+-- declarations to get user defined operator right.) 
+fixInfixApp :: HsExp -> ContextM Isa.Term
+
+fixInfixApp (HsInfixApp exp1 op exp2)
+    = do exp1' <- fixInfixApp exp1
+         exp2' <- fixInfixApp exp2
+         op'   <- convert op
+         fixup (Isa.InfixApp exp1' op' exp2')
+         
+fixInfixApp expr = convert expr
+
+fixup :: Isa.Term -> ContextM Isa.Term
 fixup origExpr@(Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3)
     -- (e1 `op1` e2) `op2` e3,  where we assume that (e1 `op1` e2) is correct
-    -- already; so we have just to find the proper place for (`op2` e3).
+    -- already; so we have just to find the proper place for the (`op2` e3).
     = do (assoc1, prio1) <- lookupOp op1
          (assoc2, prio2) <- lookupOp op2
          case prio2 `compare` prio1 of
@@ -419,9 +515,3 @@ lookupSig fname
            Nothing        -> die ("Missing function signature for " ++ (show fname) ++ " (FIXME)")
            Just signature -> return signature
 
-
-instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
-    convert' (HsFieldUpdate qname exp)
-        = do qname' <- convert qname
-             exp'   <- convert exp
-             return (qname', exp')
