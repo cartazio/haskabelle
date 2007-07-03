@@ -1,0 +1,16 @@
+This is XYZ, an importer from Haskell source files to HOL Isar theories.
+
+To get it run, install the following:
+
+    GHC:
+        http://www.haskell.org/ghc/
+
+    Happy:
+        http://www.haskell.org/happy/
+
+    HSX:
+        http://www.cs.chalmers.se/~d00nibro/haskell-src-exts/
+
+Sources of the importer itself are available from SVN:
+
+    svn+ssh://haftmann@atbroy100.informatik.tu-muenchen.de/home/wiss/haftmann/repos/shared/trunk/hsimp

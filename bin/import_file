@@ -1,0 +1,4 @@
+#!/bin/bash
+
+EXECPATH="$(dirname "$0")/.."
+runhaskell -fglasgow-exts "$EXECPATH/Hsimp"

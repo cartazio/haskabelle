@@ -1,12 +1,12 @@
 theory Tree
-imports Main
+imports Main Pretty_Char
 begin
 
 text {*
   A small theory of search trees:
 *}
 
-class ordered =
+class ordered = type +
   fixes below :: "'a \<Rightarrow> 'a \<Rightarrow> bool" (infixl "\<^loc>\<preceq>" 50)
   assumes refl [iff]: "x \<^loc>\<preceq> x"
   and antisym: "x \<^loc>\<preceq> y \<Longrightarrow> y \<^loc>\<preceq> x \<Longrightarrow> x = y"
@@ -42,6 +42,6 @@ fun
   example :: "nat \<Rightarrow> (nat, string) searchtree" where
   "example n = update (n, ''bar'') (Leaf 0 ''foo'')"
 
-code_gen find update example (Haskell -)  -- {* replace "-" by directory name *}
+code_gen find update example in Haskell file -  -- {* replace "-" by directory name *}
 
 end

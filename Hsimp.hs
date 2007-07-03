@@ -30,3 +30,4 @@ convertFile fp = readFile fp >>= (return . convertFileContents)
 cnvFile :: FilePath -> IO String
 cnvFile fp = readFile fp >>= cnvFileContents
 
+main :: IO ()
