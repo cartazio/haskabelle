@@ -1,23 +1,28 @@
+{-  ID:         $Id$
+    Author:     Tobias C. Rittweiler, TU Munich
+
+Toplevel interface to importer.
+-}
 
 module Main (
-  module Hsimp.Convert,
-  module Hsimp.IsaSyntax,
-  module Hsimp.Printer, -- especially `pprint'
+  module Importer.Convert,
+  module Importer.IsaSyntax,
+  module Importer.Printer, -- especially `pprint'
   convertFile, cnvFile
 ) where
 
 import System.Environment
 import Text.PrettyPrint
 
-import Hsimp.Convert
-import Hsimp.IsaSyntax
-import Hsimp.Printer
+import Importer.Convert
+import Importer.IsaSyntax
+import Importer.Printer
 
 -- The main function, takes a path to a Haskell source file and
 -- returns its convertion, that is an AST for Isar/HOL as defined in
--- Hsimp.IsaSyntax.
+-- Importer.IsaSyntax.
 --
--- The AST can then be feed to the pretty printer (Hsimp.Printer.pprint)
+-- The AST can then be feed to the pretty printer (Importer.Printer.pprint)
 -- to return a Text.PrettyPrinter.doc datum.
 --
 -- E.g.
@@ -25,7 +30,7 @@ import Hsimp.Printer
 --    do (ConvSuccess ast _) <- convertFile "/path/foo.hs"
 --       return (pprint ast)
 --
-convertFile :: FilePath -> IO (Convertion Hsimp.IsaSyntax.Cmd)
+convertFile :: FilePath -> IO (Convertion Importer.IsaSyntax.Cmd)
 convertFile fp = readFile fp >>= (return . convertFileContents)
 
 -- Like `convertFile' but returns the textual representation of the

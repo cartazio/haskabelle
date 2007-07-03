@@ -1,4 +1,10 @@
-module Hsimp.IsaSyntax (
+{-  ID:         $Id$
+    Author:     Tobias C. Rittweiler, TU Munich
+
+Abstract syntactic representation of Isar/HOL theory.
+-}
+
+module Importer.IsaSyntax (
                   Cmd(..), Theory(..),
                   TypeSpec(..), TypeSig(..), Type(..), 
                   Name(..), Literal(..), Term(..), Assoc(..),

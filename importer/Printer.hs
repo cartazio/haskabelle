@@ -1,7 +1,12 @@
+{-  ID:         $Id$
+    Author:     Tobias C. Rittweiler, TU Munich
 
-module Hsimp.Printer where
+Pretty printing of abstract Isar/HOL theory.
+-}
 
-import qualified Hsimp.IsaSyntax as Isa
+module Importer.Printer where
+
+import qualified Importer.IsaSyntax as Isa
 
 
 import Control.Exception (assert)

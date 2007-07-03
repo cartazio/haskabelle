@@ -15,7 +15,7 @@ DST="$2"
 [ -z "$DST" ] && fail "no target file given"
 
 cd "$EXECPATH"
-ghc -fglasgow-exts --make --make -o import_file_bin Hsimp.hs || exit $?
+ghc -fglasgow-exts --make --make -o import_file_bin Importer.hs || exit $?
 
 echo "Importing $SRC to $DST..."
 ./import_file_bin "$SRC" "$DST"

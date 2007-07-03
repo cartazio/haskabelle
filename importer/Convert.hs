@@ -1,5 +1,10 @@
+{-  ID:         $Id$
+    Author:     Tobias C. Rittweiler, TU Munich
 
-module Hsimp.Convert (Convertion(..), convertFileContents, cnvFileContents) where
+Conversion from abstract Haskell code to abstract Isar/HOL theory.
+-}
+
+module Importer.Convert (Convertion(..), convertFileContents, cnvFileContents) where
 
 import Control.Exception (assert) -- FIXME
 import Debug.Trace (trace)        -- FIXME
@@ -9,7 +14,7 @@ import Monad
 import Random
 import Language.Haskell.Hsx
 
-import qualified Hsimp.IsaSyntax as Isa
+import qualified Importer.IsaSyntax as Isa
 
 convertFile fp = readFile fp >>= (return . convertFileContents)
 
