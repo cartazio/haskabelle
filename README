@@ -14,3 +14,15 @@ To get it run, install the following:
 Sources of the importer itself are available from SVN:
 
     svn+ssh://haftmann@atbroy100.informatik.tu-muenchen.de/home/wiss/haftmann/repos/shared/trunk/hsimp
+
+Using the importer:
+
+    bin/import_file <SRC>.hs <DST>.thy
+
+Examples:
+
+    ex/src_hs
+
+Importing all examples:
+
+    bin/test_all
