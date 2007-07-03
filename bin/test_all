@@ -1,0 +1,21 @@
+#!/bin/bash
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+EXECPATH="$(dirname "$0")/.."
+
+[ -z "$EXECPATH" ] && fail "$0 must be called with absolute path"
+
+cd "$EXECPATH"
+
+for SRC in ex/src_hs/*
+do
+  DST=ex/dst_thy/"$(basename "$SRC" .hs)"
+  echo ./bin/import_file "$SRC" "$DST"
+done
+
+
