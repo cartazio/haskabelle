@@ -14,8 +14,6 @@ cd "$EXECPATH"
 
 for SRC in ex/src_hs/*
 do
-  DST=ex/dst_thy/"$(basename "$SRC" .hs)"
-  echo ./bin/import_file "$SRC" "$DST"
+  DST=ex/dst_thy/"$(basename "$SRC" .hs)".thy
+  ./bin/import_file "$SRC" "$DST"
 done
-
-
