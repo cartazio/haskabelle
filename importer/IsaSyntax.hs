@@ -6,37 +6,38 @@ Abstract syntactic representation of Isar/HOL theory.
 
 module Importer.IsaSyntax (
                   Cmd(..), Theory(..),
-                  TypeSpec(..), TypeSig(..), Type(..), 
+                  TypeSpec(..), TypeSig(..), Type(..),
                   Name(..), Literal(..), Term(..), Assoc(..),
                   Prio, ConSpec(..),
-                  nil, consOp, pairOp, listOp, mknil, mkcons, mkpair, mkPairType
+                  tname_pair, cname_pair,
+                  tname_list, cname_nil, cname_cons
                  ) where
 
 newtype Theory = Theory String
   deriving (Eq, Ord, Show)
 
-data Name      = QName Theory String | Name String 
+data Name      = QName Theory String | Name String
   deriving (Eq, Show)
 
 type VarName   = Name
 type ConName   = Name
 type OpName    = Name
 
-data Cmd = 
+data Cmd =
     Block [Cmd]
 
     | TheoryCmd Theory [Cmd]
     --
-    -- datatype "('a, 'b) typeconstr" = Constr1 | Constr2 "'a list" 'b 
+    -- datatype "('a, 'b) typeconstr" = Constr1 | Constr2 "'a list" 'b
     --
     | DatatypeCmd TypeSpec [ConSpec]
-    -- 
+    --
     -- record point
     --   Xcoord :: int
     --   Ycoord :: int
     --
     | RecordCmd TypeSpec [(VarName, Type)]
-    -- 
+    --
     -- types 'a synonym1       = type1
     --       ('a, 'b) synonym2 = type2
     --
@@ -51,7 +52,7 @@ data Cmd =
     | FunCmd VarName TypeSig [([Pat], Term)]
     --
     -- definition id :: "'a ⇒ 'a"
-    -- where 
+    -- where
     --   "id a = a"
     --
     | DefinitionCmd VarName TypeSig ([Pat], Term)
@@ -91,27 +92,24 @@ data Literal = Int Integer | String String
 type Const = String
 
 data Term = Literal Literal
-          | Var VarName 
-          | Con VarName
-          | Lambda [Term] Term 
+          | Var VarName -- FIXME: proper representation of constants
+          | Con VarName -- FIXME: distinction Var/Con is not necessary
+          | Lambda [Term] Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
           | App Term Term
           | InfixApp Term Term Term -- FIXME: Is only used as
-                                    -- immediate holding pace in
+                                    -- intermediate holding pace in
                                     -- Convert.hs
           | If Term Term Term
-          | Parenthesized Term
+          | Parenthesized Term -- FIXME: should also be only intermediate
           | RecConstr VarName [(Name, Term)]
           | RecUpdate Term [(Name, Term)]
           | Case Term [(Pat, Term)]
   deriving (Show)
 
-nil      = Name "[]"
-consOp   = Name "#"
-listOp   = Name "list"
-pairOp   = Name ("Isa.*")
+-- FIXME place this into some kind of "Haskell system compatibility file"
+tname_pair  = Name "Prelude.*"
+cname_pair  = Name "Prelude.(,)"
 
-mknil       = Var nil
-mkcons x y  = App (App (Var consOp) x) y
-mkpair x y  = App (App (Var pairOp) x) y
-
-mkPairType x y = TyApp (TyApp (TyVar pairOp) x) y
+tname_list  = Name "Prelude.[]"
+cname_nil   = Name "Prelude.[]"
+cname_cons  = Name "Prelude.:"

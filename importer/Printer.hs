@@ -6,6 +6,8 @@ Pretty printing of abstract Isar/HOL theory.
 
 module Importer.Printer where
 
+import Importer.General
+
 import qualified Importer.IsaSyntax as Isa
 
 
@@ -105,7 +107,7 @@ braces d       = d >>= return . P.braces
 quotes d       = d >>= return . P.quotes
 doubleQuotes d = d >>= return . P.doubleQuotes
 
-bananas d      = text "(|" <+> d <+> text "|)" 
+bananas d      = text "(|" <+> d <+> text "|)"
 blankline d    = space $$ d
 
 parensIf :: Bool -> Doc -> Doc
@@ -113,9 +115,9 @@ parensIf True  = parens
 parensIf False = id
 
 maybeWithinHOL :: Doc -> Doc
-maybeWithinHOL d    
+maybeWithinHOL d   
     = do within_p <- queryPP withinHOL
-         if within_p then d 
+         if within_p then d
                      else do updatePP (\pps -> pps { withinHOL = True })
                              result <- doubleQuotes d
                              updatePP (\pps -> pps { withinHOL = False })
@@ -155,7 +157,7 @@ punctuate p (d1:ds) = go d1 ds
                           go d (e:es) = (d <> p) : go e es
 
 accentuate :: Doc -> [Doc] -> [Doc]
-accentuate d list = map (d<>) list 
+accentuate d list = map (d<>) list
 
 indent = 3
 
@@ -166,7 +168,7 @@ class Printer a where
     pprint  :: a -> P.Doc
     pprint obj = let DocM sf          = pprint' obj
                      (result, _state) = sf emptyPPState
-                     doc              = result 
+                     doc              = result
                  in doc
 
 
@@ -181,7 +183,7 @@ instance Printer Isa.Cmd where
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $
-          text "datatype" <+> pprint' tyspec 
+          text "datatype" <+> pprint' tyspec
           <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
                                   (map pp dataspecs))
           where pp (Isa.Constructor con types) = hsep $ pprint' con : map pprint' types
@@ -194,26 +196,26 @@ instance Printer Isa.Cmd where
 
     pprint' (Isa.DefinitionCmd vname tysig matching)
         = case matching of
-            (pattern, term) 
+            (pattern, term)
                 -> blankline $
                    text "definition" <+> pprint' vname <+> text "::" <+> pprint' tysig $$
                    text "where" $$
-                   space <+> (maybeWithinHOL $ 
+                   space <+> (maybeWithinHOL $
                                 hsep (map pprint' pattern) <+> equals <+> pprint' term)
 
     pprint' (Isa.FunCmd vname tysig matchs)
         = blankline $
           text "fun" <+> pprint' vname <+> text "::" <+> pprint' tysig $$
           text "where" $$
-          vcat (zipWith (<+>) (space : repeat (char '|')) 
+          vcat (zipWith (<+>) (space : repeat (char '|'))
                               (map pp matchs))
-          where pp (pattern, term) = maybeWithinHOL $ 
+          where pp (pattern, term) = maybeWithinHOL $
                                        pprint' vname <+> hsep (map pprint' pattern) <+> equals <+> pprint' term
-  
-    pprint' (Isa.InfixDeclCmd op assoc prio) 
+ 
+    pprint' (Isa.InfixDeclCmd op assoc prio)
         = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op
-          where pp Isa.AssocNone  = text "" 
-                pp Isa.AssocLeft  = text "l" 
+          where pp Isa.AssocNone  = text ""
+                pp Isa.AssocLeft  = text "l"
                 pp Isa.AssocRight = text "r"
 
 instance Printer Isa.Theory where
@@ -233,15 +235,15 @@ instance Printer Isa.Name where
 instance Printer Isa.Type where
     pprint' (Isa.TyVar vname) = apostroph <> pprint' vname
 
-    pprint' (Isa.TyCon cname []) = pprint' cname 
-    pprint' (Isa.TyCon cname tyvars) 
+    pprint' (Isa.TyCon cname []) = pprint' cname
+    pprint' (Isa.TyCon cname tyvars)
         = maybeWithinHOL $
             hsep (map pprint' tyvars) <+> pprint' cname
 
-    pprint' (Isa.TyFun t1 t2) 
+    pprint' (Isa.TyFun t1 t2)
         = maybeWithinHOL $
             case t1 of Isa.TyFun _ _ -> parens (pprint' t1) <+> text "=>" <+> pprint' t2
-                       _             -> pprint' t1          <+> text "=>" <+> pprint' t2 
+                       _             -> pprint' t1          <+> text "=>" <+> pprint' t2
 
     pprint' (Isa.TyTuple types)
         = maybeWithinHOL $
@@ -250,7 +252,7 @@ instance Printer Isa.Type where
     pprint' junk = error ("+++ JUNK: " ++ (show junk))
 
 instance Printer Isa.TypeSig where
-    pprint' (Isa.TypeSig _name typ) = pprint' typ 
+    pprint' (Isa.TypeSig _name typ) = pprint' typ
 
 instance Printer Isa.Literal where
     pprint' (Isa.Int i)      = integer i
@@ -262,20 +264,21 @@ instance Printer Isa.Term where
     pprint' (Isa.Literal lit)       = pprint' lit
     pprint' (Isa.Parenthesized t)   = parens $ pprint' t
 
-    pprint' app@(Isa.App t1 t2) 
-        | isListApp app             = pprintListApp app
-        | isTupleApp app            = pprintTupleApp app
-        | True                      = pprint' t1 <+> parensIf (isCompound t2) (pprint' t2)
+    pprint' app @ (Isa.App t1 t2)   = case stripListApp app of
+      Just ts -> pprintListApp ts
+      Nothing -> case stripTupleApp app of
+        Just ts -> pprintTupleApp ts
+        Nothing -> pprint' t1 <+> parensIf (isCompound t2) (pprint' t2)
 
     pprint' (Isa.InfixApp t1 op t2) = parensIf (isCompound t1) (pprint' t1)
-                                      <+> pprint' op 
+                                      <+> pprint' op
                                       <+> parensIf (isCompound t2) (pprint' t2)
 
     pprint' (Isa.If t1 t2 t3)       = fsep [text "if",   pprint' t1,
                                             text "then", pprint' t2,
                                             text "else", pprint' t3]
 
-    pprint' (Isa.Lambda vars body)  = fsep [text "%" <+> hsep (map pprint' vars) <+> dot, 
+    pprint' (Isa.Lambda vars body)  = fsep [text "%" <+> hsep (map pprint' vars) <+> dot,
                                             nest 2 (pprint' body)]
 
     pprint' (Isa.RecConstr recordN updates)
@@ -287,7 +290,7 @@ instance Printer Isa.Term where
           where pp (vname, typ) = pprint' vname <+> text ":=" <+> pprint' typ
 
     pprint' (Isa.Case term matchs)
-         = hang (text "case" <+> pprint' term <+> text "of") 
+         = hang (text "case" <+> pprint' term <+> text "of")
                 2
                 (vcat $ zipWith (<+>) (space : repeat (char '|'))
                                       (map pp matchs))
@@ -295,39 +298,31 @@ instance Printer Isa.Term where
 
 
 isCompound :: Isa.Term -> Bool
-isCompound t = case t of 
+isCompound t = case t of
                 Isa.Var _           -> False
                 Isa.Con _           -> False
                 Isa.Literal _       -> False
                 Isa.Parenthesized _ -> False
                 _                   -> True
 
--- FIXME: Needs some refactoring.
+stripListApp :: Isa.Term -> Maybe [Isa.Term]
+stripListApp t = case dest_comb_right destCons t of
+  (ts, Isa.Var c) | c == Isa.cname_nil -> Just ts
+  _ -> Nothing
+  where
+    destCons (Isa.App (Isa.App (Isa.Var c) x) xs) | c == Isa.cname_cons = Just (x, xs)
+    destCons _ = Nothing
 
-isListApp :: Isa.Term -> Bool
-isListApp t = case t of
-                Isa.Var name
-                    | name == Isa.nil      -> True
-                Isa.App (Isa.App (Isa.Var fname) _) tl 
-                    | fname == Isa.consOp  -> isListApp tl
-                _ -> False 
+pprintListApp :: [Isa.Term] -> DocM P.Doc
+pprintListApp = brackets . hsep . punctuate comma . map pprint'
 
-pprintListApp :: Isa.Term -> DocM P.Doc
-pprintListApp term = brackets . hsep . punctuate comma . map pprint' $ grovelListApp term
-    where grovelListApp :: Isa.Term -> [Isa.Term]
-          grovelListApp (Isa.Var name) 
-              | name  == Isa.nil     = []
-          grovelListApp (Isa.App (Isa.App (Isa.Var fname) hd) tl)
-              | fname == Isa.consOp  = hd : grovelListApp tl
+stripTupleApp :: Isa.Term -> Maybe [Isa.Term]
+stripTupleApp t = case dest_comb_right_improper destPair t of
+  [t] -> Nothing
+  ts -> Just ts
+  where
+    destPair (Isa.App (Isa.App (Isa.Var c) x) xs) | c == Isa.cname_pair = Just (x, xs)
+    destPair _ = Nothing
 
-isTupleApp :: Isa.Term -> Bool
-isTupleApp t = case t of Isa.App (Isa.App (Isa.Var fname) _) _ 
-                             | fname == Isa.pairOp  -> True
-                         _                          -> False
-
-pprintTupleApp :: Isa.Term -> DocM P.Doc
-pprintTupleApp term = parens . hsep . punctuate comma . map pprint' $ grovelTupelApp term
-    where grovelTupelApp :: Isa.Term -> [Isa.Term]
-          grovelTupelApp (Isa.App (Isa.App (Isa.Var fname) elem) rest)
-              | fname == Isa.pairOp  = elem : grovelTupelApp rest
-          grovelTupelApp lastElem = [lastElem]
+pprintTupleApp :: [Isa.Term] -> DocM P.Doc
+pprintTupleApp = parens . hsep . punctuate comma . map pprint'
