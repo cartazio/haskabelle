@@ -275,19 +275,18 @@ instance Convert HsType Isa.Type where
     --       
     --        ==> Isa.TyCon T [(Isa.TyVar a), (Isa.TyVar b)]   
     --
-    convert' tyapp@(HsTyApp _ _) = grovel tyapp [] -- flattens chain of type application.
-        where grovel :: HsType -> [HsType] -> ContextM Isa.Type
-              grovel (HsTyApp tyapp@(HsTyApp _ _) tyarg) tyargs
-                  -- Innermost type argument in a chain of type application
-                  -- was the first/leftmost type argument given in the original
-                  -- textual representation. So we _gotta_ append onto the end:
-                  = grovel tyapp (tyargs ++ [tyarg])
-              grovel (HsTyApp tycon@(HsTyCon _) tyarg) tyargs
-                  = do tycon'  <- convert tycon
-                       tyargs' <- mapM convert (tyargs ++ [tyarg])
-                       case tycon' of
-                         Isa.TyCon con [] -> return $ Isa.TyCon con tyargs'
-              grovel junk _ = barf "HsType -> Isa.Type (grovel HsTyApp)" junk
+    convert' tyapp @ (HsTyApp _ _) =
+      let
+        destTyApp (HsTyApp ty1 ty2) = Just (ty1, ty2)
+        destTyApp _ = Nothing
+        (ty1, tys) = dest_comb_left destTyApp tyapp
+      in do
+        tyco <- case ty1 of
+          HsTyCon tyco -> return tyco
+          _ -> barf "HsType -> Isa.Type (HsTyApp)" tyapp
+        tyco' <- convert tyco
+        tys' <- mapM convert tys
+        return $ Isa.TyCon tyco' tys' 
 
     convert' (HsTyTuple Boxed types)
         = do types' <- mapM convert types

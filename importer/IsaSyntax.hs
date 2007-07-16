@@ -9,6 +9,7 @@ module Importer.IsaSyntax (
                   TypeSpec(..), TypeSig(..), Type(..),
                   Name(..), Literal(..), Term(..), Assoc(..),
                   Prio, ConSpec(..),
+                  tname_bool,
                   tname_pair, cname_pair,
                   tname_list, cname_nil, cname_cons
                  ) where
@@ -77,7 +78,6 @@ data TypeSig = TypeSig Name Type
 data Type = TyVar VarName
           | TyCon ConName [Type]
           | TyFun Type Type
-          | TyApp Type Type
           | TyTuple [Type]
 
   deriving (Show)
@@ -107,9 +107,11 @@ data Term = Literal Literal
   deriving (Show)
 
 -- FIXME place this into some kind of "Haskell system compatibility file"
-tname_pair  = Name "Prelude.*"
-cname_pair  = Name "Prelude.(,)"
+tname_bool  = Name "Bool" -- FIXME
 
-tname_list  = Name "Prelude.[]"
-cname_nil   = Name "Prelude.[]"
-cname_cons  = Name "Prelude.:"
+tname_pair  = QName (Theory "Prelude") "*"
+cname_pair  = QName (Theory "Prelude") "(,)"
+
+tname_list  = QName (Theory "Prelude") "[]"
+cname_nil   = QName (Theory "Prelude") "[]"
+cname_cons  = QName (Theory "Prelude") ":"

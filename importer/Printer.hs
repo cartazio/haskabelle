@@ -183,7 +183,7 @@ instance Printer Isa.Cmd where
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $
-          text "datatype" <+> pprint' tyspec
+          text "datatype" <+> pprint' tyspec --FIXME tyspec in this case has to be treated differently
           <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
                                   (map pp dataspecs))
           where pp (Isa.Constructor con types) = hsep $ pprint' con : map pprint' types
@@ -235,10 +235,13 @@ instance Printer Isa.Name where
 instance Printer Isa.Type where
     pprint' (Isa.TyVar vname) = apostroph <> pprint' vname
 
-    pprint' (Isa.TyCon cname []) = pprint' cname
-    pprint' (Isa.TyCon cname tyvars)
+    pprint' (Isa.TyCon cname []) -- FIXME only an ad-hoc hack
+      | cname == Isa.tname_bool =   text "bool"
+      | otherwise =                 pprint' cname
+    pprint' (Isa.TyCon cname tyvars) -- FIXME only an ad-hoc hack
         = maybeWithinHOL $
-            hsep (map pprint' tyvars) <+> pprint' cname
+            hsep (map pprint' tyvars) <+> if cname == Isa.tname_list
+              then text "list" else pprint' cname
 
     pprint' (Isa.TyFun t1 t2)
         = maybeWithinHOL $
@@ -249,7 +252,7 @@ instance Printer Isa.Type where
         = maybeWithinHOL $
             hsep (punctuate (space<>asterisk) (map pprint' types))
 
-    pprint' junk = error ("+++ JUNK: " ++ (show junk))
+    pprint' junk = error $ "+++ JUNK: " ++ show junk
 
 instance Printer Isa.TypeSig where
     pprint' (Isa.TypeSig _name typ) = pprint' typ
