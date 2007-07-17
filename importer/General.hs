@@ -6,32 +6,30 @@ Generic functions
 
 module Importer.General where
 
--- FIXME: perhaps names should follow Haskell conventions: splitLast, combLeft etc.
+splitLast :: [a] -> ([a], a)
+splitLast xs = (init xs, last xs)
 
-split_last :: [a] -> ([a], a)
-split_last xs = (init xs, last xs)
+combLeft :: (a -> b -> a) -> a -> [b] -> a
+combLeft = foldl
 
-comb_left :: (a -> b -> a) -> a -> [b] -> a
-comb_left = foldl
+combRight :: (a -> b -> b) -> [a] -> b -> b
+combRight = flip . foldr
 
-comb_right :: (a -> b -> b) -> [a] -> b -> b
-comb_right = flip . foldr
+combRightImproper :: (a -> a -> a) -> [a] -> a
+combRightImproper f xs = combRight f xs' x where (xs', x) = splitLast xs
 
-comb_right_improper :: (a -> a -> a) -> [a] -> a
-comb_right_improper f xs = comb_right f xs' x where (xs', x) = split_last xs
-
-dest_comb_left :: (a -> Maybe (a, b)) -> a -> (a, [b])
-dest_comb_left f = dest [] where
+destCombLeft :: (a -> Maybe (a, b)) -> a -> (a, [b])
+destCombLeft f = dest [] where
   dest ys x = case f x of
     Nothing -> (x, ys)
     Just (x', y) -> dest (y : ys) x'
 
-dest_comb_right :: (b -> Maybe (a, b)) -> b -> ([a], b)
-dest_comb_right f y = case f y of
+destCombRight :: (b -> Maybe (a, b)) -> b -> ([a], b)
+destCombRight f y = case f y of
   Nothing -> ([], y)
-  Just (x, y') -> (x : xs, y'') where (xs, y'') = dest_comb_right f y'
+  Just (x, y') -> (x : xs, y'') where (xs, y'') = destCombRight f y'
 
-dest_comb_right_improper :: (a -> Maybe (a, a)) -> a -> [a]
-dest_comb_right_improper f x = case f x of
+destCombRightImproper :: (a -> Maybe (a, a)) -> a -> [a]
+destCombRightImproper f x = case f x of
   Nothing -> [x]
-  Just (x1, x2) -> x1 : dest_comb_right_improper f x2
+  Just (x1, x2) -> x1 : destCombRightImproper f x2

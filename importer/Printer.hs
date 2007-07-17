@@ -236,11 +236,11 @@ instance Printer Isa.Type where
     pprint' (Isa.TyVar vname) = apostroph <> pprint' vname
 
     pprint' (Isa.TyCon cname []) -- FIXME only an ad-hoc hack
-      | cname == Isa.tname_bool =   text "bool"
+      | cname == Isa.tnameBool =   text "bool"
       | otherwise =                 pprint' cname
     pprint' (Isa.TyCon cname tyvars) -- FIXME only an ad-hoc hack
         = maybeWithinHOL $
-            hsep (map pprint' tyvars) <+> if cname == Isa.tname_list
+            hsep (map pprint' tyvars) <+> if cname == Isa.tnameList
               then text "list" else pprint' cname
 
     pprint' (Isa.TyFun t1 t2)
@@ -309,22 +309,22 @@ isCompound t = case t of
                 _                   -> True
 
 stripListApp :: Isa.Term -> Maybe [Isa.Term]
-stripListApp t = case dest_comb_right destCons t of
-  (ts, Isa.Var c) | c == Isa.cname_nil -> Just ts
+stripListApp t = case destCombRight destCons t of
+  (ts, Isa.Var c) | c == Isa.cnameNil -> Just ts
   _ -> Nothing
   where
-    destCons (Isa.App (Isa.App (Isa.Var c) x) xs) | c == Isa.cname_cons = Just (x, xs)
+    destCons (Isa.App (Isa.App (Isa.Var c) x) xs) | c == Isa.cnameCons = Just (x, xs)
     destCons _ = Nothing
 
 pprintListApp :: [Isa.Term] -> DocM P.Doc
 pprintListApp = brackets . hsep . punctuate comma . map pprint'
 
 stripTupleApp :: Isa.Term -> Maybe [Isa.Term]
-stripTupleApp t = case dest_comb_right_improper destPair t of
+stripTupleApp t = case destCombRightImproper destPair t of
   [t] -> Nothing
   ts -> Just ts
   where
-    destPair (Isa.App (Isa.App (Isa.Var c) x) xs) | c == Isa.cname_pair = Just (x, xs)
+    destPair (Isa.App (Isa.App (Isa.Var c) x) xs) | c == Isa.cnamePair = Just (x, xs)
     destPair _ = Nothing
 
 pprintTupleApp :: [Isa.Term] -> DocM P.Doc

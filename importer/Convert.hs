@@ -153,13 +153,13 @@ instance Convert HsQName Isa.Name where
     convert' (Special spcon)   = convert spcon
 
 instance Convert HsSpecialCon Isa.Name where
-    convert' HsListCon      = return Isa.cname_nil
-    convert' HsCons         = return Isa.cname_cons
+    convert' HsListCon      = return Isa.cnameNil
+    convert' HsCons         = return Isa.cnameCons
     -- HOL only got pairs, and tuples are representated as nested pairs.
     -- Thus we have no general n-tuple type or data constructor; we fetch
     -- occurences of those earlier, and transform them into something
     -- we can handle instead.
-    convert' (HsTupleCon 2) = return Isa.cname_pair
+    convert' (HsTupleCon 2) = return Isa.cnamePair
     convert' junk           = barf "HsSpecialCon -> Isa.Name" junk
 
 instance Convert HsAssoc Isa.Assoc where
@@ -261,7 +261,7 @@ instance Convert HsType Isa.Type where
     convert' (HsTyCon qname)       = (cnv qname)     >>= (\n -> return (Isa.TyCon n []))
                                      -- Type constructors may be differently named than
                                      -- their respective data constructors.
-                                     where cnv (Special HsListCon) = return Isa.tname_list
+                                     where cnv (Special HsListCon) = return Isa.tnameList
                                            cnv etc  = (convert etc)
 
     convert' (HsTyFun type1 type2) = do type1' <- convert type1
@@ -279,7 +279,7 @@ instance Convert HsType Isa.Type where
       let
         destTyApp (HsTyApp ty1 ty2) = Just (ty1, ty2)
         destTyApp _ = Nothing
-        (ty1, tys) = dest_comb_left destTyApp tyapp
+        (ty1, tys) = destCombLeft destTyApp tyapp
       in do
         tyco <- case ty1 of
           HsTyCon tyco -> return tyco
@@ -406,16 +406,16 @@ instance Convert HsExp Isa.Term where
           where isVar (Isa.Var _) = True
                 isVar _           = False
 
-    convert' (HsList []) = return (Isa.Var Isa.cname_nil)
+    convert' (HsList []) = return (Isa.Var Isa.cnameNil)
     convert' (HsList exps)
         = do exps' <- mapM convert exps
-             return $ comb_right mk_cons exps' (Isa.Var Isa.cname_nil)
-                where mk_cons t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cname_cons) t1) t2
+             return $ combRight mkCons exps' (Isa.Var Isa.cnameNil)
+                where mkCons t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cnameCons) t1) t2
 
     convert' (HsTuple exps)
         = do exps' <- mapM convert exps
-             return $ comb_right_improper mk_pair exps'
-                where mk_pair t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cname_pair) t1) t2
+             return $ combRightImproper mkPair exps'
+                where mkPair t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cnamePair) t1) t2
 
     convert' (HsIf t1 t2 t3)
         = do t1' <- convert t1; t2' <- convert t2; t3' <- convert t3
@@ -448,8 +448,8 @@ genvar prefix = gensym prefix >>= (\sym -> return $ Isa.Var (Isa.Name sym))
 makeTupleDataCon :: Int -> ContextM Isa.Term
 makeTupleDataCon n
     = do args <- mapM genvar (replicate n "_arg")
-         return $ Isa.Parenthesized (Isa.Lambda args (comb_right_improper mk_pair args))
-            where mk_pair t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cname_pair) t1) t2
+         return $ Isa.Parenthesized (Isa.Lambda args (combRightImproper mkPair args))
+            where mkPair t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cnamePair) t1) t2
 
 -- HOL does not support pattern matching directly within a lambda
 -- expression, so we transform a `HsLambda pat1 pat2 .. patn -> body' to
