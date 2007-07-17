@@ -279,7 +279,7 @@ instance Convert HsType Isa.Type where
       let
         destTyApp (HsTyApp ty1 ty2) = Just (ty1, ty2)
         destTyApp _ = Nothing
-        (ty1, tys) = destCombLeft destTyApp tyapp
+        (ty1, tys) = destLeft destTyApp tyapp
       in do
         tyco <- case ty1 of
           HsTyCon tyco -> return tyco

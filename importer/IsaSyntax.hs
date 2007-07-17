@@ -9,9 +9,9 @@ module Importer.IsaSyntax (
                   TypeSpec(..), TypeSig(..), Type(..),
                   Name(..), Literal(..), Term(..), Assoc(..),
                   Prio, ConSpec(..),
-                  tname_bool,
-                  tname_pair, cname_pair,
-                  tname_list, cname_nil, cname_cons
+                  tnameBool,
+                  tnamePair, cnamePair,
+                  tnameList, cnameNil, cnameCons
                  ) where
 
 newtype Theory = Theory String
@@ -107,11 +107,11 @@ data Term = Literal Literal
   deriving (Show)
 
 -- FIXME place this into some kind of "Haskell system compatibility file"
-tname_bool  = Name "Bool" -- FIXME
+tnameBool  = Name "Bool" -- FIXME
 
-tname_pair  = QName (Theory "Prelude") "*"
-cname_pair  = QName (Theory "Prelude") "(,)"
+tnamePair  = QName (Theory "Prelude") "*"
+cnamePair  = QName (Theory "Prelude") "(,)"
 
-tname_list  = QName (Theory "Prelude") "[]"
-cname_nil   = QName (Theory "Prelude") "[]"
-cname_cons  = QName (Theory "Prelude") ":"
+tnameList  = QName (Theory "Prelude") "[]"
+cnameNil   = QName (Theory "Prelude") "[]"
+cnameCons  = QName (Theory "Prelude") ":"

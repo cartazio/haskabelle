@@ -309,7 +309,7 @@ isCompound t = case t of
                 _                   -> True
 
 stripListApp :: Isa.Term -> Maybe [Isa.Term]
-stripListApp t = case destCombRight destCons t of
+stripListApp t = case destRight destCons t of
   (ts, Isa.Var c) | c == Isa.cnameNil -> Just ts
   _ -> Nothing
   where
@@ -320,7 +320,7 @@ pprintListApp :: [Isa.Term] -> DocM P.Doc
 pprintListApp = brackets . hsep . punctuate comma . map pprint'
 
 stripTupleApp :: Isa.Term -> Maybe [Isa.Term]
-stripTupleApp t = case destCombRightImproper destPair t of
+stripTupleApp t = case destRightImproper destPair t of
   [t] -> Nothing
   ts -> Just ts
   where
