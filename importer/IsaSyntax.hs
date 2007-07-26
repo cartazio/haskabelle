@@ -11,7 +11,9 @@ module Importer.IsaSyntax (
                   Prio, ConSpec(..),
                   tnameBool,
                   tnamePair, cnamePair,
-                  tnameList, cnameNil, cnameCons
+                  tnameList, cnameNil, cnameCons,
+                  mknil, mkcons, mkpair,
+                  isNil, isCons, isPairCon
                  ) where
 
 newtype Theory = Theory String
@@ -112,6 +114,16 @@ tnameBool  = Name "Bool" -- FIXME
 tnamePair  = QName (Theory "Prelude") "*"
 cnamePair  = QName (Theory "Prelude") "(,)"
 
-tnameList  = QName (Theory "Prelude") "[]"
+tnameList  = QName (Theory "Prelude") "list"
 cnameNil   = QName (Theory "Prelude") "[]"
 cnameCons  = QName (Theory "Prelude") ":"
+
+mknil       = Var cnameNil
+mkcons x y  = App (App (Var cnameCons) x) y
+mkpair x y  = App (App (Var cnamePair) x) y
+
+
+isPairCon x = x == cnamePair
+isCons    x = x == cnameCons
+isNil     x = x == cnameNil
+

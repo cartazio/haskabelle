@@ -6,7 +6,7 @@ Conversion from abstract Haskell code to abstract Isar/HOL theory.
 
 module Importer.Convert (Convertion(..), convertFileContents, cnvFileContents) where
 
-import Importer.General
+import Importer.Utilities
 
 import Control.Exception (assert) -- FIXME
 import Debug.Trace (trace)        -- FIXME
@@ -262,7 +262,7 @@ instance Convert HsType Isa.Type where
                                      -- Type constructors may be differently named than
                                      -- their respective data constructors.
                                      where cnv (Special HsListCon) = return Isa.tnameList
-                                           cnv etc  = (convert etc)
+                                           cnv etc  = convert etc
 
     convert' (HsTyFun type1 type2) = do type1' <- convert type1
                                         type2' <- convert type2
@@ -275,18 +275,45 @@ instance Convert HsType Isa.Type where
     --       
     --        ==> Isa.TyCon T [(Isa.TyVar a), (Isa.TyVar b)]   
     --
-    convert' tyapp @ (HsTyApp _ _) =
-      let
-        destTyApp (HsTyApp ty1 ty2) = Just (ty1, ty2)
-        destTyApp _ = Nothing
-        (ty1, tys) = destLeft destTyApp tyapp
-      in do
-        tyco <- case ty1 of
-          HsTyCon tyco -> return tyco
-          _ -> barf "HsType -> Isa.Type (HsTyApp)" tyapp
-        tyco' <- convert tyco
-        tys' <- mapM convert tys
-        return $ Isa.TyCon tyco' tys' 
+
+    convert' tyapp@(HsTyApp _ _) 
+        = do let tycon:tyvars = unfoldl1 split tyapp
+             tycon'  <- convert tycon
+             tyvars' <- mapM convert tyvars
+             return $ case tycon' of Isa.TyCon n [] -> Isa.TyCon n tyvars'
+          where split (HsTyApp tyapp x) = Just (x, tyapp)
+                split (HsTyCon _)       = Nothing         -- Note that this HsTyCon will
+                split junk                                --  become head of the returned list.
+                    = error ("HsType -> Isa.Type (split HsTyApp)" ++ (show junk))
+
+
+-- grovel tyapp [] -- flattens chain of type application.
+--         where grovel :: HsType -> [HsType] -> ContextM Isa.Type
+--               grovel (HsTyApp tyapp@(HsTyApp _ _) tyarg) tyargs
+--                   -- Innermost type argument in a chain of type application
+--                   -- was the first/leftmost type argument given in the original
+--                   -- textual representation. So we _gotta_ append onto the end:
+--                   = grovel tyapp (tyargs ++ [tyarg])
+--               grovel (HsTyApp tycon@(HsTyCon _) tyarg) tyargs
+--                   = do tycon'  <- convert tycon 
+--                        tyargs' <- mapM convert (tyargs ++ [tyarg])
+--                        case tycon' of 
+--                          Isa.TyCon con [] -> return $ Isa.TyCon con tyargs' 
+--               grovel junk _ = barf "HsType -> Isa.Type (grovel HsTyApp)" junk
+    
+
+    -- convert' tyapp @ (HsTyApp _ _) =
+    --   let
+    --     destTyApp (HsTyApp ty1 ty2) = Just (ty1, ty2)
+    --     destTyApp _ = Nothing
+    --     (ty1, tys) = destLeft destTyApp tyapp
+    --   in do
+    --     tyco <- case ty1 of
+    --       HsTyCon tyco -> return tyco
+    --       _ -> barf "HsType -> Isa.Type (HsTyApp)" tyapp
+    --     tyco' <- convert tyco
+    --     tys' <- mapM convert tys
+    --     return $ Isa.TyCon tyco' tys' 
 
     convert' (HsTyTuple Boxed types)
         = do types' <- mapM convert types
@@ -409,13 +436,11 @@ instance Convert HsExp Isa.Term where
     convert' (HsList []) = return (Isa.Var Isa.cnameNil)
     convert' (HsList exps)
         = do exps' <- mapM convert exps
-             return $ combRight mkCons exps' (Isa.Var Isa.cnameNil)
-                where mkCons t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cnameCons) t1) t2
+             return $ foldr Isa.mkcons Isa.mknil exps' 
 
     convert' (HsTuple exps)
         = do exps' <- mapM convert exps
-             return $ combRightImproper mkPair exps'
-                where mkPair t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cnamePair) t1) t2
+             return $ foldr1 Isa.mkpair exps'
 
     convert' (HsIf t1 t2 t3)
         = do t1' <- convert t1; t2' <- convert t2; t3' <- convert t3
@@ -448,8 +473,7 @@ genvar prefix = gensym prefix >>= (\sym -> return $ Isa.Var (Isa.Name sym))
 makeTupleDataCon :: Int -> ContextM Isa.Term
 makeTupleDataCon n
     = do args <- mapM genvar (replicate n "_arg")
-         return $ Isa.Parenthesized (Isa.Lambda args (combRightImproper mkPair args))
-            where mkPair t1 t2 = Isa.App (Isa.App (Isa.Var Isa.cnamePair) t1) t2
+         return $ Isa.Parenthesized (Isa.Lambda args (foldr1 Isa.mkpair args))
 
 -- HOL does not support pattern matching directly within a lambda
 -- expression, so we transform a `HsLambda pat1 pat2 .. patn -> body' to

@@ -6,7 +6,7 @@ Pretty printing of abstract Isar/HOL theory.
 
 module Importer.Printer where
 
-import Importer.General
+import Importer.Utilities
 
 import qualified Importer.IsaSyntax as Isa
 
@@ -14,12 +14,10 @@ import qualified Importer.IsaSyntax as Isa
 import Control.Exception (assert)
 import Debug.Trace (trace)
 
-import List
 import qualified Text.PrettyPrint as P
 
 
 data PPState = PPState { withinHOL :: Bool }
-
 
 data DocM v = DocM (PPState -> (v, PPState))
 
@@ -230,18 +228,17 @@ instance Printer Isa.TypeSpec where
 
 instance Printer Isa.Name where
     pprint' (Isa.Name str) = text str
-    pprint' (Isa.QName thy str) = pprint' thy <> dot <> text str
+    --pprint' (Isa.QName thy str) = pprint' thy <> dot <> text str
+    pprint' (Isa.QName thy str) = text str -- FIXME
 
 instance Printer Isa.Type where
     pprint' (Isa.TyVar vname) = apostroph <> pprint' vname
 
-    pprint' (Isa.TyCon cname []) -- FIXME only an ad-hoc hack
-      | cname == Isa.tnameBool =   text "bool"
-      | otherwise =                 pprint' cname
-    pprint' (Isa.TyCon cname tyvars) -- FIXME only an ad-hoc hack
+    pprint' (Isa.TyCon cname []) = pprint' cname 
+    pprint' (Isa.TyCon cname tyvars) 
         = maybeWithinHOL $
-            hsep (map pprint' tyvars) <+> if cname == Isa.tnameList
-              then text "list" else pprint' cname
+               hsep (map pp tyvars) <+> pprint' cname
+          where pp tyvar = parensIf (isCompoundType tyvar) (pprint' tyvar)
 
     pprint' (Isa.TyFun t1 t2)
         = maybeWithinHOL $
@@ -267,22 +264,25 @@ instance Printer Isa.Term where
     pprint' (Isa.Literal lit)       = pprint' lit
     pprint' (Isa.Parenthesized t)   = parens $ pprint' t
 
-    pprint' app @ (Isa.App t1 t2)   = case stripListApp app of
-      Just ts -> pprintListApp ts
-      Nothing -> case stripTupleApp app of
-        Just ts -> pprintTupleApp ts
-        Nothing -> pprint' t1 <+> parensIf (isCompound t2) (pprint' t2)
+    pprint' app @ (Isa.App t1 t2)   
+        = case categorizeApp app of
+            ListApp  l      -> pprintAsList l
+            TupleApp l      -> pprintAsTuple l
+            InfixApp x op y -> let x' = parensIf (isCompound x) $ pprint' x
+                                   y' = parensIf (isCompound y) $ pprint' y
+                               in  x' <+> pprint' op <+> y'
+            MiscApp         -> pprint' t1 <+> parensIf (isCompound t2) (pprint' t2)
 
-    pprint' (Isa.InfixApp t1 op t2) = parensIf (isCompound t1) (pprint' t1)
-                                      <+> pprint' op
-                                      <+> parensIf (isCompound t2) (pprint' t2)
+    pprint' (Isa.InfixApp t1 op t2) = error "Internal error: pprint' (Isa.InfixApp _ _ _)"
 
-    pprint' (Isa.If t1 t2 t3)       = fsep [text "if",   pprint' t1,
-                                            text "then", pprint' t2,
-                                            text "else", pprint' t3]
+    pprint' (Isa.If t1 t2 t3)
+        = fsep [text "if"   <+> pprint' t1,
+                text "then" <+> pprint' t2,
+                text "else" <+> pprint' t3]
 
-    pprint' (Isa.Lambda vars body)  = fsep [text "%" <+> hsep (map pprint' vars) <+> dot,
-                                            nest 2 (pprint' body)]
+    pprint' (Isa.Lambda vars body)
+        = fsep [text "%" <+> hsep (map pprint' vars) <+> dot,
+                nest 2 (pprint' body)]
 
     pprint' (Isa.RecConstr recordN updates)
         = pprint' recordN <+> (bananas . vcat . punctuate comma $ map pp updates)
@@ -300,32 +300,63 @@ instance Printer Isa.Term where
            where pp (pat, term) = (pprint' pat) <+> text "=>" <+> pprint' term
 
 
+pprintAsList :: [Isa.Term] -> DocM P.Doc
+pprintAsList = brackets . hsep . punctuate comma . map pprint'
+
+pprintAsTuple :: [Isa.Term] -> DocM P.Doc
+pprintAsTuple = parens . hsep . punctuate comma . map pprint'
+
+
+data AppFlavor = ListApp [Isa.Term] 
+               | TupleApp [Isa.Term] 
+               | InfixApp Isa.Term Isa.Term Isa.Term 
+               | MiscApp
+  deriving (Show)
+
+-- This makes use of pattern guards which are not Haskell98, but quite
+-- portable across implementations nontheless.
+--
+-- Cf. http://www.haskell.org/ghc/docs/latest/html/users_guide/syntax-extns.html#pattern-guards
+--
+categorizeApp :: Isa.Term -> AppFlavor
+categorizeApp app@(Isa.App (Isa.App (Isa.Var c) t1) t2) 
+    | Isa.isCons c,    Just list <- flattenListApp app  = ListApp list
+    | Isa.isPairCon c, Just list <- flattenTupleApp app = TupleApp list
+    | isInfixOp c                                       = InfixApp t1 (Isa.Var c) t2
+categorizeApp _                                         = MiscApp
+
+flattenListApp :: Isa.Term -> Maybe [Isa.Term]
+flattenListApp app 
+    = let list = unfoldr1 split app in 
+      case last list of -- proper list?
+        (Isa.Var c) | Isa.isNil c -> Just list
+        _ -> Nothing
+  where
+    split (Isa.App (Isa.App (Isa.Var c) x) xs) | Isa.isCons c = Just (x, xs)
+    split _ = Nothing
+
+flattenTupleApp :: Isa.Term -> Maybe [Isa.Term]
+flattenTupleApp app = let list = unfoldr1 split app in
+                      if (length list) > 1 then Just list
+                                           else Nothing
+  where
+    split (Isa.App (Isa.App (Isa.Var c) x) xs) | Isa.isPairCon c = Just (x, xs)
+    split _ = Nothing
+
+
 isCompound :: Isa.Term -> Bool
-isCompound t = case t of
-                Isa.Var _           -> False
-                Isa.Con _           -> False
-                Isa.Literal _       -> False
-                Isa.Parenthesized _ -> False
-                _                   -> True
+isCompound (Isa.App (Isa.App (Isa.Var c) _) _)  -- FIXME: temporary to avoid the extra parens
+    | Isa.isPairCon c = False                   --  in `((x,y)) : z'; should be handled by
+isCompound t = case t of                        --  checking for infix priorities.
+                Isa.Var _            -> False
+                Isa.Con _            -> False
+                Isa.Literal _        -> False
+                Isa.Parenthesized _  -> False
+                _ -> True
 
-stripListApp :: Isa.Term -> Maybe [Isa.Term]
-stripListApp t = case destRight destCons t of
-  (ts, Isa.Var c) | c == Isa.cnameNil -> Just ts
-  _ -> Nothing
-  where
-    destCons (Isa.App (Isa.App (Isa.Var c) x) xs) | c == Isa.cnameCons = Just (x, xs)
-    destCons _ = Nothing
-
-pprintListApp :: [Isa.Term] -> DocM P.Doc
-pprintListApp = brackets . hsep . punctuate comma . map pprint'
-
-stripTupleApp :: Isa.Term -> Maybe [Isa.Term]
-stripTupleApp t = case destRightImproper destPair t of
-  [t] -> Nothing
-  ts -> Just ts
-  where
-    destPair (Isa.App (Isa.App (Isa.Var c) x) xs) | c == Isa.cnamePair = Just (x, xs)
-    destPair _ = Nothing
-
-pprintTupleApp :: [Isa.Term] -> DocM P.Doc
-pprintTupleApp = parens . hsep . punctuate comma . map pprint'
+isCompoundType :: Isa.Type -> Bool
+isCompoundType t = case t of
+                     Isa.TyVar _ -> False
+                     _           -> True
+                                      
+isInfixOp name = Isa.isCons name -- FIXME
