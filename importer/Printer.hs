@@ -249,8 +249,6 @@ instance Printer Isa.Type where
         = maybeWithinHOL $
             hsep (punctuate (space<>asterisk) (map pprint' types))
 
-    pprint' junk = error $ "+++ JUNK: " ++ show junk
-
 instance Printer Isa.TypeSig where
     pprint' (Isa.TypeSig _name typ) = pprint' typ
 

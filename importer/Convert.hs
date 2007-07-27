@@ -1,5 +1,5 @@
 {-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Munich
+    Author:     Tobias Christian Rittweiler <tcr@freebits.de>, TU Munich
 
 Conversion from abstract Haskell code to abstract Isar/HOL theory.
 -}
@@ -36,8 +36,11 @@ emptyContext = Context { _fsignatures = [],
                          _backtrace   = [],
                          _gensymcount = 0 }
 
-
-type FieldSurrogate field = (Context -> field, Context -> field -> Context)
+-- Instead of accessing a record directly by their `_foo' slots, you
+-- use the respective `foo' surrogate which consists of an appropriate
+-- getter and setter -- which allows functions to both query and
+-- update a record (almost) by slot name.
+type FieldSurrogate field = (Context -> field, Context -> field -> Context) 
 
 fsignatures = (_fsignatures, \c f -> c { _fsignatures = f })
 optable     = (_optable,     \c f -> c { _optable     = f })
@@ -275,45 +278,15 @@ instance Convert HsType Isa.Type where
     --       
     --        ==> Isa.TyCon T [(Isa.TyVar a), (Isa.TyVar b)]   
     --
-
     convert' tyapp@(HsTyApp _ _) 
         = do let tycon:tyvars = unfoldl1 split tyapp
              tycon'  <- convert tycon
              tyvars' <- mapM convert tyvars
              return $ case tycon' of Isa.TyCon n [] -> Isa.TyCon n tyvars'
           where split (HsTyApp tyapp x) = Just (x, tyapp)
-                split (HsTyCon _)       = Nothing         -- Note that this HsTyCon will
-                split junk                                --  become head of the returned list.
-                    = error ("HsType -> Isa.Type (split HsTyApp)" ++ (show junk))
-
-
--- grovel tyapp [] -- flattens chain of type application.
---         where grovel :: HsType -> [HsType] -> ContextM Isa.Type
---               grovel (HsTyApp tyapp@(HsTyApp _ _) tyarg) tyargs
---                   -- Innermost type argument in a chain of type application
---                   -- was the first/leftmost type argument given in the original
---                   -- textual representation. So we _gotta_ append onto the end:
---                   = grovel tyapp (tyargs ++ [tyarg])
---               grovel (HsTyApp tycon@(HsTyCon _) tyarg) tyargs
---                   = do tycon'  <- convert tycon 
---                        tyargs' <- mapM convert (tyargs ++ [tyarg])
---                        case tycon' of 
---                          Isa.TyCon con [] -> return $ Isa.TyCon con tyargs' 
---               grovel junk _ = barf "HsType -> Isa.Type (grovel HsTyApp)" junk
-    
-
-    -- convert' tyapp @ (HsTyApp _ _) =
-    --   let
-    --     destTyApp (HsTyApp ty1 ty2) = Just (ty1, ty2)
-    --     destTyApp _ = Nothing
-    --     (ty1, tys) = destLeft destTyApp tyapp
-    --   in do
-    --     tyco <- case ty1 of
-    --       HsTyCon tyco -> return tyco
-    --       _ -> barf "HsType -> Isa.Type (HsTyApp)" tyapp
-    --     tyco' <- convert tyco
-    --     tys' <- mapM convert tys
-    --     return $ Isa.TyCon tyco' tys' 
+                split (HsTyCon _)       = Nothing         -- Note that this HsTyCon will become
+                split junk                                --  the head of the returned list.
+                    = error ("HsType -> Isa.Type (split HsTyApp): " ++ (show junk))
 
     convert' (HsTyTuple Boxed types)
         = do types' <- mapM convert types
@@ -468,8 +441,6 @@ genvar prefix = gensym prefix >>= (\sym -> return $ Isa.Var (Isa.Name sym))
 -- pairs to represent n-tuples), we simply return a lambda expression
 -- that takes n parameters and constructs the nested pairs within its
 -- body.
--- FIXME: this comment is definitly wrong, HOL supports curried data type
---   constructors (HOL is not SML)
 makeTupleDataCon :: Int -> ContextM Isa.Term
 makeTupleDataCon n
     = do args <- mapM genvar (replicate n "_arg")
@@ -508,23 +479,45 @@ fixInfixApp (HsInfixApp exp1 op exp2)
         
 fixInfixApp expr = convert expr
 
+-- Notice that `1 * 2 + 3 / 4' is parsed as `((1 * 2) + 3) / 4', i.e.
+-- 
+--    InfixApp (InfixApp (InfixApp 1 * 2) + 3) / 4
+--
+-- whereas `1 * 2 + (3 / 4)' is parsed as
+--
+--    InfixApp (InfixApp 1 * 2) + (Parenthesized (InfixApp 3 / 4))
+--
+-- and `1 * (2 + 3) / 4' is parsed as
+--
+--    InfixApp (InfixApp 1 (Parenthesized (InfixApp 2 + 3))) / 4
+--
+-- Thus we _know_ that the second operand of an infix application,
+-- i.e. the e2 in `InfixApp e1 op e2', can never be a bare infix
+-- application that we might have to consider during fixup.
+--  
 fixup :: Isa.Term -> ContextM Isa.Term
 fixup origExpr@(Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3)
-    -- (e1 `op1` e2) `op2` e3,  where we assume that (e1 `op1` e2) is correct
-    -- already; so we have just to find the proper place for the (`op2` e3).
-    = do (assoc1, prio1) <- lookupOp op1
-         (assoc2, prio2) <- lookupOp op2
+    -- (e1 `op1` e2) `op2` e3, where we assume that (e1 `op1` e2) is correct
+    -- already; so we have to only find the proper place for the (`op2` e3).
+    = do (assoc1', prio1) <- lookupOp op1
+         (assoc2', prio2) <- lookupOp op2
+         let assoc1 = normalizeAssociativity assoc1'
+         let assoc2 = normalizeAssociativity assoc2'
          case prio2 `compare` prio1 of
            LT -> return origExpr
-           GT -> liftM (Isa.InfixApp e1 op1) $ fixup (Isa.InfixApp e2 op2 e3)
+           GT -> fixup (Isa.InfixApp e2 op2 e3) >>= (return . Isa.InfixApp e1 op1)
            EQ -> if assoc2 /= assoc1 then
                      die ("Associativity mismatch: " ++ (show op2) ++ " has " ++ (show assoc2)
                             ++ ", whereas " ++ (show op1) ++ " has " ++ (show assoc1) ++ ".")
                  else case assoc2 of
                         Isa.AssocLeft  -> return (Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3) -- i.e. origExpr
                         Isa.AssocRight -> return (Isa.InfixApp e1 op1 (Isa.InfixApp e2 op2 e3))
-                        Isa.AssocNone  -> die ("No associativity for " ++ (show op2) ++ ", " ++ (show op1))
+                        Isa.AssocNone  -> die ("fixup InfixApp: Internal error (AssocNone should " ++
+                                               "have already been normalized away.)")
 fixup expr@(Isa.InfixApp _ _ _) = return expr
+
+normalizeAssociativity (Isa.AssocNone) = Isa.AssocLeft -- as specified in Haskell98.
+normalizeAssociativity etc = etc
 
 lookupOp :: Isa.Term -> ContextM (Isa.Assoc, Int)
 lookupOp (Isa.Var name)
@@ -534,7 +527,7 @@ lookupOp (Isa.Var name)
            Nothing            -> do warn ("Missing infix declaration for `" ++ (show name) ++ "'"
                                           ++ ", assuming left associativity and a fixity of 9.")
                                     return (Isa.AssocLeft, 9) -- default values in Haskell98
-lookupOp junk = barf "lookupOp" junk
+lookupOp junk = barf "lookupOp: " junk
 
 lookupSig :: Isa.Name -> ContextM Isa.TypeSig
 lookupSig fname

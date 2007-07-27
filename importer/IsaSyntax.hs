@@ -98,11 +98,10 @@ data Term = Literal Literal
           | Con VarName -- FIXME: distinction Var/Con is not necessary
           | Lambda [Term] Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
           | App Term Term
-          | InfixApp Term Term Term -- FIXME: Is only used as
-                                    -- intermediate holding pace in
-                                    -- Convert.hs
+          | InfixApp Term Term Term -- Is only used as an intermediate
+                                    -- holding place in Convert.hs.
           | If Term Term Term
-          | Parenthesized Term -- FIXME: should also be only intermediate
+          | Parenthesized Term
           | RecConstr VarName [(Name, Term)]
           | RecUpdate Term [(Name, Term)]
           | Case Term [(Pat, Term)]
