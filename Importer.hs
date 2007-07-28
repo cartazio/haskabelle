@@ -15,6 +15,8 @@ import Control.Monad
 import System.Environment (getArgs)
 import Text.PrettyPrint (render)
 
+import Language.Haskell.Hsx (parseFile)
+
 import Importer.Convert
 import Importer.IsaSyntax (Cmd)
 import Importer.Printer (pprint)
@@ -32,7 +34,7 @@ import Importer.Printer (pprint)
 --       return (pprint ast)
 --
 convertFile :: FilePath -> IO (Convertion Cmd)
-convertFile = liftM convertFileContents . readFile
+convertFile = liftM convertParseResult . parseFile
 
 importFile :: FilePath -> FilePath -> IO ()
 importFile src dst = do

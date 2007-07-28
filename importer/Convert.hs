@@ -4,7 +4,7 @@
 Conversion from abstract Haskell code to abstract Isar/HOL theory.
 -}
 
-module Importer.Convert (Convertion(..), convertFileContents, cnvFileContents) where
+module Importer.Convert (Convertion(..), convertParseResult, cnvFileContents) where
 
 import Importer.Utilities
 
@@ -97,14 +97,6 @@ die msg = do backtrace <- queryContext backtrace
 barf str obj = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
 
 
-prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
-                             (ParseOk foo) = parseModule str
-                         in (prettyPrint foo)
-
-prettyShow obj = prettyShow' "foo" obj
-
-
-
 class Show a => Convert a b | a -> b where
     convert' :: (Convert a b) => a -> ContextM b
     convert  :: (Convert a b) => a -> ContextM b
@@ -115,22 +107,22 @@ class Show a => Convert a b | a -> b where
 data Convertion a = ConvSuccess a [Warning] | ConvFailed String
   deriving (Eq, Ord, Show)
 
-converter :: ParseResult HsModule -> Convertion Isa.Cmd
-converter (ParseOk parseRes) = let
-    ContextM cf = convert parseRes
-    (result, context) = cf emptyContext
-  in ConvSuccess result (_warnings context)
-converter (ParseFailed loc msg) =
-  ConvFailed (show loc ++ " -- " ++ msg)
+convertParseResult :: ParseResult HsModule -> Convertion Isa.Cmd
 
-convertFileContents = converter . parseModule
+convertParseResult (ParseOk parseRes) 
+    = let ContextM cf       = convert parseRes
+          (result, context) = cf emptyContext
+      in ConvSuccess result (_warnings context)
+convertParseResult (ParseFailed loc msg) 
+    = ConvFailed (show loc ++ " -- " ++ msg)
+
+convertFileContents = convertParseResult . parseModule
 
 cnvFileContents str = let
     (ConvSuccess res warnings) = convertFileContents str
     str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
     (ParseOk foo) = parseModule str2
   in prettyPrint foo
-
 
 
 instance Convert HsModule Isa.Cmd where
@@ -270,7 +262,7 @@ instance Convert HsType Isa.Type where
     convert' (HsTyFun type1 type2) = do type1' <- convert type1
                                         type2' <- convert type2
                                         return (Isa.TyFun type1' type2')
-    --
+
     -- Types aren't curried or partially appliable in HOL, so we must pull a nested
     -- chain of type application inside out:
     --
@@ -492,7 +484,7 @@ fixInfixApp expr = convert expr
 --    InfixApp (InfixApp 1 (Parenthesized (InfixApp 2 + 3))) / 4
 --
 -- Thus we _know_ that the second operand of an infix application,
--- i.e. the e2 in `InfixApp e1 op e2', can never be a bare infix
+-- i.e. the e2 in `InfixApp e1 op e2', can _never_ be a bare infix
 -- application that we might have to consider during fixup.
 --  
 fixup :: Isa.Term -> ContextM Isa.Term

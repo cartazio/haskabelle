@@ -8,7 +8,7 @@ module Importer.Utilities where
 
 import qualified List as List
 
-import Language.Haskell.Hsx
+import qualified Language.Haskell.Hsx as Hsx
 
 unfoldl, unfoldr    :: (b -> Maybe (a,b)) -> b -> [a]
 
@@ -31,14 +31,9 @@ unfoldr1 f x =
                 Just (z, x') -> z : unfoldr1 f x'
 
 
--- foo (HsTyApp (HsTyApp (HsTyCon c) x) xs) = Just (x, xs)
--- foo (HsTyApp xs x@(HsTyVar _)) = Just (x, xs)
--- foo _ = Nothing
 
-bar (HsApp (HsApp (HsVar c) x) xs) = Just (x, xs)
-bar _ = Nothing
+prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
+                             (Hsx.ParseOk (Hsx.HsModule _ _ _ _ decls)) = Hsx.parseModule str
+                         in concatMap Hsx.prettyPrint decls
 
--- HsTyApp (HsTyApp (HsTyApp (HsTyCon (UnQual (HsIdent "T")))
---                                    (HsTyVar (HsIdent "a"))))
---                  (HsTyVar (HsIdent "b"))) 
---         (HsTyVar (HsIdent "c"))
+prettyShow obj = prettyShow' "foo" obj
