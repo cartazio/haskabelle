@@ -4,24 +4,25 @@
 Conversion from abstract Haskell code to abstract Isar/HOL theory.
 -}
 
-module Importer.Convert (Convertion(..), convertParseResult, cnvFileContents) where
+module Importer.Convert (
+  Convertion(..), convertParseResult, cnvFileContents
+) where
 
-import Importer.Utilities
-
-import Control.Exception (assert) -- FIXME
-import Debug.Trace (trace)        -- FIXME
-
-import List
-import Monad
-import Random
 import Language.Haskell.Hsx
 
+import List (unzip4)
+import Monad
+import Maybe
+
+import Importer.Utilities
 import qualified Importer.IsaSyntax as Isa
+import qualified Importer.Msg as Msg
 
 data Context    = Context
     {
+      _theory      :: Maybe Isa.Theory
       -- alist of (function name, its type signature)
-      _fsignatures :: [(Isa.Name, Isa.TypeSig)]  
+    , _fsignatures :: [(Isa.Name, Isa.TypeSig)]  
 
       -- alist of (operator name, (its association kind, binding priority)
     , _optable     :: [(Isa.Name, (Isa.Assoc, Isa.Prio))]
@@ -30,18 +31,20 @@ data Context    = Context
     , _gensymcount :: Int
     }
 
-emptyContext = Context { _fsignatures = [],
+emptyContext = Context { _theory = Nothing,
+                         _fsignatures = [],
                          _optable     = [],
                          _warnings    = [],
                          _backtrace   = [],
                          _gensymcount = 0 }
 
--- Instead of accessing a record directly by their `_foo' slots, you
+-- Instead of accessing a record directly by their `_foo' slots, we
 -- use the respective `foo' surrogate which consists of an appropriate
 -- getter and setter -- which allows functions to both query and
 -- update a record (almost) by slot name.
 type FieldSurrogate field = (Context -> field, Context -> field -> Context) 
 
+theory      = (_theory,      \c f -> c { _theory      = f })
 fsignatures = (_fsignatures, \c f -> c { _fsignatures = f })
 optable     = (_optable,     \c f -> c { _optable     = f })
 warnings    = (_warnings,    \c f -> c { _warnings    = f })
@@ -100,11 +103,12 @@ barf str obj = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
 class Show a => Convert a b | a -> b where
     convert' :: (Convert a b) => a -> ContextM b
     convert  :: (Convert a b) => a -> ContextM b
-    convert hsexpr = withUpdatedContext backtrace (\bt -> let frameName = "frame" ++ show (length bt)
-                                                          in prettyShow' frameName hsexpr : bt)
-                          $ convert' hsexpr
+    convert hsexpr = withUpdatedContext backtrace 
+                       (\bt -> let frameName = "frame" ++ show (length bt)
+                               in prettyShow' frameName hsexpr : bt)
+                     $ convert' hsexpr
 
-data Convertion a = ConvSuccess a [Warning] | ConvFailed String
+data Convertion a = ConvSuccess a [Warning] | ConvFailed String -- FIXME: s/convertion/conversion
   deriving (Eq, Ord, Show)
 
 convertParseResult :: ParseResult HsModule -> Convertion Isa.Cmd
@@ -116,20 +120,22 @@ convertParseResult (ParseOk parseRes)
 convertParseResult (ParseFailed loc msg) 
     = ConvFailed (show loc ++ " -- " ++ msg)
 
-convertFileContents = convertParseResult . parseModule
+convertFileContents = convertParseResult . parseModule -- FIXME: remove
 
 cnvFileContents str = let
     (ConvSuccess res warnings) = convertFileContents str
     str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
     (ParseOk foo) = parseModule str2
-  in prettyPrint foo
+  in prettyHsx foo
+
 
 
 instance Convert HsModule Isa.Cmd where
     convert' (HsModule _loc modul _exports _imports decls)
-        = do theory <- convert modul
-             cmds   <- mapM convert decls
-             return (Isa.TheoryCmd theory cmds)
+        = do thy <- convert modul
+             withUpdatedContext theory (\t -> assert (isNothing t) $ Just thy) 
+               $ do cmds <- mapM convert decls
+                    return (Isa.TheoryCmd thy cmds)
 
 instance Convert Module Isa.Theory where
     convert' (Module name) = return (Isa.Theory name)
@@ -184,7 +190,7 @@ instance Convert HsDecl Isa.Cmd where
                                 tyvars <- mapM convert types
                                 return $ Isa.Constructor name' tyvars
                        cnvt junk = barf ("Internal Error: " ++
-                                         "HsRecDecl should be dealt with elsewhere already.")
+                                         "HsRecDecl should have been dealt with elsewhere already.")
                                         junk
 
     convert' (HsInfixDecl _loc assoc prio ops)
@@ -201,17 +207,42 @@ instance Convert HsDecl Isa.Cmd where
              updateContext fsignatures (\sigs -> (zip names' newsigs) ++ sigs)
              return (Isa.Comment (prettyShow' "typeSigs" newsigs)) -- show type sigs in comment; FIXME
 
+    -- There are no local functions in Isar/HOL, so local "where" declarations
+    -- are pulled out and are made global. To avoid name capture, the names
+    -- of these local functions are renamed to fresh identifiers (with the
+    -- bodies of the local functions, and the body of the actual HsFunBind 
+    -- being properly alpha converted.)
+    --
+    -- E.g.                                
+    --                                     fun g0 :: "Int => Int"
+    --    f :: Int -> Int                  where
+    --    f x = g x                          "g0 x = x * x"
+    --      where g :: Int -> Int   ==>    
+    --            g x = x * x              fun f :: "Int => Int"
+    --                                     where
+    --                                       "f x = g0 x"
     convert' (HsFunBind matchs)
         = let (names, patterns, rhss, wbinds) = unzip4 (map splitMatch matchs)
           in do assert (all (== head names) (tail names)) (return ())
                 fname'    <- convert (names!!0)            -- as all names are equal, pick first one.
-                patterns' <- mapM (mapM convert) patterns  -- each pattern is a list of HsPat.
-                rhss'     <- mapM convert rhss
-                wbinds'   <- liftM concat $ mapM convert wbinds -- FIXME: alpha convert (also: rhss)
-                fsig      <- lookupSig fname'
-                return $ Isa.Block (wbinds' ++ [Isa.FunCmd fname' fsig (zip patterns' rhss')])
+                patterns' <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
+                rhss'     <- mapM convert rhss             
+                locdecls  <- concatMapM convert wbinds     -- local declarations
+                fsig      <- lookupSig fname'              
+                thy       <- lookupThy                     
+                locdeclNs <- case concatMapM extractBindNames wbinds of
+                               Nothing    -> die "Illegal where bind" -- FIXME
+                               Just names -> mapM convert names
+                genNs     <- mapM genIsaName locdeclNs
+                -- Note that we do the alpha-conversion on the Isar/HOL AST,
+                -- as it's way easier to do it properly there than on full Haskell.
+                let renamings  = zip locdeclNs genNs
+                let locdecls'  = map (alphaConvertCmd thy renamings) locdecls
+                let rhss''     = map (alphaConvertTerm thy renamings) rhss'
+                return $ Isa.Block (locdecls' ++ [Isa.FunCmd fname' fsig (zip patterns' rhss'')])
             where splitMatch (HsMatch _loc name patterns rhs wherebind)
                       = (name, patterns, rhs, wherebind)
+                  
 
     convert' (HsPatBind _loc pat@(HsPVar name) rhs _wherebinds)
         = do name' <- convert name
@@ -225,6 +256,7 @@ instance Convert HsDecl Isa.Cmd where
 
 instance Convert HsBinds [Isa.Cmd] where
     convert' (HsBDecls decls) = mapM convert decls
+    convert' junk = barf "HsBinds -> Isa.Cmd" junk
 
 isRecDecls :: [HsConDecl] -> Bool
 isRecDecls decls
@@ -365,7 +397,7 @@ instance Convert HsAlt (Isa.Term, Isa.Term) where
 instance Convert HsExp Isa.Term where
     convert' (HsLit lit)       = convert lit   >>= (\l -> return (Isa.Literal l))
     convert' (HsVar qname)     = convert qname >>= (\n -> return (Isa.Var n))
-    convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Con n))
+    convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
 
     convert' (HsApp exp1 exp2)
@@ -393,10 +425,11 @@ instance Convert HsExp Isa.Term where
     convert' (HsLambda _loc pats exp)
         = do pats'  <- mapM convert pats
              exp'   <- convert exp
-             if all isVar pats' then return $ Isa.Lambda pats' exp'
+             if all isVar pats' then return $ Isa.Lambda (map getName pats') exp'
                                 else makePatternMatchingLambda pats' exp'
-          where isVar (Isa.Var _) = True
-                isVar _           = False
+          where isVar (Isa.Var _)   = True
+                isVar _             = False
+                getName (Isa.Var n) = n
 
     convert' (HsList []) = return (Isa.Var Isa.cnameNil)
     convert' (HsList exps)
@@ -425,8 +458,11 @@ gensym prefix = do count <- queryContext gensymcount
                    updateContext gensymcount (\count -> count + 1)
                    return $ prefix ++ (show count)
 
-genvar :: String -> ContextM Isa.Term
-genvar prefix = gensym prefix >>= (\sym -> return $ Isa.Var (Isa.Name sym))
+genIsaName :: Isa.Name -> ContextM Isa.Name
+genIsaName (Isa.QName t prefix) 
+    = gensym prefix >>= (\sym -> return (Isa.QName t sym))
+genIsaName (Isa.Name prefix)
+    = gensym prefix >>= (\sym -> return (Isa.Name sym))
 
 
 -- Since HOL doesn't have true n-tuple constructors (it uses nested
@@ -435,8 +471,8 @@ genvar prefix = gensym prefix >>= (\sym -> return $ Isa.Var (Isa.Name sym))
 -- body.
 makeTupleDataCon :: Int -> ContextM Isa.Term
 makeTupleDataCon n
-    = do args <- mapM genvar (replicate n "_arg")
-         return $ Isa.Parenthesized (Isa.Lambda args (foldr1 Isa.mkpair args))
+    = do args <- mapM genIsaName (replicate n (Isa.Name "_arg"))
+         return $ Isa.Parenthesized (Isa.Lambda args (foldr1 Isa.mkpair (map Isa.Var args)))
 
 -- HOL does not support pattern matching directly within a lambda
 -- expression, so we transform a `HsLambda pat1 pat2 .. patn -> body' to
@@ -453,8 +489,8 @@ makePatternMatchingLambda :: [Isa.Term] -> Isa.Term -> ContextM Isa.Term
 makePatternMatchingLambda patterns theBody
     = foldM mkMatchingLambda theBody (reverse patterns) -- foldM is a left fold.
       where mkMatchingLambda body pat
-                = do g <- (genvar "_arg")
-                     return $ Isa.Lambda [g] (Isa.Case g [(pat, body)])
+                = do g <- genIsaName (Isa.Name "_arg")
+                     return $ Isa.Lambda [g] (Isa.Case (Isa.Var g) [(pat, body)])
 
 
 -- Hsx parses every infix application simply from left to right without
@@ -499,8 +535,7 @@ fixup origExpr@(Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3)
            LT -> return origExpr
            GT -> fixup (Isa.InfixApp e2 op2 e3) >>= (return . Isa.InfixApp e1 op1)
            EQ -> if assoc2 /= assoc1 then
-                     die ("Associativity mismatch: " ++ (show op2) ++ " has " ++ (show assoc2)
-                            ++ ", whereas " ++ (show op1) ++ " has " ++ (show assoc1) ++ ".")
+                     die (Msg.assoc_mismatch op1 assoc1 op2 assoc2)
                  else case assoc2 of
                         Isa.AssocLeft  -> return (Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3) -- i.e. origExpr
                         Isa.AssocRight -> return (Isa.InfixApp e1 op1 (Isa.InfixApp e2 op2 e3))
@@ -516,8 +551,7 @@ lookupOp (Isa.Var name)
     = do optable <- queryContext optable
          case lookup name optable of
            Just (assoc, prio) -> return (assoc, prio)
-           Nothing            -> do warn ("Missing infix declaration for `" ++ (show name) ++ "'"
-                                          ++ ", assuming left associativity and a fixity of 9.")
+           Nothing            -> do warn (Msg.missing_infix_decl name)
                                     return (Isa.AssocLeft, 9) -- default values in Haskell98
 lookupOp junk = barf "lookupOp: " junk
 
@@ -525,5 +559,10 @@ lookupSig :: Isa.Name -> ContextM Isa.TypeSig
 lookupSig fname
     = do seensigs  <- queryContext fsignatures
          case (lookup fname seensigs) of
-           Nothing        -> die ("Missing function signature for " ++ (show fname) ++ " (FIXME)")
+           Nothing        -> die (Msg.missing_fun_sig fname)
            Just signature -> return signature
+
+lookupThy :: ContextM Isa.Theory
+lookupThy = do thy <- queryContext theory
+               case thy of Nothing -> die "lookupThy"
+                           Just t  -> return t

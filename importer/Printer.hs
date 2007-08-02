@@ -258,7 +258,6 @@ instance Printer Isa.Literal where
 
 instance Printer Isa.Term where
     pprint' (Isa.Var vname)         = pprint' vname
-    pprint' (Isa.Con cname)         = pprint' cname
     pprint' (Isa.Literal lit)       = pprint' lit
     pprint' (Isa.Parenthesized t)   = parens $ pprint' t
 
@@ -324,11 +323,10 @@ categorizeApp app@(Isa.App (Isa.App (Isa.Var c) t1) t2)
 categorizeApp _                                         = MiscApp
 
 flattenListApp :: Isa.Term -> Maybe [Isa.Term]
-flattenListApp app 
-    = let list = unfoldr1 split app in 
-      case last list of -- proper list?
-        (Isa.Var c) | Isa.isNil c -> Just list
-        _ -> Nothing
+flattenListApp app = let list = unfoldr1 split app in 
+                     case last list of -- proper list?
+                       (Isa.Var c) | Isa.isNil c -> Just list
+                       _ -> Nothing
   where
     split (Isa.App (Isa.App (Isa.Var c) x) xs) | Isa.isCons c = Just (x, xs)
     split _ = Nothing
@@ -347,14 +345,14 @@ isCompound (Isa.App (Isa.App (Isa.Var c) _) _)  -- FIXME: temporary to avoid the
     | Isa.isPairCon c = False                   --  in `((x,y)) : z'; should be handled by
 isCompound t = case t of                        --  checking for infix priorities.
                 Isa.Var _            -> False
-                Isa.Con _            -> False
                 Isa.Literal _        -> False
                 Isa.Parenthesized _  -> False
                 _ -> True
 
 isCompoundType :: Isa.Type -> Bool
 isCompoundType t = case t of
-                     Isa.TyVar _ -> False
-                     _           -> True
+                     Isa.TyVar _    -> False
+                     Isa.TyCon _ [] -> False
+                     _              -> True
                                       
 isInfixOp name = Isa.isCons name -- FIXME

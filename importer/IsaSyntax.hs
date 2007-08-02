@@ -16,11 +16,15 @@ module Importer.IsaSyntax (
                   isNil, isCons, isPairCon
                  ) where
 
+import Data.Generics.Basics
+import Data.Generics.Instances
+
+
 newtype Theory = Theory String
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 data Name      = QName Theory String | Name String
-  deriving (Eq, Show)
+  deriving (Eq, Show, Data, Typeable)
 
 type VarName   = Name
 type ConName   = Name
@@ -61,42 +65,42 @@ data Cmd =
     | DefinitionCmd VarName TypeSig ([Pat], Term)
     | InfixDeclCmd OpName Assoc Prio
     | Comment String
-  deriving (Show)
+  deriving (Show, Data, Typeable)
 
 
 type Prio = Int
 
 data Assoc = AssocNone | AssocLeft | AssocRight
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Data, Typeable)
 
 type Pat = Term
 
 data TypeSpec = TypeSpec [VarName] ConName
-  deriving (Show)
+  deriving (Show, Data, Typeable)
 
 data TypeSig = TypeSig Name Type
-  deriving (Show)
+  deriving (Show, Data, Typeable)
 
 data Type = TyVar VarName
           | TyCon ConName [Type]
           | TyFun Type Type
           | TyTuple [Type]
 
-  deriving (Show)
+  deriving (Show, Data, Typeable)
 
 data ConSpec = Constructor ConName [Type]
-  deriving (Show)
+  deriving (Show, Data, Typeable)
 
 data Literal = Int Integer | String String
-  deriving (Show)
+  deriving (Show, Data, Typeable)
 
 
 type Const = String
 
 data Term = Literal Literal
           | Var VarName -- FIXME: proper representation of constants
-          | Con VarName -- FIXME: distinction Var/Con is not necessary
-          | Lambda [Term] Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
+         -- | Con VarName -- FIXME: distinction Var/Con is not necessary
+          | Lambda [VarName] Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
           | App Term Term
           | InfixApp Term Term Term -- Is only used as an intermediate
                                     -- holding place in Convert.hs.
@@ -105,7 +109,7 @@ data Term = Literal Literal
           | RecConstr VarName [(Name, Term)]
           | RecUpdate Term [(Name, Term)]
           | Case Term [(Pat, Term)]
-  deriving (Show)
+  deriving (Show, Data, Typeable)
 
 -- FIXME place this into some kind of "Haskell system compatibility file"
 tnameBool  = Name "Bool" -- FIXME
