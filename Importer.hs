@@ -33,7 +33,7 @@ import Importer.Printer (pprint)
 --    do (ConvSuccess ast _) <- convertFile "/path/foo.hs"
 --       return (pprint ast)
 --
-convertFile :: FilePath -> IO (Convertion Cmd)
+convertFile :: FilePath -> IO (Conversion Cmd)
 convertFile = liftM convertParseResult . parseFile
 
 importFile :: FilePath -> FilePath -> IO ()

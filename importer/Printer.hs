@@ -6,15 +6,11 @@ Pretty printing of abstract Isar/HOL theory.
 
 module Importer.Printer where
 
-import Importer.Utilities
-
+import Importer.Utilities.Misc
 import qualified Importer.IsaSyntax as Isa
 
-
-import Control.Exception (assert)
-import Debug.Trace (trace)
-
 import qualified Text.PrettyPrint as P
+
 
 
 data PPState = PPState { withinHOL :: Bool }
@@ -269,8 +265,6 @@ instance Printer Isa.Term where
                                    y' = parensIf (isCompound y) $ pprint' y
                                in  x' <+> pprint' op <+> y'
             MiscApp         -> pprint' t1 <+> parensIf (isCompound t2) (pprint' t2)
-
-    pprint' (Isa.InfixApp t1 op t2) = error "Internal error: pprint' (Isa.InfixApp _ _ _)"
 
     pprint' (Isa.If t1 t2 t3)
         = fsep [text "if"   <+> pprint' t1,

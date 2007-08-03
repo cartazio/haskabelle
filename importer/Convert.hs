@@ -5,7 +5,7 @@ Conversion from abstract Haskell code to abstract Isar/HOL theory.
 -}
 
 module Importer.Convert (
-  Convertion(..), convertParseResult, cnvFileContents
+  Conversion(..), convertParseResult, cnvFileContents
 ) where
 
 import Language.Haskell.Hsx
@@ -14,13 +14,15 @@ import List (unzip4)
 import Monad
 import Maybe
 
-import Importer.Utilities
+import Importer.Utilities.Misc
+import qualified Importer.Utilities.Isa as Utilities.Isa
+import qualified Importer.Utilities.Hsx as Utilities.Hsx
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
 
 data Context    = Context
     {
-      _theory      :: Maybe Isa.Theory
+      _theory      :: Isa.Theory
       -- alist of (function name, its type signature)
     , _fsignatures :: [(Isa.Name, Isa.TypeSig)]  
 
@@ -31,8 +33,8 @@ data Context    = Context
     , _gensymcount :: Int
     }
 
-emptyContext = Context { _theory = Nothing,
-                         _fsignatures = [],
+emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default Module in Haskell
+                         _fsignatures = [],                   --  is called `Main'; clashes with Isabelle.
                          _optable     = [],
                          _warnings    = [],
                          _backtrace   = [],
@@ -108,10 +110,10 @@ class Show a => Convert a b | a -> b where
                                in prettyShow' frameName hsexpr : bt)
                      $ convert' hsexpr
 
-data Convertion a = ConvSuccess a [Warning] | ConvFailed String -- FIXME: s/convertion/conversion
+data Conversion a = ConvSuccess a [Warning] | ConvFailed String
   deriving (Eq, Ord, Show)
 
-convertParseResult :: ParseResult HsModule -> Convertion Isa.Cmd
+convertParseResult :: ParseResult HsModule -> Conversion Isa.Cmd
 
 convertParseResult (ParseOk parseRes) 
     = let ContextM cf       = convert parseRes
@@ -133,7 +135,7 @@ cnvFileContents str = let
 instance Convert HsModule Isa.Cmd where
     convert' (HsModule _loc modul _exports _imports decls)
         = do thy <- convert modul
-             withUpdatedContext theory (\t -> assert (isNothing t) $ Just thy) 
+             withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
                $ do cmds <- mapM convert decls
                     return (Isa.TheoryCmd thy cmds)
 
@@ -202,7 +204,6 @@ instance Convert HsDecl Isa.Cmd where
     convert' (HsTypeSig _loc names typ)
         = do names' <- mapM convert names
              typ'   <- convert typ
-             sigs   <- queryContext fsignatures
              let newsigs = map (\n -> Isa.TypeSig n typ') names'
              updateContext fsignatures (\sigs -> (zip names' newsigs) ++ sigs)
              return (Isa.Comment (prettyShow' "typeSigs" newsigs)) -- show type sigs in comment; FIXME
@@ -229,16 +230,16 @@ instance Convert HsDecl Isa.Cmd where
                 rhss'     <- mapM convert rhss             
                 locdecls  <- concatMapM convert wbinds     -- local declarations
                 fsig      <- lookupSig fname'              
-                thy       <- lookupThy                     
-                locdeclNs <- case concatMapM extractBindNames wbinds of
+                thy       <- queryContext theory           -- current theory we're converting in.
+                locdeclNs <- case concatMapM Utilities.Hsx.extractBindingNames wbinds of
                                Nothing    -> die "Illegal where bind" -- FIXME
                                Just names -> mapM convert names
                 genNs     <- mapM genIsaName locdeclNs
                 -- Note that we do the alpha-conversion on the Isar/HOL AST,
-                -- as it's way easier to do it properly there than on full Haskell.
+                -- as it's way easier to do it there than on full Haskell.
                 let renamings  = zip locdeclNs genNs
-                let locdecls'  = map (alphaConvertCmd thy renamings) locdecls
-                let rhss''     = map (alphaConvertTerm thy renamings) rhss'
+                let locdecls'  = map (Utilities.Isa.alphaConvertCmd  thy renamings) locdecls
+                let rhss''     = map (Utilities.Isa.alphaConvertTerm thy renamings) rhss'
                 return $ Isa.Block (locdecls' ++ [Isa.FunCmd fname' fsig (zip patterns' rhss'')])
             where splitMatch (HsMatch _loc name patterns rhs wherebind)
                       = (name, patterns, rhs, wherebind)
@@ -407,10 +408,10 @@ instance Convert HsExp Isa.Term where
                 cnv etc = convert etc
 
     convert' app@(HsInfixApp exp1 op exp2)
-        = fixInfixApp app >>= (return . infix2prefix)
-          where infix2prefix (Isa.InfixApp exp1 op exp2)
-                    = Isa.App (Isa.App op (infix2prefix exp1)) (infix2prefix exp2)
-                infix2prefix etc = etc
+        = do exp1' <- convert exp1 
+             op'   <- convert op
+             exp2' <- convert exp2
+             fixOperatorFixities (Isa.mkInfixApp exp1' op' exp2')
 
     convert' (HsRecConstr qname updates)
         = do qname'   <- convert qname
@@ -493,67 +494,67 @@ makePatternMatchingLambda patterns theBody
                      return $ Isa.Lambda [g] (Isa.Case (Isa.Var g) [(pat, body)])
 
 
+
 -- Hsx parses every infix application simply from left to right without
 -- taking operator associativity or binding priority into account. So
 -- we gotta fix that up ourselves. (We also properly consider infix
 -- declarations to get user defined operator right.)
-fixInfixApp :: HsExp -> ContextM Isa.Term
 
-fixInfixApp (HsInfixApp exp1 op exp2)
-    = do exp1' <- fixInfixApp exp1
-         exp2' <- fixInfixApp exp2
-         op'   <- convert op
-         fixup (Isa.InfixApp exp1' op' exp2')
-        
-fixInfixApp expr = convert expr
+fixOperatorFixities :: Isa.Term -> ContextM Isa.Term
+
 
 -- Notice that `1 * 2 + 3 / 4' is parsed as `((1 * 2) + 3) / 4', i.e.
 -- 
---    InfixApp (InfixApp (InfixApp 1 * 2) + 3) / 4
+--    HsInfixApp (HsInfixApp (HsInfixApp 1 * 2) + 3) / 4
 --
 -- whereas `1 * 2 + (3 / 4)' is parsed as
 --
---    InfixApp (InfixApp 1 * 2) + (Parenthesized (InfixApp 3 / 4))
+--    HsInfixApp (HsInfixApp 1 * 2) + (HsParen (HsInfixApp 3 / 4))
 --
 -- and `1 * (2 + 3) / 4' is parsed as
 --
---    InfixApp (InfixApp 1 (Parenthesized (InfixApp 2 + 3))) / 4
+--    HsInfixApp (HsInfixApp 1 (HsParen (HsInfixApp 2 + 3))) / 4
 --
 -- Thus we _know_ that the second operand of an infix application,
--- i.e. the e2 in `InfixApp e1 op e2', can _never_ be a bare infix
+-- i.e. the e2 in `HsInfixApp e1 op e2', can _never_ be a bare infix
 -- application that we might have to consider during fixup.
 --  
-fixup :: Isa.Term -> ContextM Isa.Term
-fixup origExpr@(Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3)
-    -- (e1 `op1` e2) `op2` e3, where we assume that (e1 `op1` e2) is correct
-    -- already; so we have to only find the proper place for the (`op2` e3).
-    = do (assoc1', prio1) <- lookupOp op1
-         (assoc2', prio2) <- lookupOp op2
+fixOperatorFixities app
+    | Just (left, op2, t3) <- splitInfixApp app, -- ((t1, op1, t2), op2, t3)
+      Just (t1, op1, t2)   <- splitInfixApp left --    <==  mkInfixApp (mkInfixApp t1 op1 t2) op2 t3
+    -- We assume that `(t1, op1, t2)' is correct already
+    -- and from above, we also know that `t3' cannot possibly
+    -- interfere, so we just have to find the proper place of `op2'.
+    = let (Isa.Var opN1) = op1 
+          (Isa.Var opN2) = op2 in
+      do (assoc1', prio1)  <- lookupOp opN1
+         (assoc2', prio2)  <- lookupOp opN2
          let assoc1 = normalizeAssociativity assoc1'
          let assoc2 = normalizeAssociativity assoc2'
-         case prio2 `compare` prio1 of
-           LT -> return origExpr
-           GT -> fixup (Isa.InfixApp e2 op2 e3) >>= (return . Isa.InfixApp e1 op1)
+         case prio1 `compare` prio2 of
+           GT -> return app
+           LT -> liftM (Isa.mkInfixApp op1 t1) (fixOperatorFixities (Isa.mkInfixApp t2 op2 t3))
            EQ -> if assoc2 /= assoc1 then
                      die (Msg.assoc_mismatch op1 assoc1 op2 assoc2)
                  else case assoc2 of
-                        Isa.AssocLeft  -> return (Isa.InfixApp (Isa.InfixApp e1 op1 e2) op2 e3) -- i.e. origExpr
-                        Isa.AssocRight -> return (Isa.InfixApp e1 op1 (Isa.InfixApp e2 op2 e3))
-                        Isa.AssocNone  -> die ("fixup InfixApp: Internal error (AssocNone should " ++
+                        Isa.AssocLeft  -> return app
+                        Isa.AssocRight -> return (Isa.mkInfixApp t1 op1 (Isa.mkInfixApp t2 op2 t3))
+                        Isa.AssocNone  -> die ("fixup2 InfixApp: Internal error (AssocNone should " ++
                                                "have already been normalized away.)")
-fixup expr@(Isa.InfixApp _ _ _) = return expr
+  where splitInfixApp (Isa.App (Isa.App op t1) t2) = Just (t1, op, t2)
+        splitInfixApp _ = Nothing
+fixOperatorFixities nonNestedInfixApp = return nonNestedInfixApp
 
 normalizeAssociativity (Isa.AssocNone) = Isa.AssocLeft -- as specified in Haskell98.
 normalizeAssociativity etc = etc
 
-lookupOp :: Isa.Term -> ContextM (Isa.Assoc, Int)
-lookupOp (Isa.Var name)
+lookupOp :: Isa.Name -> ContextM (Isa.Assoc, Int)
+lookupOp name
     = do optable <- queryContext optable
          case lookup name optable of
            Just (assoc, prio) -> return (assoc, prio)
            Nothing            -> do warn (Msg.missing_infix_decl name)
                                     return (Isa.AssocLeft, 9) -- default values in Haskell98
-lookupOp junk = barf "lookupOp: " junk
 
 lookupSig :: Isa.Name -> ContextM Isa.TypeSig
 lookupSig fname
@@ -561,8 +562,3 @@ lookupSig fname
          case (lookup fname seensigs) of
            Nothing        -> die (Msg.missing_fun_sig fname)
            Just signature -> return signature
-
-lookupThy :: ContextM Isa.Theory
-lookupThy = do thy <- queryContext theory
-               case thy of Nothing -> die "lookupThy"
-                           Just t  -> return t

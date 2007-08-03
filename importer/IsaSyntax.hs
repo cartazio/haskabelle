@@ -4,17 +4,7 @@
 Abstract syntactic representation of Isar/HOL theory.
 -}
 
-module Importer.IsaSyntax (
-                  Cmd(..), Theory(..),
-                  TypeSpec(..), TypeSig(..), Type(..),
-                  Name(..), Literal(..), Term(..), Assoc(..),
-                  Prio, ConSpec(..),
-                  tnameBool,
-                  tnamePair, cnamePair,
-                  tnameList, cnameNil, cnameCons,
-                  mknil, mkcons, mkpair,
-                  isNil, isCons, isPairCon
-                 ) where
+module Importer.IsaSyntax (module Importer.IsaSyntax) where
 
 import Data.Generics.Basics
 import Data.Generics.Instances
@@ -98,12 +88,9 @@ data Literal = Int Integer | String String
 type Const = String
 
 data Term = Literal Literal
-          | Var VarName -- FIXME: proper representation of constants
-         -- | Con VarName -- FIXME: distinction Var/Con is not necessary
+          | Var VarName
           | Lambda [VarName] Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
           | App Term Term
-          | InfixApp Term Term Term -- Is only used as an intermediate
-                                    -- holding place in Convert.hs.
           | If Term Term Term
           | Parenthesized Term
           | RecConstr VarName [(Name, Term)]
@@ -112,19 +99,21 @@ data Term = Literal Literal
   deriving (Show, Data, Typeable)
 
 -- FIXME place this into some kind of "Haskell system compatibility file"
-tnameBool  = Name "Bool" -- FIXME
+tnameBool   = Name "Bool" -- FIXME
 
-tnamePair  = QName (Theory "Prelude") "*"
-cnamePair  = QName (Theory "Prelude") "(,)"
+tnamePair   = QName (Theory "Prelude") "*"
+cnamePair   = QName (Theory "Prelude") "(,)"
 
-tnameList  = QName (Theory "Prelude") "list"
-cnameNil   = QName (Theory "Prelude") "[]"
-cnameCons  = QName (Theory "Prelude") ":"
+tnameList   = QName (Theory "Prelude") "list"
+cnameNil    = QName (Theory "Prelude") "[]"
+cnameCons   = QName (Theory "Prelude") ":"
 
 mknil       = Var cnameNil
 mkcons x y  = App (App (Var cnameCons) x) y
 mkpair x y  = App (App (Var cnamePair) x) y
 
+mkInfixApp t1 op t2
+    = App (App op t1) t2
 
 isPairCon x = x == cnamePair
 isCons    x = x == cnameCons
