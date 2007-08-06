@@ -5,7 +5,7 @@ Generic functions
 -}
 
 module Importer.Utilities.Misc (
-  assert, trace, concatMapM,
+  assert, trace, concatMapM, map2,
   unfoldr, unfoldr1, unfoldl, unfoldl1,
   prettyShow', prettyShow, prettyHsx,
 ) where
@@ -42,6 +42,8 @@ unfoldl1 f x = aux [] f x
 concatMapM     :: Monad m => (a -> m [b]) -> [a] -> m [b] 
 concatMapM f xs = liftM concat (mapM f xs)
 
+map2 :: (a -> b -> c) -> [a] -> [b] -> [c]
+map2 = zipWith
 
 prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
                              (Hsx.ParseOk (Hsx.HsModule _ _ _ _ decls)) = Hsx.parseModule str

@@ -214,35 +214,80 @@ instance Convert HsDecl Isa.Cmd where
     -- bodies of the local functions, and the body of the actual HsFunBind 
     -- being properly alpha converted.)
     --
-    -- E.g.                                
-    --                                     fun g0 :: "Int => Int"
-    --    f :: Int -> Int                  where
-    --    f x = g x                          "g0 x = x * x"
-    --      where g :: Int -> Int   ==>    
-    --            g x = x * x              fun f :: "Int => Int"
+    -- E.g.                                fun g0 :: "Int => Int"
     --                                     where
+    --    f :: Int -> Int                    "g0 0 = 0"
+    --    f x = g x                        | "g0 n = n + g0 (n - 1)"
+    --      where g :: Int -> Int   ==>    
+    --            g 0 = 0                  fun f :: "Int => Int"
+    --            g n = n + g (n-1)        where
     --                                       "f x = g0 x"
+
+    -- convert' (HsFunBind matchs)
+    --     = let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs)
+    --       in do assert (all (== head names) (tail names)) (return ())
+    --             let m         = Module "FIXME"
+    --             let locdecls  = concatMap (\(HsBDecls decls) -> decls) wbinds
+    --             let locdeclNs = Utilities.Hsx.bindingsFromDecls m locdecls
+    --             trace ("locdeclNs = " ++ (show locdeclNs)) (return ())
+    --             genNs     <- mapM genHsQName locdeclNs
+    --             thy       <- queryContext theory
+    --             let renamings = zip locdeclNs genNs
+    --             let locdecls' = map (Utilities.Hsx.alphaConvertHsDecl m renamings) locdecls
+    --             let bodies'   = map (Utilities.Hsx.alphaConvertHsExp  m renamings) bodies
+    --             fname'     <- convert (names!!0)            -- as all names are equal, pick first one.
+    --             patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
+    --             bodies''   <- mapM convert bodies'
+    --             locdecls'' <- mapM convert locdecls'
+    --             fsig       <- lookupSig fname'              
+    --             return $ Isa.Block (locdecls'' ++ [Isa.FunCmd fname' fsig (zip patterns' bodies'')])
+    --         where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
+    --                   = (name, patterns, body, wherebind)
+
     convert' (HsFunBind matchs)
-        = let (names, patterns, rhss, wbinds) = unzip4 (map splitMatch matchs)
-          in do assert (all (== head names) (tail names)) (return ())
-                fname'    <- convert (names!!0)            -- as all names are equal, pick first one.
-                patterns' <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
-                rhss'     <- mapM convert rhss             
-                locdecls  <- concatMapM convert wbinds     -- local declarations
-                fsig      <- lookupSig fname'              
-                thy       <- queryContext theory           -- current theory we're converting in.
-                locdeclNs <- case concatMapM Utilities.Hsx.extractBindingNames wbinds of
-                               Nothing    -> die "Illegal where bind" -- FIXME
-                               Just names -> mapM convert names
-                genNs     <- mapM genIsaName locdeclNs
-                -- Note that we do the alpha-conversion on the Isar/HOL AST,
-                -- as it's way easier to do it there than on full Haskell.
-                let renamings  = zip locdeclNs genNs
-                let locdecls'  = map (Utilities.Isa.alphaConvertCmd  thy renamings) locdecls
-                let rhss''     = map (Utilities.Isa.alphaConvertTerm thy renamings) rhss'
-                return $ Isa.Block (locdecls' ++ [Isa.FunCmd fname' fsig (zip patterns' rhss'')])
-            where splitMatch (HsMatch _loc name patterns rhs wherebind)
-                      = (name, patterns, rhs, wherebind)
+        = do matchs'    <- mapM preprocessMatch matchs
+             let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs')
+             assert (all (== head names) (tail names)) (return ())
+             fname'     <- convert (names!!0)            -- as all names are equal, pick first one.
+             patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
+             bodies'    <- mapM convert bodies
+             wbinds'    <- concatMapM convert wbinds
+             fsig       <- lookupSig fname'              
+             thy        <- queryContext theory
+             return $ Isa.Block (wbinds' ++ [Isa.FunCmd fname' fsig (zip patterns' bodies')])
+       where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
+                 = (name, patterns, body, wherebind)
+             preprocessMatch (HsMatch loc name pats (HsUnGuardedRhs body) (HsBDecls locdecls))
+                 = do let m         = Module "FIXME"
+                      let locdeclNs = Utilities.Hsx.bindingsFromDecls m locdecls
+                      genNs <- mapM genHsQName locdeclNs
+                      let renamings = zip locdeclNs genNs
+                      let locdecls' = map (Utilities.Hsx.alphaconvert m renamings) locdecls
+                      let body'     = Utilities.Hsx.alphaconvert m renamings body
+                      return $ HsMatch loc name pats (HsUnGuardedRhs body') (HsBDecls locdecls') 
+
+
+    -- convert' (HsFunBind matchs)
+    --     = let (names, patterns, rhss, wbinds) = unzip4 (map splitMatch matchs)
+    --       in do assert (all (== head names) (tail names)) (return ())
+    --             fname'    <- convert (names!!0)            -- as all names are equal, pick first one.
+    --             patterns' <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
+    --             rhss'     <- mapM convert rhss             
+    --             locdecls  <- concatMapM convert wbinds     -- local declarations
+    --             fsig      <- lookupSig fname'              
+    --             thy       <- queryContext theory           -- current theory we're converting in.
+    --             locdeclNs <- case concatMapM Utilities.Hsx.namesFromHsBinds wbinds of
+    --                            Nothing    -> die "(convert' HsFunBind): Illegal where bind" -- FIXME
+    --                            Just names -> mapM convert (nub names)
+    --             genNs     <- mapM genIsaName locdeclNs
+    --             -- Note that we do the alpha-conversion on the Isar/HOL AST,
+    --             -- as it's way easier to do it there than on full Haskell.
+    --             let renamings  = zip locdeclNs genNs
+    --             let locdecls'  = map (Utilities.Isa.alphaConvertCmd  thy renamings) locdecls
+    --             let rhss''     = map (Utilities.Isa.alphaConvertTerm thy renamings) rhss'
+    --             return $ Isa.Block (locdecls' ++ [Isa.FunCmd fname' fsig (zip patterns' rhss'')])
+    --         where splitMatch (HsMatch _loc name patterns rhs wherebind)
+    --                   = (name, patterns, rhs, wherebind)
                   
 
     convert' (HsPatBind _loc pat@(HsPVar name) rhs _wherebinds)
@@ -276,9 +321,9 @@ createRecordCmd :: HsName -> [HsName] -> [HsConDecl] -> ContextM Isa.Cmd
 createRecordCmd tyconN tyvarNs [HsRecDecl name slots]
     = do tycon  <- convert tyconN
          tyvars <- mapM convert tyvarNs
-         slots' <- liftM concat (mapM cnvtSlot slots)
+         slots' <- concatMapM cnvSlot slots
          return $ Isa.RecordCmd (Isa.TypeSpec tyvars tycon) slots'
-    where cnvtSlot (names, typ)
+    where cnvSlot (names, typ)
               = do names' <- mapM convert names
                    typ'   <- convert typ
                    return (zip names' (cycle [typ']))
@@ -393,6 +438,8 @@ instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
 instance Convert HsAlt (Isa.Term, Isa.Term) where
     convert' (HsAlt _loc pat (HsUnGuardedAlt exp) _wherebinds)
         = do pat' <- convert pat; exp' <- convert exp; return (pat', exp')
+    convert' junk 
+        = barf "HsAlt -> (Isa.Term, Isa.Term)" junk
 
 
 instance Convert HsExp Isa.Term where
@@ -400,6 +447,15 @@ instance Convert HsExp Isa.Term where
     convert' (HsVar qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
+
+    convert' (HsList [])       = return (Isa.Var Isa.cnameNil)
+    convert' (HsList exps)
+        = do exps' <- mapM convert exps
+             return $ foldr Isa.mkcons Isa.mknil exps' 
+
+    convert' (HsTuple exps)
+        = do exps' <- mapM convert exps
+             return $ foldr1 Isa.mkpair exps'
 
     convert' (HsApp exp1 exp2)
         = do exp1' <- cnv exp1 ; exp2' <- cnv exp2
@@ -423,32 +479,37 @@ instance Convert HsExp Isa.Term where
              updates' <- mapM convert updates
              return $ Isa.RecUpdate exp' updates'
 
-    convert' (HsLambda _loc pats exp)
-        = do pats'  <- mapM convert pats
-             exp'   <- convert exp
-             if all isVar pats' then return $ Isa.Lambda (map getName pats') exp'
-                                else makePatternMatchingLambda pats' exp'
-          where isVar (Isa.Var _)   = True
-                isVar _             = False
-                getName (Isa.Var n) = n
-
-    convert' (HsList []) = return (Isa.Var Isa.cnameNil)
-    convert' (HsList exps)
-        = do exps' <- mapM convert exps
-             return $ foldr Isa.mkcons Isa.mknil exps' 
-
-    convert' (HsTuple exps)
-        = do exps' <- mapM convert exps
-             return $ foldr1 Isa.mkpair exps'
-
     convert' (HsIf t1 t2 t3)
         = do t1' <- convert t1; t2' <- convert t2; t3' <- convert t3
              return (Isa.If t1' t2' t3')
+
 
     convert' (HsCase exp alts)
         = do exp'  <- convert exp
              alts' <- mapM convert alts
              return $ Isa.Case exp' alts'
+
+    convert' (HsLambda _loc pats body)
+        = do pats'  <- mapM convert pats
+             body'  <- convert body
+             if all isVar pats' then return $ Isa.Lambda [n | Isa.Var n <- pats'] body'
+                                else makePatternMatchingLambda pats' body'
+          where isVar (Isa.Var _)   = True
+                isVar _             = False
+
+    -- FIXME: HsLet must be preconverted to where binds.
+    --
+    --
+    -- convert' (HsLet (HsBDecls decls) body)
+    --     = do let m         = Module "FIXME"
+    --          let declNs    = Utilities.Hsx.bindingsFromDecls m decls
+    --          genNs <- mapM genHsQName declNs
+    --          let renamings = zip declNs genNs
+    --          let decls'    = map (Utilities.Hsx.alphaconvert m renamings) decls
+    --          let body'     = Utilities.Hsx.alphaconvert m renamings body
+    --          localcmds <- mapM convert decls'
+    --          body''    <- convert body'
+    --          return $ Isa.Block (localcmds ++ [body''])
 
     convert' junk = barf "HsExp -> Isa.Term" junk
 
@@ -459,11 +520,16 @@ gensym prefix = do count <- queryContext gensymcount
                    updateContext gensymcount (\count -> count + 1)
                    return $ prefix ++ (show count)
 
+
+genHsName (HsIdent  prefix) = liftM HsIdent  (gensym prefix) 
+genHsName (HsSymbol prefix) = liftM HsSymbol (gensym prefix) 
+
+genHsQName (Qual m prefix)  = liftM (Qual m) (genHsName prefix)
+genHsQName (UnQual prefix)  = liftM UnQual   (genHsName prefix)
+
 genIsaName :: Isa.Name -> ContextM Isa.Name
-genIsaName (Isa.QName t prefix) 
-    = gensym prefix >>= (\sym -> return (Isa.QName t sym))
-genIsaName (Isa.Name prefix)
-    = gensym prefix >>= (\sym -> return (Isa.Name sym))
+genIsaName (Isa.QName t prefix) = liftM (Isa.QName t) (gensym prefix)
+genIsaName (Isa.Name prefix)    = liftM Isa.Name      (gensym prefix)
 
 
 -- Since HOL doesn't have true n-tuple constructors (it uses nested
@@ -472,8 +538,9 @@ genIsaName (Isa.Name prefix)
 -- body.
 makeTupleDataCon :: Int -> ContextM Isa.Term
 makeTupleDataCon n
-    = do args <- mapM genIsaName (replicate n (Isa.Name "_arg"))
-         return $ Isa.Parenthesized (Isa.Lambda args (foldr1 Isa.mkpair (map Isa.Var args)))
+    = do argNs <- mapM genIsaName (replicate n (Isa.Name "_arg"))
+         args  <- return (map Isa.Var argNs)
+         return $ Isa.Parenthesized (Isa.Lambda argNs (foldr1 Isa.mkpair args))
 
 -- HOL does not support pattern matching directly within a lambda
 -- expression, so we transform a `HsLambda pat1 pat2 .. patn -> body' to
