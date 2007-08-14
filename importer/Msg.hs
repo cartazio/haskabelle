@@ -1,3 +1,8 @@
+{-  ID:         $Id: Printer.hs 421 2007-08-03 19:18:11Z rittweil $
+    Author:     Tobias C. Rittweiler, TU Munich
+
+Messages.
+-}
 
 module Importer.Msg where
 

@@ -1,7 +1,7 @@
 {-  ID:         $Id: General.hs 416 2007-07-17 07:03:59Z haftmann $
     Author:     Tobias C. Rittweiler and Florian Haftmann, TU Munich
 
-Generic functions
+Generic functions.
 -}
 
 module Importer.Utilities.Misc (
