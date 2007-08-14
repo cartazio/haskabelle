@@ -1,4 +1,4 @@
-{-  ID:         $Id: General.hs 416 2007-07-17 07:03:59Z haftmann $
+{-  ID:         $Id$
     Author:     Tobias C. Rittweiler and Florian Haftmann, TU Munich
 
 Generic functions.
