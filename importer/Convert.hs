@@ -116,7 +116,7 @@ data Conversion a = ConvSuccess a [Warning] | ConvFailed String
 convertParseResult :: ParseResult HsModule -> Conversion Isa.Cmd
 
 convertParseResult (ParseOk parseRes) 
-    = let ContextM cf       = convert parseRes
+    = let ContextM cf       = convert (Utilities.Hsx.preprocessHsModule parseRes)
           (result, context) = cf emptyContext
       in ConvSuccess result (_warnings context)
 convertParseResult (ParseFailed loc msg) 
@@ -150,9 +150,10 @@ instance Convert HsName Isa.Name where
 instance Convert HsQName Isa.Name where
     convert' (UnQual name)     = (convert name)
     convert' (Qual modul name) = do theory <- convert modul
-                                    return (Isa.QName theory (case name of
-                                                                HsIdent str  -> str
-                                                                HsSymbol str -> str))
+                                    return (Isa.QName theory 
+                                               $ case name of
+                                                   HsIdent  str -> str
+                                                   HsSymbol str -> str)
     convert' (Special spcon)   = convert spcon
 
 instance Convert HsSpecialCon Isa.Name where
@@ -182,7 +183,7 @@ instance Convert HsDecl Isa.Cmd where
         = let strip (HsQualConDecl _loc _FIXME _context decl) = decl
               decls = map strip condecls
           in if isRecDecls decls then
-                 createRecordCmd tyconN tyvarNs decls
+                 makeRecordCmd tyconN tyvarNs decls
              else do tyvars <- mapM convert tyvarNs
                      tycon  <- convert tyconN
                      decls' <- mapM cnvt decls
@@ -208,87 +209,31 @@ instance Convert HsDecl Isa.Cmd where
              updateContext fsignatures (\sigs -> (zip names' newsigs) ++ sigs)
              return (Isa.Comment (prettyShow' "typeSigs" newsigs)) -- show type sigs in comment; FIXME
 
-    -- There are no local functions in Isar/HOL, so local "where" declarations
-    -- are pulled out and are made global. To avoid name capture, the names
-    -- of these local functions are renamed to fresh identifiers (with the
-    -- bodies of the local functions, and the body of the actual HsFunBind 
-    -- being properly alpha converted.)
+    -- Remember that at this stage there are _no_ local declarations in the Hsx
+    -- AST anymore, as we made those global during the preprocessing stage.
+    -- 
+    --   E.g.                                                       fun g0 :: "Int => Int"    
+    --                                    g0 :: Int -> Int          where                      
+    --    f :: Int -> Int                 g0 0 = 0                    "g0 0 = 0"              
+    --    f x = g x                       g0 n = n + g0 (n-1)       | "g0 n = n + g0 (n - 1)"
+    --      where g :: Int -> Int   ==>                        ==>                            
+    --            g 0 = 0                 f :: Int -> Int           fun f :: "Int => Int"     
+    --            g n = n + g (n-1)       f x = g0 x                where                     
+    --                                                                "f x = g0 x"            
     --
-    -- E.g.                                fun g0 :: "Int => Int"
-    --                                     where
-    --    f :: Int -> Int                    "g0 0 = 0"
-    --    f x = g x                        | "g0 n = n + g0 (n - 1)"
-    --      where g :: Int -> Int   ==>    
-    --            g 0 = 0                  fun f :: "Int => Int"
-    --            g n = n + g (n-1)        where
-    --                                       "f x = g0 x"
-
-    -- convert' (HsFunBind matchs)
-    --     = let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs)
-    --       in do assert (all (== head names) (tail names)) (return ())
-    --             let m         = Module "FIXME"
-    --             let locdecls  = concatMap (\(HsBDecls decls) -> decls) wbinds
-    --             let locdeclNs = Utilities.Hsx.bindingsFromDecls m locdecls
-    --             trace ("locdeclNs = " ++ (show locdeclNs)) (return ())
-    --             genNs     <- mapM genHsQName locdeclNs
-    --             thy       <- queryContext theory
-    --             let renamings = zip locdeclNs genNs
-    --             let locdecls' = map (Utilities.Hsx.alphaConvertHsDecl m renamings) locdecls
-    --             let bodies'   = map (Utilities.Hsx.alphaConvertHsExp  m renamings) bodies
-    --             fname'     <- convert (names!!0)            -- as all names are equal, pick first one.
-    --             patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
-    --             bodies''   <- mapM convert bodies'
-    --             locdecls'' <- mapM convert locdecls'
-    --             fsig       <- lookupSig fname'              
-    --             return $ Isa.Block (locdecls'' ++ [Isa.FunCmd fname' fsig (zip patterns' bodies'')])
-    --         where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
-    --                   = (name, patterns, body, wherebind)
-
     convert' (HsFunBind matchs)
-        = do matchs'    <- mapM preprocessMatch matchs
-             let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs')
+        = do let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs)
              assert (all (== head names) (tail names)) (return ())
-             fname'     <- convert (names!!0)            -- as all names are equal, pick first one.
-             patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
+             assert (all empty wbinds) (return ())      -- all decls are global at this point.
+             fname'     <- convert (names!!0)           -- as all names are equal, pick first one.
+             patterns'  <- mapM (mapM convert) patterns -- each pattern is itself a list of HsPat.
              bodies'    <- mapM convert bodies
-             wbinds'    <- concatMapM convert wbinds
              fsig       <- lookupSig fname'              
              thy        <- queryContext theory
-             return $ Isa.Block (wbinds' ++ [Isa.FunCmd fname' fsig (zip patterns' bodies')])
+             return $ Isa.FunCmd fname' fsig (zip patterns' bodies')
        where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
-             preprocessMatch (HsMatch loc name pats (HsUnGuardedRhs body) (HsBDecls locdecls))
-                 = do let m         = Module "FIXME"
-                      let locdeclNs = Utilities.Hsx.bindingsFromDecls m locdecls
-                      genNs <- mapM genHsQName locdeclNs
-                      let renamings = zip locdeclNs genNs
-                      let locdecls' = map (Utilities.Hsx.alphaconvert m renamings) locdecls
-                      let body'     = Utilities.Hsx.alphaconvert m renamings body
-                      return $ HsMatch loc name pats (HsUnGuardedRhs body') (HsBDecls locdecls') 
-
-
-    -- convert' (HsFunBind matchs)
-    --     = let (names, patterns, rhss, wbinds) = unzip4 (map splitMatch matchs)
-    --       in do assert (all (== head names) (tail names)) (return ())
-    --             fname'    <- convert (names!!0)            -- as all names are equal, pick first one.
-    --             patterns' <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
-    --             rhss'     <- mapM convert rhss             
-    --             locdecls  <- concatMapM convert wbinds     -- local declarations
-    --             fsig      <- lookupSig fname'              
-    --             thy       <- queryContext theory           -- current theory we're converting in.
-    --             locdeclNs <- case concatMapM Utilities.Hsx.namesFromHsBinds wbinds of
-    --                            Nothing    -> die "(convert' HsFunBind): Illegal where bind" -- FIXME
-    --                            Just names -> mapM convert (nub names)
-    --             genNs     <- mapM genIsaName locdeclNs
-    --             -- Note that we do the alpha-conversion on the Isar/HOL AST,
-    --             -- as it's way easier to do it there than on full Haskell.
-    --             let renamings  = zip locdeclNs genNs
-    --             let locdecls'  = map (Utilities.Isa.alphaConvertCmd  thy renamings) locdecls
-    --             let rhss''     = map (Utilities.Isa.alphaConvertTerm thy renamings) rhss'
-    --             return $ Isa.Block (locdecls' ++ [Isa.FunCmd fname' fsig (zip patterns' rhss'')])
-    --         where splitMatch (HsMatch _loc name patterns rhs wherebind)
-    --                   = (name, patterns, rhs, wherebind)
-                  
+             empty wherebind = case wherebind of HsBDecls [] -> True; _ -> False
 
     convert' (HsPatBind _loc pat@(HsPVar name) rhs _wherebinds)
         = do name' <- convert name
@@ -304,30 +249,7 @@ instance Convert HsBinds [Isa.Cmd] where
     convert' (HsBDecls decls) = mapM convert decls
     convert' junk = barf "HsBinds -> Isa.Cmd" junk
 
-isRecDecls :: [HsConDecl] -> Bool
-isRecDecls decls
-    = case decls of
-        -- Haskell allows that a data declaration may be mixed up arbitrarily
-        -- by normal data constructor declarations and record declarations.
-        -- As HOL does not support that kind of mishmash, we require that a
-        -- data declaration either consists of exactly one record definition,
-        -- or arbitrarily many data constructor definitions.
-        (HsRecDecl _ _):rest -> assert (null rest) True
-        decls                -> assert (all (not.isRecDecl) decls) False
-    where isRecDecl (HsRecDecl _ _) = True
-          isRecDecl _               = False
-
-createRecordCmd :: HsName -> [HsName] -> [HsConDecl] -> ContextM Isa.Cmd
-createRecordCmd tyconN tyvarNs [HsRecDecl name slots]
-    = do tycon  <- convert tyconN
-         tyvars <- mapM convert tyvarNs
-         slots' <- concatMapM cnvSlot slots
-         return $ Isa.RecordCmd (Isa.TypeSpec tyvars tycon) slots'
-    where cnvSlot (names, typ)
-              = do names' <- mapM convert names
-                   typ'   <- convert typ
-                   return (zip names' (cycle [typ']))
-        
+     
 
 instance Convert HsType Isa.Type where
     convert' (HsTyVar name)        = (convert name)  >>= (\n -> return (Isa.TyVar n))
@@ -561,6 +483,31 @@ makePatternMatchingLambda patterns theBody
                      return $ Isa.Lambda [g] (Isa.Case (Isa.Var g) [(pat, body)])
 
 
+isRecDecls :: [HsConDecl] -> Bool
+isRecDecls decls
+    = case decls of
+        -- Haskell allows that a data declaration may be mixed up arbitrarily
+        -- by normal data constructor declarations and record declarations.
+        -- As HOL does not support that kind of mishmash, we require that a
+        -- data declaration either consists of exactly one record definition,
+        -- or arbitrarily many data constructor definitions.
+        (HsRecDecl _ _):rest -> assert (null rest) True
+        decls                -> assert (all (not.isRecDecl) decls) False
+    where isRecDecl (HsRecDecl _ _) = True
+          isRecDecl _               = False
+
+makeRecordCmd :: HsName -> [HsName] -> [HsConDecl] -> ContextM Isa.Cmd
+makeRecordCmd tyconN tyvarNs [HsRecDecl name slots] -- cf. `isRecDecls'
+    = do tycon  <- convert tyconN
+         tyvars <- mapM convert tyvarNs
+         slots' <- concatMapM cnvSlot slots
+         return $ Isa.RecordCmd (Isa.TypeSpec tyvars tycon) slots'
+    where cnvSlot (names, typ)
+              = do names' <- mapM convert names
+                   typ'   <- convert typ
+                   return (zip names' (cycle [typ']))
+ 
+
 
 -- Hsx parses every infix application simply from left to right without
 -- taking operator associativity or binding priority into account. So
@@ -606,8 +553,8 @@ fixOperatorFixities app
                  else case assoc2 of
                         Isa.AssocLeft  -> return app
                         Isa.AssocRight -> return (Isa.mkInfixApp t1 op1 (Isa.mkInfixApp t2 op2 t3))
-                        Isa.AssocNone  -> die ("fixup2 InfixApp: Internal error (AssocNone should " ++
-                                               "have already been normalized away.)")
+                        Isa.AssocNone  -> die ("fixupOperatorFixities: Internal error " ++
+                                               "(AssocNone should have already been normalized away.)")
   where splitInfixApp (Isa.App (Isa.App op t1) t2) = Just (t1, op, t2)
         splitInfixApp _ = Nothing
 fixOperatorFixities nonNestedInfixApp = return nonNestedInfixApp

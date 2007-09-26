@@ -6,16 +6,18 @@ Auxiliary.
 
 module Importer.Utilities.Hsx ( 
   namesFromHsBinds, namesFromHsDecl,
-  bindingsFromDecls,
-  alphaconvert,
+  bindingsFromDecls, renameToFreshIdentifiers,
+  alphaconvert, preprocessHsModule, 
 ) where
 
-import Importer.Utilities.Misc (concatMapM, assert)
+import Importer.Utilities.Misc -- (concatMapM, assert)
+import Importer.Utilities.Gensym
 
 import Data.Generics.PlateData
 import Language.Haskell.Hsx
 import Control.Monad.State
 import Maybe
+import Array (inRange)
 
 namesFromHsBinds :: HsBinds -> Maybe [HsQName]
 
@@ -158,47 +160,53 @@ instance AlphaConvertable HsPat where
 
 
 
--- preprocess :: HsModule -> HsModule
+preprocessHsModule :: HsModule -> HsModule
 
--- preprocess (HsModule loc modul exports imports topdecls)
---       = HsModule loc modul exports imports (topdecls ++ localdecls' ++ decls_of_localdecls)
---   where localdecls = concat [ decls | HsBDecls decls <- (childrenBi topdecls :: [HsBinds]) ]            
---         (localdecls', decls_of_localdecls) = unzip (map (delocalize modul) localdecls)
+preprocessHsModule (HsModule loc modul exports imports topdecls)
+    = HsModule loc modul exports imports 
+        $ evalState (concatMapM (delocalizeDecl modul) topdecls) (GensymCount 0)
+
+-- Delocalization of HsDecls:
+--
+--  Since Isabelle/HOL does not really support local variable / function 
+--  declarations, we convert the Haskell AST to an equivalent AST where
+--  every local declaration is made a global declaration.
+--
+--  For each toplevel declaration, this is done as follows:
+--
+--     * separate the decl from itself and its local declarations; 
+--
+--     * rename the local declarations to fresh identifiers;
+--
+--     * alpha convert decl (sans local decls) and alpha convert the 
+--       bodies of the local decls themselves to reflect the new names;
+--
+--     * delocalize the bodies of the local declarations (as they can
+--       themselves contain local declarations);
+--
+--     * and finally concatenate everything.
+--
+
+delocalizeDecl :: Module -> HsDecl -> State GensymCount [HsDecl]
+delocalizeDecl m decl 
+    = do (localdecls, decl') <- delocalizeDeclAux m decl
+         return (localdecls ++ decl')
+      
+delocalizeDeclAux :: Module -> HsDecl -> State GensymCount ([HsDecl], [HsDecl])
+delocalizeDeclAux m decl
+    = let (wherebinds, contextgen) = biplate decl
+          localdecls               = concat [ decls | HsBDecls decls <- wherebinds ]
+      in do renamings <- renameToFreshIdentifiers (bindingsFromDecls m localdecls)
+            let decl'       = alphaconvert m renamings (contextgen (map (\_ -> (HsBDecls [])) wherebinds))
+            let localdecls' = map (alphaconvert m renamings) localdecls
+            (sublocaldecls, localdecls'') 
+                      <- liftM (\(xs,ys) -> (concat xs, concat ys))
+                           $ (mapAndUnzipM (delocalizeDeclAux m) localdecls')
+            return (sublocaldecls ++ localdecls'', [decl'])
 
 
+renameToFreshIdentifiers :: [HsQName] -> State GensymCount [(HsQName, HsQName)]
+renameToFreshIdentifiers qnames
+    = do freshs <- mapM genHsQName qnames
+         return (zip qnames freshs)
 
--- uniquefy modul body decls
---     = let declNs    = bindingsFromDecls modul decls
---           renamings = zip declNs (map (genHsQName 99) declNs)
---           body'     = alphaconvert modul renamings body
---           decls'    = map (alphaconvert modul renamings) decls
---       in (body', decls')
-
--- delocalize modul (HsPatBind loc pat (HsUnGuardedRhs body) (HsBDecls decls))
---     = let (body', decls') = uniquefy modul body decls
---           (decls'', decls_of_decls) = unzip (map delocalize decls')
---       in (HsPatBind loc pat (HsUnGuardedRhs body') (HsBDecls []), decls'' ++ decls_of_decls)
-
--- genHsName n (HsIdent  prefix) = HsIdent  (prefix ++ "_" ++ (show n))
--- genHsName n (HsSymbol prefix) = HsSymbol (prefix ++ "_" ++ (show n))
-
--- genHsQName n  (Qual m prefix) = Qual m (genHsName n prefix)
--- genHsQName n  (UnQual prefix) = UnQual (genHsName n prefix)
-
-
--- f modul (HsPatBind loc pat (HsUnGuardedRhs body) (HsBDecls decls)) 
---     = do (n:ns,result) <- get
---          let declNs    = bindingsFromDecls modul decls
---          let renamings = zip declNs (map (genHsQName n) declNs)
---          let body'     = alphaconvert modul renamings body
---          decls' <- descendBiM (f modul) decls
---          let decls''    = 
---          put (ns, decls'' ++ result)
---          return (HsPatBind loc pat (HsUnGuardedRhs body') (HsBDecls []))
--- f modul (HsMatch loc name pats (HsUnGuardedRhs) (HsBDecls decls))
---   = return (HsMatch loc name pats (HsUnGuardedRhs) (HsBDecls decls))
-
--- delocalizeHsDecl (HsFunBind matchs)
---      = concatMap delocalizeHsMatch matchs
---    where delocalizeHsMatch (HsMatch loc name pats rhs (HsBDecl localdecls))
---              = 
