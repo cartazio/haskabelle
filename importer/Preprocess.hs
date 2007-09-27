@@ -2,7 +2,6 @@
 module Importer.Preprocess (preprocessHsModule) where
 
 import Control.Monad.State
-import Data.Generics.PlateData (biplate)
 import Language.Haskell.Hsx
 
 import Importer.Utilities.Misc (concatMapM)
@@ -36,25 +35,34 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
 --     * and finally concatenate everything.
 --
 
+
 delocalizeDecl :: Module -> HsDecl -> State GensymCount [HsDecl]
-delocalizeDecl m decl 
-    = do (localdecls, decl') <- delocalizeDeclAux m decl
-         return (localdecls ++ decl')
-      
-delocalizeDeclAux :: Module -> HsDecl -> State GensymCount ([HsDecl], [HsDecl])
-delocalizeDeclAux m decl
-    = let (wherebinds, contextgen) = biplate decl
-          localdecls               = concat [ decls | HsBDecls decls <- wherebinds ]
-      in do renamings <- renameToFreshIdentifiers (bindingsFromDecls m localdecls)
-            let decl'       = alphaconvert m renamings (contextgen (map (\_ -> (HsBDecls [])) wherebinds))
-            let localdecls' = map (alphaconvert m renamings) localdecls
-            (sublocaldecls, localdecls'') 
-                      <- liftM (\(xs,ys) -> (concat xs, concat ys))
-                           $ (mapAndUnzipM (delocalizeDeclAux m) localdecls')
-            return (sublocaldecls ++ localdecls'', [decl'])
+
+delocalizeDecl m (HsPatBind loc pat rhs wbinds)
+    = do (localdecls, renamings) <- delocalizeWhereBinds m wbinds
+         return $ localdecls ++ [alphaconvert m renamings (HsPatBind loc pat rhs (HsBDecls []))]
+
+delocalizeDecl m (HsFunBind matchs)
+    = do (matchs', localdecls) <- liftM (\(xs, ys) -> (xs, concat ys))
+                                    $ mapAndUnzipM (delocalizeMatch m) matchs
+         return (localdecls ++ [HsFunBind matchs'])
+
+delocalizeDecl m decl = return [decl]
+
+
+delocalizeMatch m (HsMatch loc name pats rhs wbinds)
+    = do (localdecls, renamings) <- delocalizeWhereBinds m wbinds
+         return (alphaconvert m renamings (HsMatch loc name pats rhs (HsBDecls [])),
+                 localdecls)
+
+delocalizeWhereBinds m (HsBDecls localdecls)
+    = do renamings <- renameToFreshIdentifiers (bindingsFromDecls m localdecls)
+         let localdecls' = map (alphaconvert m renamings) localdecls
+         localdecls'' <- concatMapM (delocalizeDecl m) localdecls'
+         return (localdecls'', renamings)
+
 
 renameToFreshIdentifiers :: [HsQName] -> State GensymCount [(HsQName, HsQName)]
 renameToFreshIdentifiers qnames
     = do freshs <- mapM genHsQName qnames
          return (zip qnames freshs)
-

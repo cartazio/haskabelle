@@ -15,6 +15,7 @@ import Data.Generics.PlateData
 import Language.Haskell.Hsx
 
 import Maybe
+import List (tails)
 import Array (inRange)
 
 namesFromHsBinds :: HsBinds -> Maybe [HsQName]
@@ -42,14 +43,15 @@ namesFromHsDecl _                              = Nothing
 bindingsFromPats modul pattern 
     = [ Qual modul n | HsPVar n <- universeBi pattern ] 
 
-bindingsFromDecls modul decls 
-    -- Type signatures do not create new bindings, but simply 
-    -- annotate them.
-    = concatMap (fromJust . namesFromHsDecl) (filter (not . isTypeSig) decls)
-    where isTypeSig (HsTypeSig _ _ _) = True
+bindingsFromDecls modul decls = assert (not (hasDuplicates bindings)) bindings
+    -- Type signatures do not create new bindings, but simply annotate them.
+    where bindings = concatMap (fromJust . namesFromHsDecl) (filter (not . isTypeSig) decls)
+          isTypeSig (HsTypeSig _ _ _) = True
           isTypeSig _                 = False
 
-
+hasDuplicates :: Eq a => [a] -> Bool
+hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
+    where tails' = filter (not . null) (tails list)
 
 type Renaming = (HsQName, HsQName)
 
