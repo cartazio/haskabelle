@@ -18,10 +18,11 @@ import Control.Monad.State
 
 import Importer.Utilities.Misc
 import Importer.Utilities.Gensym
-import qualified Importer.Utilities.Isa as Utils.Isa
-import qualified Importer.Utilities.Hsx as Utils.Hsx
+
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
+
+import Importer.Preprocess
 
 data Context    = Context
     {
@@ -110,7 +111,7 @@ data Conversion a = ConvSuccess a [Warning] | ConvFailed String
 convertParseResult :: ParseResult HsModule -> Conversion Isa.Cmd
 
 convertParseResult (ParseOk parseRes) 
-    = let parseRes'         = Utils.Hsx.preprocessHsModule parseRes
+    = let parseRes'         = preprocessHsModule parseRes
           (result, context) = runConversion (convert parseRes')
       in ConvSuccess result (_warnings context)
 convertParseResult (ParseFailed loc msg) 
