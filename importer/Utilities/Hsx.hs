@@ -141,15 +141,15 @@ toHsPatBind (HsAlt loc pat guards wherebinds)
 fromHsPatBind (HsPatBind loc pat rhs wherebinds)
     = HsAlt loc pat (rhs2guards rhs) wherebinds
   where rhs2guards (HsUnGuardedRhs body) = HsUnGuardedAlt body
-        
+
 
 instance AlphaConvertable HsMatch where
-    alphaconvert modul renams (HsMatch loc name pats (HsUnGuardedRhs body) (HsBDecls decls))
-        = HsMatch loc name' pats (HsUnGuardedRhs body') (HsBDecls decls')
+    alphaconvert modul renams (HsMatch loc name pats rhs (HsBDecls decls))
+        = HsMatch loc name' pats rhs' (HsBDecls decls')
       where name'  = translate name renams
             patNs  = bindingsFromPats  modul pats
             declNs = bindingsFromDecls modul decls 
-            body'  = alphaconvert modul (shadow (patNs ++ declNs) renams) body
+            rhs'   = alphaconvert modul (shadow (patNs ++ declNs) renams) rhs
             decls' = map (alphaconvert modul (shadow declNs renams)) decls
 
 
@@ -157,3 +157,7 @@ instance AlphaConvertable HsPat where
     alphaconvert modul renams pat = transformBi alpha pat
       where alpha (HsPVar name) = HsPVar (translate name renams)
             alpha etc           = etc
+
+instance AlphaConvertable HsRhs where
+    alphaconvert modul renams (HsUnGuardedRhs exp)
+        = HsUnGuardedRhs (alphaconvert modul renams exp)

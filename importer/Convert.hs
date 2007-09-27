@@ -417,16 +417,9 @@ instance Convert HsExp Isa.Term where
     -- FIXME: HsLet must be preconverted to where binds.
     --
     --
-    -- convert' (HsLet (HsBDecls decls) body)
-    --     = do let m         = Module "FIXME"
-    --          let declNs    = Utils.Hsx.bindingsFromDecls m decls
-    --          genNs <- mapM genHsQName declNs
-    --          let renamings = zip declNs genNs
-    --          let decls'    = map (Utils.Hsx.alphaconvert m renamings) decls
-    --          let body'     = Utils.Hsx.alphaconvert m renamings body
-    --          localcmds <- mapM convert decls'
-    --          body''    <- convert body'
-    --          return $ Isa.Block (localcmds ++ [body''])
+    convert' expr@(HsLet bindings body)
+        = die ("convert' (HsLet): Internal Error. All let expression should have been "
+               ++ "preprocessed away at this stage.")
 
     convert' junk = barf "HsExp -> Isa.Term" junk
 
