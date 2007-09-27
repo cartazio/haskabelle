@@ -17,6 +17,7 @@ import Maybe
 import Control.Monad.State
 
 import Importer.Utilities.Misc
+import Importer.Utilities.Gensym
 import qualified Importer.Utilities.Isa as Utils.Isa
 import qualified Importer.Utilities.Hsx as Utils.Hsx
 import qualified Importer.IsaSyntax as Isa
@@ -56,8 +57,10 @@ backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
 gensymcount = (_gensymcount, \c f -> c { _gensymcount = f })
 
 
-type ContextM v = State Context v --(StateT Context (State GensymCount) v)
+type ContextM v = StateT Context (State GensymCount) v
 
+runConversion :: ContextM v -> (v, Context)
+runConversion m = runGensym 0 (runStateT m emptyContext)
 
 queryContext :: (FieldSurrogate field) -> ContextM field
 queryContext (query, _)
@@ -108,7 +111,7 @@ convertParseResult :: ParseResult HsModule -> Conversion Isa.Cmd
 
 convertParseResult (ParseOk parseRes) 
     = let parseRes'         = Utils.Hsx.preprocessHsModule parseRes
-          (result, context) = runState (convert parseRes') emptyContext
+          (result, context) = runConversion (convert parseRes')
       in ConvSuccess result (_warnings context)
 convertParseResult (ParseFailed loc msg) 
     = ConvFailed (show loc ++ " -- " ++ msg)
@@ -427,31 +430,13 @@ instance Convert HsExp Isa.Term where
     convert' junk = barf "HsExp -> Isa.Term" junk
 
 
-
-gensym :: String -> ContextM String
-gensym prefix = do count <- queryContext gensymcount
-                   updateContext gensymcount (\count -> count + 1)
-                   return $ prefix ++ (show count)
-
-
-genHsName (HsIdent  prefix) = liftM HsIdent  (gensym prefix) 
-genHsName (HsSymbol prefix) = liftM HsSymbol (gensym prefix) 
-
-genHsQName (Qual m prefix)  = liftM (Qual m) (genHsName prefix)
-genHsQName (UnQual prefix)  = liftM UnQual   (genHsName prefix)
-
-genIsaName :: Isa.Name -> ContextM Isa.Name
-genIsaName (Isa.QName t prefix) = liftM (Isa.QName t) (gensym prefix)
-genIsaName (Isa.Name prefix)    = liftM Isa.Name      (gensym prefix)
-
-
 -- Since HOL doesn't have true n-tuple constructors (it uses nested
 -- pairs to represent n-tuples), we simply return a lambda expression
 -- that takes n parameters and constructs the nested pairs within its
 -- body.
 makeTupleDataCon :: Int -> ContextM Isa.Term
 makeTupleDataCon n
-    = do argNs <- mapM genIsaName (replicate n (Isa.Name "_arg"))
+    = do argNs <- mapM (lift . genIsaName) (replicate n (Isa.Name "_arg"))
          args  <- return (map Isa.Var argNs)
          return $ Isa.Parenthesized (Isa.Lambda argNs (foldr1 Isa.mkpair args))
 
@@ -470,7 +455,7 @@ makePatternMatchingLambda :: [Isa.Term] -> Isa.Term -> ContextM Isa.Term
 makePatternMatchingLambda patterns theBody
     = foldM mkMatchingLambda theBody (reverse patterns) -- foldM is a left fold.
       where mkMatchingLambda body pat
-                = do g <- genIsaName (Isa.Name "_arg")
+                = do g <- lift (genIsaName (Isa.Name "_arg"))
                      return $ Isa.Lambda [g] (Isa.Case (Isa.Var g) [(pat, body)])
 
 

@@ -20,3 +20,5 @@ genHsQName (UnQual prefix)  = liftM UnQual   (genHsName prefix)
 
 genIsaName (QName t prefix) = liftM (QName t) (gensym prefix)
 genIsaName (Name prefix)    = liftM Name      (gensym prefix)
+
+runGensym init state = evalState state (GensymCount init)

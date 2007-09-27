@@ -164,7 +164,7 @@ preprocessHsModule :: HsModule -> HsModule
 
 preprocessHsModule (HsModule loc modul exports imports topdecls)
     = HsModule loc modul exports imports 
-        $ evalState (concatMapM (delocalizeDecl modul) topdecls) (GensymCount 0)
+        $ runGensym 0 (concatMapM (delocalizeDecl modul) topdecls)
 
 -- Delocalization of HsDecls:
 --
