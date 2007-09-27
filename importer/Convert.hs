@@ -14,9 +14,11 @@ import List (unzip4)
 import Monad
 import Maybe
 
+import Control.Monad.State
+
 import Importer.Utilities.Misc
-import qualified Importer.Utilities.Isa as Utilities.Isa
-import qualified Importer.Utilities.Hsx as Utilities.Hsx
+import qualified Importer.Utilities.Isa as Utils.Isa
+import qualified Importer.Utilities.Hsx as Utils.Hsx
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
 
@@ -43,7 +45,7 @@ emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default 
 -- Instead of accessing a record directly by their `_foo' slots, we
 -- use the respective `foo' surrogate which consists of an appropriate
 -- getter and setter -- which allows functions to both query and
--- update a record (almost) by slot name.
+-- update a record by slot name.
 type FieldSurrogate field = (Context -> field, Context -> field -> Context) 
 
 theory      = (_theory,      \c f -> c { _theory      = f })
@@ -54,37 +56,26 @@ backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
 gensymcount = (_gensymcount, \c f -> c { _gensymcount = f })
 
 
-data ContextM v = ContextM (Context -> (v, Context))
+type ContextM v = State Context v --(StateT Context (State GensymCount) v)
 
-instance Monad ContextM where
-    return value
-        = ContextM (\context -> (value, context))
-    ContextM cf0 >>= f
-        = ContextM $ \c0 -> let (v1, c1)     = cf0 c0
-                                ContextM cf1 = f v1
-                                (v2, c2)     = cf1 c1 in (v2, c2)
-
--- getContext :: ContextM Context
--- getContext = ContextM (\c -> (c, c))
-
--- setContext :: Context -> ContextM ()
--- setContext newContext = ContextM (\c -> ((), newContext)) 
 
 queryContext :: (FieldSurrogate field) -> ContextM field
 queryContext (query, _)
-    = ContextM $ \c -> (query c, c)
+    = do context <- get; return (query context) 
 
 updateContext :: (FieldSurrogate field) -> (field -> field) -> ContextM ()
 updateContext (query, update) updateField
-    = ContextM $ \c -> ((), update c (updateField (query c)))
+    = do context <- get
+         put (update context (updateField (query context)))
+         return ()
 
 withUpdatedContext :: (FieldSurrogate field) -> (field -> field) -> ContextM a -> ContextM a
-withUpdatedContext surrogate updateField result
+withUpdatedContext surrogate updateField body
      = do oldval <- queryContext surrogate
           updateContext surrogate updateField
-          evaledResult <- result
+          result <- body
           updateContext surrogate (\_ -> oldval)
-          return evaledResult
+          return result
 
 
 newtype Warning = Warning String
@@ -116,8 +107,8 @@ data Conversion a = ConvSuccess a [Warning] | ConvFailed String
 convertParseResult :: ParseResult HsModule -> Conversion Isa.Cmd
 
 convertParseResult (ParseOk parseRes) 
-    = let ContextM cf       = convert (Utilities.Hsx.preprocessHsModule parseRes)
-          (result, context) = cf emptyContext
+    = let parseRes'         = Utils.Hsx.preprocessHsModule parseRes
+          (result, context) = runState (convert parseRes') emptyContext
       in ConvSuccess result (_warnings context)
 convertParseResult (ParseFailed loc msg) 
     = ConvFailed (show loc ++ " -- " ++ msg)
@@ -424,11 +415,11 @@ instance Convert HsExp Isa.Term where
     --
     -- convert' (HsLet (HsBDecls decls) body)
     --     = do let m         = Module "FIXME"
-    --          let declNs    = Utilities.Hsx.bindingsFromDecls m decls
+    --          let declNs    = Utils.Hsx.bindingsFromDecls m decls
     --          genNs <- mapM genHsQName declNs
     --          let renamings = zip declNs genNs
-    --          let decls'    = map (Utilities.Hsx.alphaconvert m renamings) decls
-    --          let body'     = Utilities.Hsx.alphaconvert m renamings body
+    --          let decls'    = map (Utils.Hsx.alphaconvert m renamings) decls
+    --          let body'     = Utils.Hsx.alphaconvert m renamings body
     --          localcmds <- mapM convert decls'
     --          body''    <- convert body'
     --          return $ Isa.Block (localcmds ++ [body''])
@@ -576,3 +567,4 @@ lookupSig fname
          case (lookup fname seensigs) of
            Nothing        -> die (Msg.missing_fun_sig fname)
            Just signature -> return signature
+
