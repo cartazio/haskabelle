@@ -8,15 +8,17 @@ module Main (
   module Importer.Convert,
   module Importer.IsaSyntax,
   module Importer.Printer,
-  convertFile, importFile, cnvFile
+  convertFile, -- importFile, cnvFile
 ) where
 
+import IO
 import Control.Monad
 import System.Environment (getArgs)
-import Text.PrettyPrint (render)
+import Text.PrettyPrint (render, vcat, text, (<>))
 
-import Language.Haskell.Hsx (parseFile)
+import Language.Haskell.Hsx (ParseResult(..), parseFile)
 
+import Importer.ConversionUnit
 import Importer.Convert
 import Importer.IsaSyntax (Cmd)
 import Importer.Printer (pprint)
@@ -33,23 +35,34 @@ import Importer.Printer (pprint)
 --    do (ConvSuccess ast _) <- convertFile "/path/foo.hs"
 --       return (pprint ast)
 --
-convertFile :: FilePath -> IO (Conversion Cmd)
-convertFile = liftM convertParseResult . parseFile
+convertFile   :: FilePath -> IO ConversionUnit
+convertFile fp = do (ParseOk initHsModule) <- parseFile fp
+                    unit <- try (makeConversionUnit initHsModule)
+                    case unit of
+                      Left ioerror -> error (show ioerror)
+                      Right (HsxUnit hsmodules) 
+                          -> let isathys = map convertHsModule hsmodules 
+                             in return (IsaUnit (map (\(ConvSuccess cmd _) -> cmd) isathys))
 
-importFile :: FilePath -> FilePath -> IO ()
-importFile src dst = do
-  ConvSuccess abstract _ <- convertFile src
-  let concrete = (render . pprint) abstract ++ "\n"
-  writeFile dst concrete
+pprintConversionUnit (IsaUnit thys)
+    = vcat (map (dashes . pprint) thys)
+    where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
+                    
+
+-- importFile :: FilePath -> FilePath -> IO ()
+-- importFile src dst = do
+--   ConvSuccess abstract _ <- convertFile src
+--   let concrete = (render . pprint) abstract ++ "\n"
+--   writeFile dst concrete
 
 -- Like `convertFile' but returns the textual representation of the
 -- AST itself. 
-cnvFile :: FilePath -> IO String
-cnvFile = liftM cnvFileContents . readFile
+-- cnvFile :: FilePath -> IO String
+-- cnvFile = liftM cnvFileContents . readFile
 
-main :: IO ()
-main = do
-  args <- getArgs
-  case args of
-    [src, dst] -> importFile src dst
-    _ -> ioError (userError "exactly two arguments expected")
+-- main :: IO ()
+-- main = do
+--   args <- getArgs
+--   case args of
+--     [src, dst] -> importFile src dst
+--     _ -> ioError (userError "exactly two arguments expected")

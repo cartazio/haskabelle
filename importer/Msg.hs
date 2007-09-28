@@ -6,6 +6,8 @@ Messages.
 
 module Importer.Msg where
 
+import Importer.Utilities.Hsx (srcloc2string)
+
 quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
 
@@ -21,3 +23,15 @@ missing_infix_decl name
 
 missing_fun_sig name
     = "Missing function signature for " ++ (quote name) ++ ". (FIXME)"
+
+failed_import importloc importname errormsg
+    = srcloc2string importloc ++ ": "
+      ++ "While trying to import " ++ (quote importname) 
+      ++ ", the following error occured:\n" ++ errormsg
+
+failed_parsing loc msg
+    = srcloc2string loc ++ ": " ++ msg
+
+cycle_in_dependency_graph moduleNs
+    = "Dependency graph is not a DAG. In particular, a cycle was found between\n"
+      ++ "the following modules: " ++ concatMap ((++" ") . quote) moduleNs

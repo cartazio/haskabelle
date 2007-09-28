@@ -170,7 +170,7 @@ instance Printer Isa.Cmd where
     pprint' (Isa.Comment string) = empty -- blankline $ comment string
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
     pprint' (Isa.TheoryCmd thy cmds)
-        = text "theory Imported" {-<+> pprint' thy-} $$
+        = text "theory" <+> pprint' thy $$
           text "imports Main"           $$
           text "begin"                  $$
           (vcat $ map pprint' cmds)

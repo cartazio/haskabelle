@@ -22,8 +22,7 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
 --  Since Isabelle/HOL does not really support local variable / function 
 --  declarations, we convert the Haskell AST to an equivalent AST where
 --  every local declaration is made a global declaration. This also
---  includes let expression which are also converted to global 
---  declarations.
+--  includes let expression.
 --
 --  For each toplevel declaration, this is done as follows:
 --

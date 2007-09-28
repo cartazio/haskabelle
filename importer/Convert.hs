@@ -5,7 +5,7 @@ Conversion from abstract Haskell code to abstract Isar/HOL theory.
 -}
 
 module Importer.Convert (
-  Conversion(..), convertParseResult, cnvFileContents
+  Conversion(..), convertHsModule, -- convertParseResult, cnvFileContents
 ) where
 
 import Language.Haskell.Hsx
@@ -108,22 +108,19 @@ class Show a => Convert a b | a -> b where
 data Conversion a = ConvSuccess a [Warning] | ConvFailed String
   deriving (Eq, Ord, Show)
 
-convertParseResult :: ParseResult HsModule -> Conversion Isa.Cmd
+convertHsModule :: HsModule -> Conversion Isa.Cmd
 
-convertParseResult (ParseOk parseRes) 
-    = let parseRes'         = preprocessHsModule parseRes
-          (result, context) = runConversion (convert parseRes')
+convertHsModule m
+    = let (result, context) = runConversion (convert (preprocessHsModule m))
       in ConvSuccess result (_warnings context)
-convertParseResult (ParseFailed loc msg) 
-    = ConvFailed (show loc ++ " -- " ++ msg)
 
-convertFileContents = convertParseResult . parseModule -- FIXME: remove
+-- convertFileContents = convertParseResult . parseModule -- FIXME: remove
 
-cnvFileContents str = let
-    (ConvSuccess res warnings) = convertFileContents str
-    str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
-    (ParseOk foo) = parseModule str2
-  in prettyHsx foo
+-- cnvFileContents str = let
+--     (ConvSuccess res warnings) = convertFileContents str
+--     str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
+--     (ParseOk foo) = parseModule str2
+--   in prettyHsx foo
 
 
 
@@ -414,9 +411,6 @@ instance Convert HsExp Isa.Term where
           where isVar (Isa.Var _)   = True
                 isVar _             = False
 
-    -- FIXME: HsLet must be preconverted to where binds.
-    --
-    --
     convert' expr@(HsLet bindings body)
         = die ("convert' (HsLet): Internal Error. All let expression should have been "
                ++ "preprocessed away at this stage.")

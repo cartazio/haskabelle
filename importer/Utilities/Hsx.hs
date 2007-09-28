@@ -5,10 +5,10 @@ Auxiliary.
 -}
 
 module Importer.Utilities.Hsx ( 
-  namesFromHsBinds, namesFromHsDecl,
-  bindingsFromDecls, alphaconvert, Renaming,
+  namesFromHsDecl, bindingsFromDecls, 
+  Renaming, alphaconvert, srcloc2string,
 ) where
-
+  
 import Importer.Utilities.Misc (concatMapM, assert)
 
 import Data.Generics.PlateData
@@ -18,11 +18,11 @@ import Maybe
 import List (tails)
 import Array (inRange)
 
-namesFromHsBinds :: HsBinds -> Maybe [HsQName]
 
-namesFromHsBinds (HsBDecls decls) 
-    = concatMapM namesFromHsDecl decls
+-- namesFromHsBinds :: HsBinds -> Maybe [HsQName]
 
+-- namesFromHsBinds (HsBDecls decls) 
+--    = concatMapM namesFromHsDecl decls
 
 namesFromHsDecl :: HsDecl -> Maybe [HsQName]
 
@@ -38,8 +38,6 @@ namesFromHsDecl (HsFunBind (m:ms))             = case m of
                                                    HsMatch _ fname _ _ _ -> Just [UnQual fname]
 namesFromHsDecl _                              = Nothing
 
-
-
 bindingsFromPats modul pattern 
     = [ Qual modul n | HsPVar n <- universeBi pattern ] 
 
@@ -52,6 +50,12 @@ bindingsFromDecls modul decls = assert (not (hasDuplicates bindings)) bindings
 hasDuplicates :: Eq a => [a] -> Bool
 hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
     where tails' = filter (not . null) (tails list)
+
+
+srcloc2string :: SrcLoc -> String
+srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })
+    = filename ++ ":" ++ (show line) ++ ":" ++ (show column)
+
 
 type Renaming = (HsQName, HsQName)
 
