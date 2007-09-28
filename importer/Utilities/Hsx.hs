@@ -6,7 +6,7 @@ Auxiliary.
 
 module Importer.Utilities.Hsx ( 
   namesFromHsBinds, namesFromHsDecl,
-  bindingsFromDecls, alphaconvert,
+  bindingsFromDecls, alphaconvert, Renaming,
 ) where
 
 import Importer.Utilities.Misc (concatMapM, assert)
