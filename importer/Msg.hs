@@ -7,6 +7,9 @@ Messages.
 module Importer.Msg where
 
 import Importer.Utilities.Hsx (srcloc2string)
+import Importer.Utilities.Misc (prettyHsx)
+
+spacify x = x ++ " "
 
 quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
@@ -34,4 +37,8 @@ failed_parsing loc msg
 
 cycle_in_dependency_graph moduleNs
     = "Dependency graph is not a DAG. In particular, a cycle was found between\n"
-      ++ "the following modules: " ++ concatMap ((++" ") . quote) moduleNs
+      ++ "the following modules: " ++ concatMap (spacify . quote) moduleNs
+
+free_vars_found loc freeVariableNames
+    = srcloc2string loc ++ ": " ++ "Closures disallowed. The following variables occur free: "
+      ++ concatMap (spacify . quote . prettyHsx) freeVariableNames

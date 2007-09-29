@@ -5,7 +5,7 @@ Auxiliary.
 -}
 
 module Importer.Utilities.Hsx ( 
-  namesFromHsDecl, bindingsFromDecls, 
+  namesFromHsDecl, bindingsFromDecls, bindingsFromPats,
   Renaming, alphaconvert, srcloc2string,
 ) where
   
@@ -18,11 +18,10 @@ import Maybe
 import List (tails)
 import Array (inRange)
 
+srcloc2string :: SrcLoc -> String
+srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })
+    = filename ++ ":" ++ (show line) ++ ":" ++ (show column)
 
--- namesFromHsBinds :: HsBinds -> Maybe [HsQName]
-
--- namesFromHsBinds (HsBDecls decls) 
---    = concatMapM namesFromHsDecl decls
 
 namesFromHsDecl :: HsDecl -> Maybe [HsQName]
 
@@ -38,9 +37,12 @@ namesFromHsDecl (HsFunBind (m:ms))             = case m of
                                                    HsMatch _ fname _ _ _ -> Just [UnQual fname]
 namesFromHsDecl _                              = Nothing
 
-bindingsFromPats modul pattern 
-    = [ Qual modul n | HsPVar n <- universeBi pattern ] 
 
+bindingsFromPats :: Module -> [HsPat] -> [HsQName]
+bindingsFromPats modul pattern 
+    = [ UnQual n | HsPVar n <- universeBi pattern ] 
+
+bindingsFromDecls :: Module -> [HsDecl] -> [HsQName]
 bindingsFromDecls modul decls = assert (not (hasDuplicates bindings)) bindings
     -- Type signatures do not create new bindings, but simply annotate them.
     where bindings = concatMap (fromJust . namesFromHsDecl) (filter (not . isTypeSig) decls)
@@ -50,11 +52,6 @@ bindingsFromDecls modul decls = assert (not (hasDuplicates bindings)) bindings
 hasDuplicates :: Eq a => [a] -> Bool
 hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
     where tails' = filter (not . null) (tails list)
-
-
-srcloc2string :: SrcLoc -> String
-srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })
-    = filename ++ ":" ++ (show line) ++ ":" ++ (show column)
 
 
 type Renaming = (HsQName, HsQName)
@@ -74,15 +71,35 @@ shadow boundNs renamings  = filter ((`notElem` boundNs) . fst) renamings
 class AlphaConvertable a where
     alphaconvert :: (AlphaConvertable a) => Module -> [Renaming] -> a -> a 
 
+instance AlphaConvertable HsQName where
+    alphaconvert modul renams qname = qtranslate qname renams
+
+instance AlphaConvertable HsName where
+    alphaconvert modul renams name = translate name renams
+
+instance AlphaConvertable HsQOp where
+    alphaconvert modul renams qop
+        = case qop of HsQVarOp qname -> HsQVarOp (alphaconvert modul renams qname)
+                      HsQConOp qname -> HsQConOp (alphaconvert modul renams qname)
+
+instance AlphaConvertable HsOp where
+    alphaconvert modul renams op
+        = case op of HsVarOp name -> HsVarOp (alphaconvert modul renams name)
+                     HsConOp name -> HsConOp (alphaconvert modul renams name)
 
 instance AlphaConvertable HsExp where
     alphaconvert modul renams hsexp
         = case hsexp of
-            HsVar qname -> HsVar $ qtranslate qname renams
-            HsCon qname -> HsVar $ qtranslate qname renams
+            HsVar qname -> HsVar (alphaconvert modul renams qname)
+            HsCon qname -> HsVar (alphaconvert modul renams qname)
             HsLit lit   -> HsLit lit
+            HsInfixApp e1 qop e2
+                -> HsInfixApp e1' qop' e2'
+                     where e1'  = alphaconvert modul renams e1
+                           qop' = alphaconvert modul renams qop
+                           e2'  = alphaconvert modul renams e2
             HsRecConstr qname updates
-                -> HsRecConstr (qtranslate qname renams) updates'
+                -> HsRecConstr (alphaconvert modul renams qname) updates'
                      where updates' = map (alphaconvert modul renams) updates
             HsRecUpdate exp updates
                 -> HsRecUpdate exp' updates'
@@ -107,7 +124,6 @@ instance AlphaConvertable HsExp where
 
 isTriviallyDescendable hsexp 
     = case hsexp of
-        HsInfixApp _ _ _ -> True
         HsApp      _ _   -> True
         HsNegApp   _     -> True
         HsIf       _ _ _ -> True
@@ -117,11 +133,12 @@ isTriviallyDescendable hsexp
         _                -> False -- rest is not supported at the moment.
 
 
+
 instance AlphaConvertable HsDecl where
     alphaconvert modul renams hsdecl
         = case hsdecl of
             HsFunBind matchs        -> HsFunBind $ map (alphaconvert modul renams) matchs
-            HsTypeSig loc names typ -> HsTypeSig loc [translate n renams | n <- names] typ
+            HsTypeSig loc names typ -> HsTypeSig loc (map (alphaconvert modul renams) names) typ
             HsPatBind loc pat (HsUnGuardedRhs body) binds
                 -> HsPatBind loc pat' (HsUnGuardedRhs body') binds'
                       where pat'                 = alphaconvert modul renams pat
@@ -165,3 +182,5 @@ instance AlphaConvertable HsPat where
 instance AlphaConvertable HsRhs where
     alphaconvert modul renams (HsUnGuardedRhs exp)
         = HsUnGuardedRhs (alphaconvert modul renams exp)
+
+
