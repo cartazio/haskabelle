@@ -12,7 +12,6 @@ module Importer.Utilities.Misc (
 
 import Control.Exception (assert)
 import Debug.Trace (trace)
-
 import Monad (liftM)
 import qualified List
 

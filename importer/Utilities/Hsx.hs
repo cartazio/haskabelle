@@ -6,17 +6,22 @@ Auxiliary.
 
 module Importer.Utilities.Hsx ( 
   namesFromHsDecl, bindingsFromDecls, bindingsFromPats,
-  Renaming, alphaconvert, srcloc2string,
+  Renaming, renameFreeVars, renameHsDecl, renameHsPat,
+  freshIdentifiers, isFreeVar, srcloc2string,
 ) where
   
-import Importer.Utilities.Misc (concatMapM, assert)
-
-import Data.Generics.PlateData
-import Language.Haskell.Hsx
-
 import Maybe
 import List (tails)
 import Array (inRange)
+
+import Control.Monad.State
+import Data.Generics.PlateData
+import Language.Haskell.Hsx
+
+
+import Importer.Utilities.Misc (concatMapM, assert)
+import Importer.Utilities.Gensym
+
 
 srcloc2string :: SrcLoc -> String
 srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })
@@ -38,12 +43,11 @@ namesFromHsDecl (HsFunBind (m:ms))             = case m of
 namesFromHsDecl _                              = Nothing
 
 
-bindingsFromPats :: Module -> [HsPat] -> [HsQName]
-bindingsFromPats modul pattern 
-    = [ UnQual n | HsPVar n <- universeBi pattern ] 
+bindingsFromPats          :: [HsPat] -> [HsQName]
+bindingsFromPats pattern  = [ UnQual n | HsPVar n <- universeBi pattern ] 
 
-bindingsFromDecls :: Module -> [HsDecl] -> [HsQName]
-bindingsFromDecls modul decls = assert (not (hasDuplicates bindings)) bindings
+bindingsFromDecls       :: [HsDecl] -> [HsQName]
+bindingsFromDecls decls = assert (not (hasDuplicates bindings)) bindings
     -- Type signatures do not create new bindings, but simply annotate them.
     where bindings = concatMap (fromJust . namesFromHsDecl) (filter (not . isTypeSig) decls)
           isTypeSig (HsTypeSig _ _ _) = True
@@ -56,71 +60,73 @@ hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
 
 type Renaming = (HsQName, HsQName)
 
-qtranslate :: HsQName -> [Renaming] -> HsQName
-qtranslate qname renamings 
-    = fromMaybe qname (lookup qname renamings)
+freshIdentifiers :: [HsQName] -> State GensymCount [Renaming]
+freshIdentifiers qnames
+    = do freshs <- mapM genHsQName qnames
+         return (zip qnames freshs)
 
-translate :: HsName -> [Renaming] -> HsName
-translate name renamings 
-    = let (UnQual name') = qtranslate (UnQual name) renamings in name'
 
 shadow :: [HsQName] -> [Renaming] -> [Renaming]
 shadow boundNs renamings  = filter ((`notElem` boundNs) . fst) renamings
 
+qtranslate :: [Renaming] -> HsQName -> HsQName
+qtranslate renamings qname 
+    = fromMaybe qname (lookup qname renamings)
+
+translate :: [Renaming] -> HsName -> HsName
+translate renamings name 
+    = let (UnQual name') = qtranslate renamings (UnQual name) in name'
+
+qoptranslate :: [Renaming] -> HsQOp -> HsQOp
+qoptranslate renamings qop
+    = case qop of HsQVarOp qname -> HsQVarOp (qtranslate renamings qname)
+                  HsQConOp qname -> HsQConOp (qtranslate renamings qname)
+
+optranslate :: [Renaming] -> HsOp -> HsOp
+optranslate renamings op
+    = case op of HsVarOp qname -> HsVarOp (translate renamings qname)
+                 HsConOp qname -> HsConOp (translate renamings qname)
+
 
 class AlphaConvertable a where
-    alphaconvert :: (AlphaConvertable a) => Module -> [Renaming] -> a -> a 
-
-instance AlphaConvertable HsQName where
-    alphaconvert modul renams qname = qtranslate qname renams
-
-instance AlphaConvertable HsName where
-    alphaconvert modul renams name = translate name renams
-
-instance AlphaConvertable HsQOp where
-    alphaconvert modul renams qop
-        = case qop of HsQVarOp qname -> HsQVarOp (alphaconvert modul renams qname)
-                      HsQConOp qname -> HsQConOp (alphaconvert modul renams qname)
+    renameFreeVars :: [Renaming] -> a -> a
 
 instance AlphaConvertable HsOp where
-    alphaconvert modul renams op
-        = case op of HsVarOp name -> HsVarOp (alphaconvert modul renams name)
-                     HsConOp name -> HsConOp (alphaconvert modul renams name)
+    renameFreeVars renams op
+        = case op of HsVarOp name -> HsVarOp (translate renams name)
+                     HsConOp name -> HsConOp (translate renams name)
 
 instance AlphaConvertable HsExp where
-    alphaconvert modul renams hsexp
+    renameFreeVars renams hsexp
         = case hsexp of
-            HsVar qname -> HsVar (alphaconvert modul renams qname)
-            HsCon qname -> HsVar (alphaconvert modul renams qname)
+            HsVar qname -> HsVar (qtranslate renams qname)
+            HsCon qname -> HsVar (qtranslate renams qname)
             HsLit lit   -> HsLit lit
             HsInfixApp e1 qop e2
                 -> HsInfixApp e1' qop' e2'
-                     where e1'  = alphaconvert modul renams e1
-                           qop' = alphaconvert modul renams qop
-                           e2'  = alphaconvert modul renams e2
-            HsRecConstr qname updates
-                -> HsRecConstr (alphaconvert modul renams qname) updates'
-                     where updates' = map (alphaconvert modul renams) updates
-            HsRecUpdate exp updates
-                -> HsRecUpdate exp' updates'
-                     where exp'     = alphaconvert modul renams exp
-                           updates' = map (alphaconvert modul renams) updates
+                     where e1'  = renameFreeVars renams e1
+                           qop' = qoptranslate renams qop
+                           e2'  = renameFreeVars renams e2
             HsLambda loc pats body
                 -> HsLambda loc pats body'
-                     where body' = let boundNs = bindingsFromPats modul pats in 
-                                   alphaconvert modul (shadow boundNs renams) body
+                     where body' = let boundNs = bindingsFromPats pats
+                                   in renameFreeVars (shadow boundNs renams) body
             HsCase exp alternatives
                 -> HsCase exp' alternatives'
-                     where exp'          = alphaconvert modul renams exp
-                           alternatives' = map (alphaconvert modul renams) alternatives
+                     where exp'          = renameFreeVars renams exp
+                           alternatives' = map (renameFreeVars renams) alternatives
             HsLet (HsBDecls decls) body 
                 -> HsLet (HsBDecls decls') body'
-                      where declNs  = bindingsFromDecls modul decls
+                      where declNs  = bindingsFromDecls decls
                             renams' = shadow declNs renams
-                            body'   = alphaconvert modul renams' body
-                            decls'  = map (alphaconvert modul renams') decls
+                            body'   = renameFreeVars renams' body
+                            decls'  = map (renameFreeVars renams') decls
+            HsRecConstr qname updates
+                -> HsRecConstr qname updates
+            HsRecUpdate exp updates
+                -> HsRecUpdate (renameFreeVars renams exp) updates
             exp -> assert (isTriviallyDescendable exp)
-                     $ descendBi (alphaconvert modul renams :: HsExp -> HsExp) exp
+                     $ descendBi (renameFreeVars renams :: HsExp -> HsExp) exp
 
 isTriviallyDescendable hsexp 
     = case hsexp of
@@ -135,25 +141,19 @@ isTriviallyDescendable hsexp
 
 
 instance AlphaConvertable HsDecl where
-    alphaconvert modul renams hsdecl
+    renameFreeVars renams hsdecl
         = case hsdecl of
-            HsFunBind matchs        -> HsFunBind $ map (alphaconvert modul renams) matchs
-            HsTypeSig loc names typ -> HsTypeSig loc (map (alphaconvert modul renams) names) typ
+            HsFunBind matchs        -> HsFunBind $ map (renameFreeVars renams) matchs
+            HsTypeSig loc names typ -> HsTypeSig loc names typ
             HsPatBind loc pat (HsUnGuardedRhs body) binds
-                -> HsPatBind loc pat' (HsUnGuardedRhs body') binds'
-                      where pat'                 = alphaconvert modul renams pat
-                            (HsLet binds' body') = alphaconvert modul renams (HsLet binds body)
-
-
-instance AlphaConvertable HsFieldUpdate where
-    alphaconvert modul renams (HsFieldUpdate slotN exp)
-        = HsFieldUpdate slotN (alphaconvert modul renams exp)
+                -> HsPatBind loc pat (HsUnGuardedRhs body') binds'
+                      where (HsLet binds' body') = renameFreeVars renams' (HsLet binds body)
+                            renams' = shadow (bindingsFromPats [pat]) renams
 
 
 instance AlphaConvertable HsAlt where
-    alphaconvert modul renams hsalt@(HsAlt _ pat _ _)
-        = let renams' = shadow (bindingsFromPats modul [pat]) renams
-          in fromHsPatBind (alphaconvert modul renams' (toHsPatBind hsalt))
+    renameFreeVars renams hsalt@(HsAlt _ pat _ _)
+        = fromHsPatBind (renameFreeVars renams (toHsPatBind hsalt))
 
 toHsPatBind (HsAlt loc pat guards wherebinds)
     = HsPatBind loc pat (guards2rhs guards) wherebinds
@@ -165,22 +165,66 @@ fromHsPatBind (HsPatBind loc pat rhs wherebinds)
 
 
 instance AlphaConvertable HsMatch where
-    alphaconvert modul renams (HsMatch loc name pats rhs (HsBDecls decls))
-        = HsMatch loc name' pats rhs' (HsBDecls decls')
-      where name'  = translate name renams
-            patNs  = bindingsFromPats  modul pats
-            declNs = bindingsFromDecls modul decls 
-            rhs'   = alphaconvert modul (shadow (patNs ++ declNs) renams) rhs
-            decls' = map (alphaconvert modul (shadow declNs renams)) decls
-
-
-instance AlphaConvertable HsPat where
-    alphaconvert modul renams pat = transformBi alpha pat
-      where alpha (HsPVar name) = HsPVar (translate name renams)
-            alpha etc           = etc
+    renameFreeVars renams (HsMatch loc name pats rhs (HsBDecls decls))
+        = HsMatch loc name pats rhs' (HsBDecls decls')
+      where patNs  = bindingsFromPats  pats
+            declNs = bindingsFromDecls decls 
+            rhs'   = renameFreeVars (shadow ([UnQual name] ++ patNs ++ declNs) renams) rhs
+            decls' = map (renameFreeVars (shadow (UnQual name : declNs) renams)) decls
 
 instance AlphaConvertable HsRhs where
-    alphaconvert modul renams (HsUnGuardedRhs exp)
-        = HsUnGuardedRhs (alphaconvert modul renams exp)
+    renameFreeVars renams (HsUnGuardedRhs exp)
+        = HsUnGuardedRhs (renameFreeVars renams exp)
 
 
+
+renameHsDecl :: [Renaming] -> HsDecl -> HsDecl
+
+renameHsDecl renams (HsTypeDecl loc tyconN tyvarNs typ)
+    = HsTypeDecl loc (translate renams tyconN) tyvarNs typ
+
+renameHsDecl renams (HsDataDecl loc context tyconN tyvarNs condecls derives)
+    = HsDataDecl loc context (translate renams tyconN) tyvarNs condecls derives
+
+renameHsDecl renams (HsInfixDecl loc assoc prio ops)
+    = HsInfixDecl loc assoc prio (map (optranslate renams) ops)
+
+renameHsDecl renams (HsTypeSig loc names typ)
+    = HsTypeSig loc (map (translate renams) names) typ
+
+renameHsDecl renams (HsFunBind matchs)
+    = HsFunBind (map rename matchs)
+      where rename (HsMatch loc name pats rhs wbinds)
+                = HsMatch loc (translate renams name) pats rhs wbinds
+
+renameHsDecl renams (HsPatBind loc pat rhs wbinds)
+    = HsPatBind loc (renameHsPat renams pat) rhs wbinds
+
+
+renameHsPat :: [Renaming] -> HsPat -> HsPat
+
+renameHsPat renams pat
+    = case pat of
+        HsPVar name                 -> HsPVar (translate renams name)
+        HsPLit lit                  -> HsPLit lit
+        HsPNeg pat                  -> HsPNeg (renameHsPat renams pat)
+        HsPInfixApp pat1 qname pat2 -> HsPInfixApp pat1' qname' pat2'
+            where pat1'  = renameHsPat renams pat1 
+                  qname' = qtranslate renams qname
+                  pat2'  = renameHsPat renams pat2
+        HsPApp qname pats           -> HsPApp qname' pats'
+            where qname' = qtranslate renams qname
+                  pats'  = map (renameHsPat renams) pats
+        HsPTuple pats               -> HsPTuple (map (renameHsPat renams) pats)
+        HsPList  pats               -> HsPList (map (renameHsPat renams) pats)
+        HsPParen pat                -> HsPParen (renameHsPat renams pat)
+
+
+-- Kludge.
+--
+isFreeVar :: HsQName -> HsExp -> Bool
+isFreeVar qname body
+    = occurs qname body && let body' = renameFreeVars (runGensym 999 (freshIdentifiers [qname])) body
+                           in not (occurs qname body')
+    where occurs qname body 
+              = not (null [ qn | HsVar qn <- universeBi body, qn == qname ])

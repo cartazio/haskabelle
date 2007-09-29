@@ -8,7 +8,7 @@ import Language.Haskell.Hsx
 
 import Data.Generics.Biplate
 
-import Importer.Utilities.Misc (concatMapM, assert)
+import Importer.Utilities.Misc --(concatMapM, assert)
 import Importer.Utilities.Hsx
 import Importer.Utilities.Gensym
 
@@ -17,8 +17,8 @@ import qualified Importer.Msg as Msg
 preprocessHsModule :: HsModule -> HsModule
 
 preprocessHsModule (HsModule loc modul exports imports topdecls)
-    = HsModule loc modul exports imports (check_against_free_vars modul topdecls')
-      where topdecls' = runGensym 0 (concatMapM (delocalize_HsDecl modul) topdecls)
+    = HsModule loc modul exports imports (check_against_free_vars topdecls')
+      where topdecls' = runGensym 0 (concatMapM delocalize_HsDecl topdecls)
 
 
 -- Delocalization of HsDecls:
@@ -45,67 +45,66 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
 
 -- Main function. Takes a declaration, and returns a list of itself and all
 -- priorly local declarations.
-delocalize_HsDecl  :: Module -> HsDecl  -> State GensymCount [HsDecl]
+delocalize_HsDecl  :: HsDecl  -> State GensymCount [HsDecl]
 
 -- Helper functions. Return a properly alpha-converted version of their argument 
 -- plus a list of globalized declarations.
-delocalize_HsMatch :: Module -> HsMatch -> State GensymCount (HsMatch, [HsDecl])
-delocalize_HsRhs   :: Module -> HsRhs   -> State GensymCount (HsRhs, [HsDecl])
-delocalize_HsExp   :: Module -> HsExp   -> State GensymCount (HsExp, [HsDecl])
+delocalize_HsMatch :: HsMatch -> State GensymCount (HsMatch, [HsDecl])
+delocalize_HsRhs   :: HsRhs   -> State GensymCount (HsRhs, [HsDecl])
+delocalize_HsExp   :: HsExp   -> State GensymCount (HsExp, [HsDecl])
 
 -- This additionally returns the renamings that reflect how the where-binds
 -- were renamed. This is necessary, beacuse the body of the caller 
 -- where these where-binds apply to, must also be alpha converted.
-delocalize_HsBinds :: Module -> HsBinds -> State GensymCount (HsBinds, [HsDecl], [Renaming])
+delocalize_HsBinds :: HsBinds -> State GensymCount (HsBinds, [HsDecl], [Renaming])
 
 
-delocalize_HsDecl m (HsPatBind loc pat rhs wbinds)
-    = do (wbinds', localdecls, renamings) <- delocalize_HsBinds m wbinds
-         (rhs',    morelocaldecls)        <- delocalize_HsRhs m (alphaconvert m renamings rhs)
+delocalize_HsDecl (HsPatBind loc pat rhs wbinds)
+    = do (wbinds', localdecls, renamings) <- delocalize_HsBinds wbinds
+         (rhs',    morelocaldecls)        <- delocalize_HsRhs (renameFreeVars renamings rhs)
          return $ localdecls ++ morelocaldecls ++ [HsPatBind loc pat rhs' wbinds']
 
-delocalize_HsDecl m (HsFunBind matchs)
+delocalize_HsDecl (HsFunBind matchs)
     = do (matchs', localdecls) <- liftM (\(xs, ys) -> (xs, concat ys))
-                                    $ mapAndUnzipM (delocalize_HsMatch m) matchs
+                                    $ mapAndUnzipM delocalize_HsMatch matchs
          return (localdecls ++ [HsFunBind matchs'])
 
-delocalize_HsDecl m decl  = assert (check decl) $ return [decl]
+delocalize_HsDecl decl  = assert (check decl) $ return [decl]
           -- Safety check to make sure we didn't miss anything.
     where check decl   = and [null (universeBi decl :: [HsBinds]),
                               null [ True | HsLet _ _ <- universeBi decl ]]
           isHsLet expr = case expr of HsLet _ _ -> True; _ -> False
 
-delocalize_HsMatch m (HsMatch loc name pats rhs wbinds)
-    = do (wbinds', localdecls, renamings) <- delocalize_HsBinds m wbinds
-         (rhs',    morelocaldecls)        <- delocalize_HsRhs m (alphaconvert m renamings rhs)
+delocalize_HsMatch (HsMatch loc name pats rhs wbinds)
+    = do (wbinds', localdecls, renamings) <- delocalize_HsBinds wbinds
+         (rhs',    morelocaldecls)        <- delocalize_HsRhs (renameFreeVars renamings rhs)
          return (HsMatch loc name pats rhs' wbinds', localdecls ++ morelocaldecls)
 
-delocalize_HsBinds m (HsBDecls localdecls)
-    = do renamings    <- renameToFreshIdentifiers (bindingsFromDecls m localdecls)
-         let localdecls' = map (alphaconvert m renamings) localdecls
-         localdecls'' <- concatMapM (delocalize_HsDecl m) localdecls'
+delocalize_HsBinds (HsBDecls localdecls)
+    -- First rename the bindings that are established by LOCALDECLS to fresh identifiers,
+    -- then also rename all occurences (i.e. recursive invocations) of these bindings
+    -- within the body of the declarations.
+    = do renamings    <- freshIdentifiers (bindingsFromDecls localdecls)
+         let localdecls' = map (renameFreeVars renamings . renameHsDecl renamings) localdecls
+         localdecls'' <- concatMapM delocalize_HsDecl localdecls'
          return (HsBDecls [], localdecls'', renamings)
 
-delocalize_HsRhs m (HsUnGuardedRhs exp)
-    = do (exp', decls) <- delocalize_HsExp m exp
+delocalize_HsRhs (HsUnGuardedRhs exp)
+    = do (exp', decls) <- delocalize_HsExp exp
          return (HsUnGuardedRhs exp', decls)
 
-delocalize_HsExp m (HsLet binds body)
-    = do (binds', decls, renamings) <- delocalize_HsBinds m binds
-         (body',  moredecls)        <- delocalize_HsExp m (alphaconvert m renamings body)
+delocalize_HsExp (HsLet binds body)
+    = do (binds', decls, renamings) <- delocalize_HsBinds binds
+         (body',  moredecls)        <- delocalize_HsExp (renameFreeVars renamings body)
          return (body', decls ++ moredecls)
 
-delocalize_HsExp m hsexp
+delocalize_HsExp hsexp
      = let (subexpressions, regenerate) = uniplate hsexp
        in do (subexpressions', decls) <- liftM (\(xs, ys) -> (xs, concat ys))
-                                          $ mapAndUnzipM (delocalize_HsExp m) subexpressions
+                                          $ mapAndUnzipM delocalize_HsExp subexpressions
              return (regenerate subexpressions', decls)
 
 
-renameToFreshIdentifiers :: [HsQName] -> State GensymCount [(HsQName, HsQName)]
-renameToFreshIdentifiers qnames
-    = do freshs <- mapM genHsQName qnames
-         return (zip qnames freshs)
 
 
 
@@ -126,23 +125,26 @@ renameToFreshIdentifiers qnames
 --
 -- Which is bogus, obviously.
 --
-check_against_free_vars :: Module -> [HsDecl] -> [HsDecl]
-check_against_free_vars m topdecls = map check topdecls
-    where globalNs = bindingsFromDecls m topdecls
+check_against_free_vars :: [HsDecl] -> [HsDecl]
+check_against_free_vars topdecls = map check topdecls
+    where globalNs = bindingsFromDecls topdecls
 
           allVarNs x = nub [ qname | HsVar qname <- universeBi x ]
 
-          check decl@(HsPatBind loc pat rhs (HsBDecls []))
-              = let freeNs  = (allVarNs rhs \\ bindingsFromPats m [pat]) \\ globalNs
+          check decl@(HsPatBind loc pat (HsUnGuardedRhs body) (HsBDecls []))
+              = let candidates  = (allVarNs body \\ bindingsFromPats [pat]) \\ globalNs
+                    freeNs      = filter (flip isFreeVar body) candidates
                 in if (null freeNs) then decl else error (Msg.free_vars_found loc freeNs)
           check (HsFunBind matchs)
               = HsFunBind
-                  $ map (\match@(HsMatch loc name pats rhs (HsBDecls []))
-                         -> let boundNs = (UnQual name) : (bindingsFromPats m pats)
-                                freeNs  = ((allVarNs rhs) \\ boundNs) \\ globalNs
-                                in if (null freeNs) then match else error (Msg.free_vars_found loc freeNs))
+                  $ map (\match@(HsMatch loc name pats (HsUnGuardedRhs body) (HsBDecls []))
+                         -> let obviouslyBoundNs = (UnQual name) : (bindingsFromPats pats)
+                                candidates  = (allVarNs body \\ obviouslyBoundNs) \\ globalNs
+                                freeNs      = filter (flip isFreeVar body) candidates
+                            in if (null freeNs) then match else error (Msg.free_vars_found loc freeNs))
                         matchs
           check decl
               = assert (null [ qname | HsVar qname <- universeBi decl ]) 
                   $ decl
+
 

@@ -55,7 +55,7 @@ makeDependencyGraph hsmodule
 makeConversionUnit hsmodule
     = do (depGraph, fromVertex, _) <- makeDependencyGraph hsmodule
          let cycles = cyclesFromGraph depGraph
-         when (not (null cycles)) -- DAG?
+         when (not (null cycles)) -- not a DAG?
               $ let toModuleName v = case fromVertex v of (_,Module n,_) -> n
                 in fail (Msg.cycle_in_dependency_graph (map toModuleName (head cycles)))
          let toHsModule v = case fromVertex v of (m,_,_) -> m
