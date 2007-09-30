@@ -22,20 +22,19 @@ import Importer.Utilities.Gensym
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
 
-import Importer.Preprocess
 import qualified Importer.LexEnv as Env
 
 data Context    = Context
-    {
+    {     
       _theory      :: Isa.Theory
-    , _globalEnv   :: Env.LexEnv
+    , _globalEnv   :: Env.GlobalLexEnv
     , _warnings    :: [Warning]
     , _backtrace   :: [String]
     , _gensymcount :: Int
     }
 
 emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default Module in Haskell
-                         _globalEnv   = Env.emptyLexEnv_Hsx,  --  is called `Main'; clashes with Isabelle.
+                         _globalEnv   = Env.emptyGlobalLexEnv,  --  is called `Main'; clashes with Isabelle.
                          _warnings    = [],
                          _backtrace   = [],
                          _gensymcount = 0 }
@@ -52,10 +51,11 @@ warnings    = (_warnings,    \c f -> c { _warnings    = f })
 backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
 gensymcount = (_gensymcount, \c f -> c { _gensymcount = f })
 
+currentModule = (\c -> let (Isa.Theory n) = _theory c in Module n, \c f -> c)
 
 type ContextM v = StateT Context (State GensymCount) v
 
-runConversion :: Env.LexEnv -> ContextM v -> (v, Context)
+runConversion :: Env.GlobalLexEnv -> ContextM v -> (v, Context)
 runConversion env m = runGensym 0 (runStateT m (emptyContext { _globalEnv = env }))
 
 queryContext :: (FieldSurrogate field) -> ContextM field
@@ -103,11 +103,10 @@ class Show a => Convert a b | a -> b where
 data Conversion a = ConvSuccess a [Warning] | ConvFailed String
   deriving (Eq, Ord, Show)
 
-convertHsModule :: HsModule -> Conversion Isa.Cmd
+convertHsModule :: Env.GlobalLexEnv -> HsModule -> Conversion Isa.Cmd
 
-convertHsModule m
-    = let m' = (preprocessHsModule m)
-          (result, context) = runConversion (Env.makeGlobalEnv_Hsx m') $ convert m'
+convertHsModule env m
+    = let (result, context) = runConversion env (convert m)
       in ConvSuccess result (_warnings context)
 
 -- convertFileContents = convertParseResult . parseModule -- FIXME: remove
@@ -186,7 +185,8 @@ instance Convert HsDecl Isa.Cmd where
 
     convert' (HsInfixDecl _loc assoc prio ops)
         = do globalEnv <- queryContext globalEnv
-             assert (all check [ Env.lookup (toHsQName op) globalEnv | op <- ops ]) 
+             modul     <- queryContext currentModule
+             assert (all check [ Env.lookupGlobally modul (toHsQName op) globalEnv | op <- ops ]) 
                $ return (Isa.Block [])
         where check (Just (Env.HsxInfixOp _ a p)) = a == assoc && p == prio
               check _ = False
@@ -195,7 +195,8 @@ instance Convert HsDecl Isa.Cmd where
 
     convert' (HsTypeSig _loc names typ)
         = do globalEnv <- queryContext globalEnv
-             assert (all check [ Env.lookup (UnQual n) globalEnv | n <- names ]) 
+             modul     <- queryContext currentModule
+             assert (all check [ Env.lookupGlobally modul (UnQual n) globalEnv | n <- names ]) 
                $ return (Isa.Block [])
         where check (Just (Env.HsxVariable (Just t)))     = t == typ
               check (Just (Env.HsxFunction (Just t)))     = t == typ
@@ -526,7 +527,8 @@ normalizeAssociativity etc = etc
 lookupOp :: HsQOp -> ContextM (HsAssoc, Int)
 lookupOp qop
     = do globalEnv <- queryContext globalEnv
-         case Env.lookup (qop2name qop) globalEnv of
+         modul     <- queryContext currentModule
+         case Env.lookupGlobally modul (qop2name qop) globalEnv of
            Just (Env.HsxInfixOp _ assoc prio) -> return (assoc, prio)
            Nothing -> do warn (Msg.missing_infix_decl qop globalEnv)
                          return (HsAssocLeft, 9) -- default values in Haskell98
@@ -535,8 +537,9 @@ lookupOp qop
 
 lookupSig :: HsQName -> ContextM Isa.TypeSig
 lookupSig fname
-    = do globalEnv  <- queryContext globalEnv
-         case (Env.lookup fname globalEnv) of
+    = do globalEnv <- queryContext globalEnv
+         modul     <- queryContext currentModule
+         case (Env.lookupGlobally modul fname globalEnv) of
            Just (Env.HsxVariable (Just typ))     -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
            Just (Env.HsxFunction (Just typ))     -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
            Just (Env.HsxInfixOp  (Just typ) _ _) -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)

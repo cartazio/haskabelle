@@ -29,8 +29,8 @@ makeLexEnv_Hsx :: [(HsQName, HsxLexInfo)] -> LexEnv
 makeLexEnv_Hsx initbindings
     = HsxLexEnv (Map.fromListWith mergeLexInfos initbindings)
 
-makeGlobalEnv_Hsx :: HsModule -> LexEnv
-makeGlobalEnv_Hsx (HsModule loc modul _exports _imports topdecls)
+makeModuleEnv_Hsx :: HsModule -> LexEnv
+makeModuleEnv_Hsx (HsModule loc modul _exports _imports topdecls)
     = makeLexEnv_Hsx (concatMap extractLexInfos topdecls)
     where 
       extractLexInfos decl 
@@ -52,3 +52,22 @@ mergeLexInfos (HsxTypeAnnotation typ) (HsxInfixOp Nothing a p) = HsxInfixOp  (Ju
 
 lookup :: HsQName -> LexEnv -> Maybe HsxLexInfo
 lookup k (HsxLexEnv map) = Map.lookup k map
+
+
+data GlobalLexEnv = HsxGlobalLexEnv (Map.Map Module LexEnv)
+  deriving (Show)
+
+makeGlobalEnv_Hsx :: [HsModule] -> GlobalLexEnv
+makeGlobalEnv_Hsx ms 
+    = HsxGlobalLexEnv (Map.fromListWith failDups 
+                              $ map (\m@(HsModule _ modul _ _ _) -> (modul, makeModuleEnv_Hsx m)) ms)
+    where failDups a b
+              = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
+
+
+lookupGlobally :: Module -> HsQName -> GlobalLexEnv -> Maybe HsxLexInfo
+lookupGlobally m n (HsxGlobalLexEnv globalmap)
+    = Map.lookup m globalmap >>= (\(HsxLexEnv lexmap) -> Map.lookup n lexmap)
+
+
+emptyGlobalLexEnv = HsxGlobalLexEnv Map.empty

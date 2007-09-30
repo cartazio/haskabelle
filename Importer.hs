@@ -16,12 +16,15 @@ import Control.Monad
 import System.Environment (getArgs)
 import Text.PrettyPrint (render, vcat, text, (<>))
 
-import Language.Haskell.Hsx (ParseResult(..), parseFile)
+import Language.Haskell.Hsx (ParseResult(..), parseFile, HsModule(..))
 
 import Importer.ConversionUnit
+import Importer.Preprocess
+import Importer.LexEnv
 import Importer.Convert
 import Importer.IsaSyntax (Cmd)
 import Importer.Printer (pprint)
+
 
 -- The main function, takes a path to a Haskell source file and
 -- returns its convertion, that is an AST for Isar/HOL as defined in
@@ -41,7 +44,9 @@ convertFile fp = do (ParseOk initHsModule) <- parseFile fp
                     case unit of
                       Left ioerror -> error (show ioerror)
                       Right (HsxUnit hsmodules) 
-                          -> let isathys = map convertHsModule hsmodules 
+                          -> let hsmodules' = map preprocessHsModule hsmodules
+                                 globalenv  = makeGlobalEnv_Hsx hsmodules'
+                                 isathys    = map (convertHsModule globalenv) hsmodules' 
                              in return (IsaUnit (map (\(ConvSuccess cmd _) -> cmd) isathys))
 
 pprintConversionUnit (IsaUnit thys)

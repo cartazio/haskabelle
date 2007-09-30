@@ -13,8 +13,6 @@ import qualified Importer.Msg as Msg
 
 import Importer.Utilities.Misc
 
-
-
 data ConversionUnit = HsxUnit [HsModule]
                     | IsaUnit [Isa.Cmd]
   deriving (Show)
@@ -52,6 +50,7 @@ makeDependencyGraph hsmodule
                 in (hsmodule, modul, imported_modules)
 
 
+makeConversionUnit :: HsModule -> IO ConversionUnit
 makeConversionUnit hsmodule
     = do (depGraph, fromVertex, _) <- makeDependencyGraph hsmodule
          let cycles = cyclesFromGraph depGraph
@@ -61,5 +60,3 @@ makeConversionUnit hsmodule
          let toHsModule v = case fromVertex v of (m,_,_) -> m
          let [hsmodules]  = map (map toHsModule . flatten) (dff depGraph)
          return (HsxUnit hsmodules)
-
-           
