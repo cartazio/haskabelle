@@ -6,8 +6,8 @@ Auxiliary.
 
 module Importer.Utilities.Hsx ( 
   namesFromHsDecl, bindingsFromDecls, bindingsFromPats,
-  Renaming, renameFreeVars, renameHsDecl, renameHsPat,
-  freshIdentifiers, isFreeVar, srcloc2string,
+  Renaming, renameFreeVars, renameHsDecl,
+  freshIdentifiers, isFreeVar, srcloc2string, qualify,
 ) where
   
 import Maybe
@@ -22,6 +22,9 @@ import Language.Haskell.Hsx
 import Importer.Utilities.Misc (concatMapM, assert)
 import Importer.Utilities.Gensym
 
+qualify :: Module -> HsQName -> HsQName
+qualify _ (Qual m n) = Qual m n
+qualify m (UnQual n) = Qual m n
 
 srcloc2string :: SrcLoc -> String
 srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })
@@ -37,7 +40,7 @@ namesFromHsDecl (HsClassDecl _ _ name _ _ _)   = Just [UnQual name]
 namesFromHsDecl (HsInstDecl _ _ qname _ _)     = Just [qname]
 namesFromHsDecl (HsTypeSig _ names _)          = Just (map UnQual names)
 namesFromHsDecl (HsInfixDecl _ _ _ ops)        = Just [UnQual n | n <- (universeBi ops :: [HsName])]
-namesFromHsDecl (HsPatBind _ pat _ _)          = Just [UnQual n | n <- (universeBi pat :: [HsName])]
+namesFromHsDecl (HsPatBind _ pat _ _)          = Just (bindingsFromPats [pat])
 namesFromHsDecl (HsFunBind (m:ms))             = case m of 
                                                    HsMatch _ fname _ _ _ -> Just [UnQual fname]
 namesFromHsDecl _                              = Nothing

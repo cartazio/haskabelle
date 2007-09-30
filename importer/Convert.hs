@@ -23,23 +23,19 @@ import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
 
 import Importer.Preprocess
+import qualified Importer.LexEnv as Env
 
 data Context    = Context
     {
       _theory      :: Isa.Theory
-      -- alist of (function name, its type signature)
-    , _fsignatures :: [(Isa.Name, Isa.TypeSig)]  
-
-      -- alist of (operator name, (its association kind, binding priority)
-    , _optable     :: [(Isa.Name, (Isa.Assoc, Isa.Prio))]
+    , _globalEnv   :: Env.LexEnv
     , _warnings    :: [Warning]
     , _backtrace   :: [String]
     , _gensymcount :: Int
     }
 
 emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default Module in Haskell
-                         _fsignatures = [],                   --  is called `Main'; clashes with Isabelle.
-                         _optable     = [],
+                         _globalEnv   = Env.emptyLexEnv_Hsx,  --  is called `Main'; clashes with Isabelle.
                          _warnings    = [],
                          _backtrace   = [],
                          _gensymcount = 0 }
@@ -51,8 +47,7 @@ emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default 
 type FieldSurrogate field = (Context -> field, Context -> field -> Context) 
 
 theory      = (_theory,      \c f -> c { _theory      = f })
-fsignatures = (_fsignatures, \c f -> c { _fsignatures = f })
-optable     = (_optable,     \c f -> c { _optable     = f })
+globalEnv   = (_globalEnv,   \c f -> c { _globalEnv   = f })
 warnings    = (_warnings,    \c f -> c { _warnings    = f })
 backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
 gensymcount = (_gensymcount, \c f -> c { _gensymcount = f })
@@ -60,8 +55,8 @@ gensymcount = (_gensymcount, \c f -> c { _gensymcount = f })
 
 type ContextM v = StateT Context (State GensymCount) v
 
-runConversion :: ContextM v -> (v, Context)
-runConversion m = runGensym 0 (runStateT m emptyContext)
+runConversion :: Env.LexEnv -> ContextM v -> (v, Context)
+runConversion env m = runGensym 0 (runStateT m (emptyContext { _globalEnv = env }))
 
 queryContext :: (FieldSurrogate field) -> ContextM field
 queryContext (query, _)
@@ -111,7 +106,8 @@ data Conversion a = ConvSuccess a [Warning] | ConvFailed String
 convertHsModule :: HsModule -> Conversion Isa.Cmd
 
 convertHsModule m
-    = let (result, context) = runConversion (convert (preprocessHsModule m))
+    = let m' = (preprocessHsModule m)
+          (result, context) = runConversion (Env.makeGlobalEnv_Hsx m') $ convert m'
       in ConvSuccess result (_warnings context)
 
 -- convertFileContents = convertParseResult . parseModule -- FIXME: remove
@@ -189,18 +185,24 @@ instance Convert HsDecl Isa.Cmd where
                                         junk
 
     convert' (HsInfixDecl _loc assoc prio ops)
-        = do assoc' <- convert assoc
-             ops'   <- mapM convert ops
-             updateContext optable (\optable -> zip ops' (cycle [(assoc', prio)]) ++ optable)
-             return (Isa.Block (map (\op' -> Isa.InfixDeclCmd op' assoc' prio) ops'))
+        = do globalEnv <- queryContext globalEnv
+             assert (all check [ Env.lookup (toHsQName op) globalEnv | op <- ops ]) 
+               $ return (Isa.Block [])
+        where check (Just (Env.HsxInfixOp _ a p)) = a == assoc && p == prio
+              check _ = False
+              toHsQName (HsVarOp n) = UnQual n
+              toHsQName (HsConOp n) = UnQual n
 
     convert' (HsTypeSig _loc names typ)
-        = do names' <- mapM convert names
-             typ'   <- convert typ
-             let newsigs = map (\n -> Isa.TypeSig n typ') names'
-             updateContext fsignatures (\sigs -> (zip names' newsigs) ++ sigs)
-             return (Isa.Comment (prettyShow' "typeSigs" newsigs)) -- show type sigs in comment; FIXME
-
+        = do globalEnv <- queryContext globalEnv
+             assert (all check [ Env.lookup (UnQual n) globalEnv | n <- names ]) 
+               $ return (Isa.Block [])
+        where check (Just (Env.HsxVariable (Just t)))     = t == typ
+              check (Just (Env.HsxFunction (Just t)))     = t == typ
+              check (Just (Env.HsxInfixOp  (Just t) _ _)) = t == typ
+              check (Just (Env.HsxTypeAnnotation t))      = t == typ
+              check _ = False
+                         
     -- Remember that at this stage there are _no_ local declarations in the Hsx
     -- AST anymore, as we made those global during the preprocessing stage.
     -- 
@@ -216,22 +218,22 @@ instance Convert HsDecl Isa.Cmd where
     convert' (HsFunBind matchs)
         = do let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs)
              assert (all (== head names) (tail names)) (return ())
-             assert (all empty wbinds) (return ())      -- all decls are global at this point.
-             fname'     <- convert (names!!0)           -- as all names are equal, pick first one.
-             patterns'  <- mapM (mapM convert) patterns -- each pattern is itself a list of HsPat.
+             assert (all isEmpty wbinds) (return ())     -- all decls are global at this point.
+             fsig       <- lookupSig (UnQual (names!!0)) -- as all names are equal, pick first one.     
+             fname'     <- convert (names!!0)           
+             patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
              bodies'    <- mapM convert bodies
-             fsig       <- lookupSig fname'              
              thy        <- queryContext theory
              return $ Isa.FunCmd fname' fsig (zip patterns' bodies')
        where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
-             empty wherebind = case wherebind of HsBDecls [] -> True; _ -> False
+             isEmpty wherebind = case wherebind of HsBDecls [] -> True; _ -> False
 
     convert' (HsPatBind _loc pat@(HsPVar name) rhs _wherebinds)
         = do name' <- convert name
              pat'  <- convert pat
              rhs'  <- convert rhs
-             sig   <- lookupSig name'
+             sig   <- lookupSig (UnQual name)
              return $ Isa.DefinitionCmd name' sig ([pat'], rhs')
 
     convert' junk = barf "HsDecl -> Isa.Cmd" junk
@@ -377,11 +379,12 @@ instance Convert HsExp Isa.Term where
           where cnv (HsCon (Special (HsTupleCon n))) = makeTupleDataCon n
                 cnv etc = convert etc
 
-    convert' app@(HsInfixApp exp1 op exp2)
-        = do exp1' <- convert exp1 
+    convert' infixapp@(HsInfixApp _ _ _)
+        = do (HsInfixApp exp1 op exp2) <- fixOperatorFixities infixapp
+             exp1' <- convert exp1 
              op'   <- convert op
              exp2' <- convert exp2
-             fixOperatorFixities (Isa.mkInfixApp exp1' op' exp2')
+             return (Isa.mkInfixApp exp1' op' exp2')
 
     convert' (HsRecConstr qname updates)
         = do qname'   <- convert qname
@@ -478,7 +481,7 @@ makeRecordCmd tyconN tyvarNs [HsRecDecl name slots] -- cf. `isRecDecls'
 -- we gotta fix that up ourselves. (We also properly consider infix
 -- declarations to get user defined operator right.)
 
-fixOperatorFixities :: Isa.Term -> ContextM Isa.Term
+-- fixOperatorFixities :: Isa.Term -> ContextM Isa.Term
 
 
 -- Notice that `1 * 2 + 3 / 4' is parsed as `((1 * 2) + 3) / 4', i.e.
@@ -497,47 +500,47 @@ fixOperatorFixities :: Isa.Term -> ContextM Isa.Term
 -- i.e. the e2 in `HsInfixApp e1 op e2', can _never_ be a bare infix
 -- application that we might have to consider during fixup.
 --  
-fixOperatorFixities app
-    | Just (left, op2, t3) <- splitInfixApp app, -- ((t1, op1, t2), op2, t3)
-      Just (t1, op1, t2)   <- splitInfixApp left --    <==  mkInfixApp (mkInfixApp t1 op1 t2) op2 t3
+fixOperatorFixities app@(HsInfixApp (HsInfixApp e1 op1 e2) op2 e3)
     -- We assume that `(t1, op1, t2)' is correct already
     -- and from above, we also know that `t3' cannot possibly
     -- interfere, so we just have to find the proper place of `op2'.
-    = let (Isa.Var opN1) = op1 
-          (Isa.Var opN2) = op2 in
-      do (assoc1', prio1)  <- lookupOp opN1
-         (assoc2', prio2)  <- lookupOp opN2
+    = do (assoc1', prio1)  <- lookupOp op1
+         (assoc2', prio2)  <- lookupOp op2
          let assoc1 = normalizeAssociativity assoc1'
          let assoc2 = normalizeAssociativity assoc2'
          case prio1 `compare` prio2 of
            GT -> return app
-           LT -> liftM (Isa.mkInfixApp op1 t1) (fixOperatorFixities (Isa.mkInfixApp t2 op2 t3))
+           LT -> liftM (HsInfixApp e1 op1) (fixOperatorFixities (HsInfixApp e2 op2 e3))
            EQ -> if assoc2 /= assoc1 then
                      die (Msg.assoc_mismatch op1 assoc1 op2 assoc2)
                  else case assoc2 of
-                        Isa.AssocLeft  -> return app
-                        Isa.AssocRight -> return (Isa.mkInfixApp t1 op1 (Isa.mkInfixApp t2 op2 t3))
-                        Isa.AssocNone  -> die ("fixupOperatorFixities: Internal error " ++
+                        HsAssocLeft  -> return app
+                        HsAssocRight -> return (HsInfixApp e1 op1 (HsInfixApp e2 op2 e3))
+                        HsAssocNone  -> die ("fixupOperatorFixities: Internal error " ++
                                                "(AssocNone should have already been normalized away.)")
-  where splitInfixApp (Isa.App (Isa.App op t1) t2) = Just (t1, op, t2)
-        splitInfixApp _ = Nothing
 fixOperatorFixities nonNestedInfixApp = return nonNestedInfixApp
 
-normalizeAssociativity (Isa.AssocNone) = Isa.AssocLeft -- as specified in Haskell98.
+normalizeAssociativity (HsAssocNone) = HsAssocLeft -- as specified in Haskell98.
 normalizeAssociativity etc = etc
 
-lookupOp :: Isa.Name -> ContextM (Isa.Assoc, Int)
-lookupOp name
-    = do optable <- queryContext optable
-         case lookup name optable of
-           Just (assoc, prio) -> return (assoc, prio)
-           Nothing            -> do warn (Msg.missing_infix_decl name)
-                                    return (Isa.AssocLeft, 9) -- default values in Haskell98
+lookupOp :: HsQOp -> ContextM (HsAssoc, Int)
+lookupOp qop
+    = do globalEnv <- queryContext globalEnv
+         case Env.lookup (qop2name qop) globalEnv of
+           Just (Env.HsxInfixOp _ assoc prio) -> return (assoc, prio)
+           Nothing -> do warn (Msg.missing_infix_decl qop globalEnv)
+                         return (HsAssocLeft, 9) -- default values in Haskell98
+    where qop2name (HsQVarOp n) = n
+          qop2name (HsQConOp n) = n
 
-lookupSig :: Isa.Name -> ContextM Isa.TypeSig
+lookupSig :: HsQName -> ContextM Isa.TypeSig
 lookupSig fname
-    = do seensigs  <- queryContext fsignatures
-         case (lookup fname seensigs) of
-           Nothing        -> die (Msg.missing_fun_sig fname)
-           Just signature -> return signature
+    = do globalEnv  <- queryContext globalEnv
+         case (Env.lookup fname globalEnv) of
+           Just (Env.HsxVariable (Just typ))     -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
+           Just (Env.HsxFunction (Just typ))     -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
+           Just (Env.HsxInfixOp  (Just typ) _ _) -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
+           Just (Env.HsxTypeAnnotation typ)      -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
+           _ -> die (Msg.missing_fun_sig fname globalEnv)
+
 

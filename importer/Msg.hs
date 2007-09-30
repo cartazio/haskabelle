@@ -7,12 +7,15 @@ Messages.
 module Importer.Msg where
 
 import Importer.Utilities.Hsx (srcloc2string)
-import Importer.Utilities.Misc (prettyHsx)
+import Importer.Utilities.Misc (prettyShow', prettyHsx)
 
 spacify x = x ++ " "
 
 quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
+
+printEnv env = "Global environment looked like:\n"
+               ++ prettyShow' "globalenv" env
 
 assoc_mismatch op1 assoc1 op2 assoc2
     = let { op1' = quote op1; assoc1' = quote assoc1; } in
@@ -20,12 +23,14 @@ assoc_mismatch op1 assoc1 op2 assoc2
       "Associativity mismatch: " ++ op1' ++ " has " ++ assoc1' ++ 
       ", whereas " ++ op2' ++ " has " ++ assoc2' ++ "."
 
-missing_infix_decl name
+missing_infix_decl name env
     = "Missing infix declaration for " ++ (quote name) ++
-      ", assuming left associativity and a fixity of 9."
+      ", assuming left associativity and a fixity of 9.\n\n"
+      ++ printEnv env
 
-missing_fun_sig name
-    = "Missing function signature for " ++ (quote name) ++ ". (FIXME)"
+missing_fun_sig name env
+    = "Missing function signature for " ++ (quote name) ++ ". (FIXME)\n\n"
+      ++ printEnv env
 
 failed_import importloc importname errormsg
     = srcloc2string importloc ++ ": "
