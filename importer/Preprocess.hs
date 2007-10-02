@@ -1,14 +1,12 @@
 
 module Importer.Preprocess (preprocessHsModule) where
 
-import List ((\\), nub)
-
 import Control.Monad.State
 import Language.Haskell.Hsx
 
 import Data.Generics.Biplate
 
-import Importer.Utilities.Misc --(concatMapM, assert)
+import Importer.Utilities.Misc (concatMapM, assert)
 import Importer.Utilities.Hsx
 import Importer.Utilities.Gensym
 
@@ -100,8 +98,8 @@ delocalize_HsBinds (HsBDecls localdecls)
     = do renamings    <- lift (freshIdentifiers (bindingsFromDecls localdecls))
          let localdecls' = map (renameFreeVars renamings . renameHsDecl renamings) localdecls
          localdecls'' <- concatMapM delocalize_HsDecl localdecls'
-         closedNs     <- getBindings
-         return (HsBDecls [], checkForClosures closedNs localdecls'', renamings)
+         closedVarNs     <- getBindings
+         return (HsBDecls [], checkForClosures closedVarNs localdecls'', renamings)
 
 delocalize_HsRhs (HsUnGuardedRhs exp)
     = do (exp', decls) <- delocalize_HsExp exp
@@ -134,6 +132,31 @@ delocalize_HsAlt (HsAlt loc pat (HsUnGuardedAlt body) wbinds)
            return (HsAlt loc pat (HsUnGuardedAlt body') wbinds', decls ++ moredecls)
 
 
+
+-- Closures over variables /that are directly bound by declarations/,
+-- can obviously not be delocalized, as for instance
+--
+--    foo x = let bar y = y * x 
+--            in bar 42
+--
+-- would otherwise be delocalized to the bogus
+--
+--    bar0 y = y * x
+--
+--    foo x  = bar0 42
+
+-- Notice, however, that this does not apply to closures that close
+-- over bindings that will themselves be delocalized, as e.g the
+-- following
+--
+--    foo x = let z = 42
+--                bar y = y * z in bar x
+--
+-- _can_ (and will) be delocalized to
+--
+--    z0 = 42
+--    bar1 y = y * z0
+--    foo x = bar1 x
 
 checkForClosures :: [HsQName] -> [HsDecl] -> [HsDecl]
 checkForClosures closedNs decls = map check decls
