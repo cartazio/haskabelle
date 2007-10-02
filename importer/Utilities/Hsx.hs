@@ -116,8 +116,10 @@ instance AlphaConvertable HsExp where
                                    in renameFreeVars (shadow boundNs renams) body
             HsCase exp alternatives
                 -> HsCase exp' alternatives'
-                     where exp'          = renameFreeVars renams exp
-                           alternatives' = map (renameFreeVars renams) alternatives
+                     where declNs        = bindingsFromDecls (childrenBi alternatives :: [HsDecl])
+                           renams'       = shadow declNs renams
+                           exp'          = renameFreeVars renams' exp
+                           alternatives' = map (renameFreeVars renams') alternatives
             HsLet (HsBDecls decls) body 
                 -> HsLet (HsBDecls decls') body'
                       where declNs  = bindingsFromDecls decls

@@ -10,8 +10,8 @@ import qualified Importer.IsaSyntax as Isa
 import Importer.Utilities.Hsx
 
 
-data LexEnv = HsxLexEnv (Map.Map HsQName HsxLexInfo)
-            | IsaLexEnv (Map.Map Isa.Name IsaLexInfo)
+data LexE = HsxLexEnv (Map.Map HsQName  HsxLexInfo)
+          | IsaLexEnv (Map.Map Isa.Name IsaLexInfo)
   deriving (Show)
 
 data HsxLexInfo = HsxVariable (Maybe HsType)
@@ -25,22 +25,9 @@ data IsaLexInfo = IsaVariable | IsaFunction
 
 emptyLexEnv_Hsx = HsxLexEnv Map.empty
 
-makeLexEnv_Hsx :: [(HsQName, HsxLexInfo)] -> LexEnv
+makeLexEnv_Hsx :: [(HsQName, HsxLexInfo)] -> LexE
 makeLexEnv_Hsx initbindings
     = HsxLexEnv (Map.fromListWith mergeLexInfos initbindings)
-
-makeModuleEnv_Hsx :: HsModule -> LexEnv
-makeModuleEnv_Hsx (HsModule loc modul _exports _imports topdecls)
-    = makeLexEnv_Hsx (concatMap extractLexInfos topdecls)
-    where 
-      extractLexInfos decl 
-          = map (\name -> (name,
-                           case decl of
-                             HsPatBind _ _ _ _          -> HsxVariable Nothing
-                             HsFunBind _                -> HsxFunction Nothing
-                             HsInfixDecl _ assoc prio _ -> HsxInfixOp  Nothing assoc prio
-                             HsTypeSig _ _ typ          -> HsxTypeAnnotation typ))
-            (fromJust $ namesFromHsDecl decl)
 
 mergeLexInfos (HsxVariable Nothing)    (HsxTypeAnnotation typ) = HsxVariable (Just typ)
 mergeLexInfos (HsxFunction Nothing)    (HsxTypeAnnotation typ) = HsxFunction (Just typ)
@@ -50,24 +37,59 @@ mergeLexInfos (HsxTypeAnnotation typ) (HsxFunction Nothing)    = HsxFunction (Ju
 mergeLexInfos (HsxTypeAnnotation typ) (HsxInfixOp Nothing a p) = HsxInfixOp  (Just typ) a p
 
 
-lookup :: HsQName -> LexEnv -> Maybe HsxLexInfo
-lookup k (HsxLexEnv map) = Map.lookup k map
-
-
-data GlobalLexEnv = HsxGlobalLexEnv (Map.Map Module LexEnv)
+data ModuleE = HsxModuleEnv Module [(Module, Maybe Module)] LexE
   deriving (Show)
 
-makeGlobalEnv_Hsx :: [HsModule] -> GlobalLexEnv
+emptyModuleEnv = HsxModuleEnv (Module "Main") [] emptyLexEnv_Hsx
+
+makeModuleEnv :: HsModule -> ModuleE
+makeModuleEnv (HsModule loc modul _exports imports topdecls)
+    = HsxModuleEnv modul (map normalizeImport imports) 
+        $ makeLexEnv_Hsx (concatMap extractLexInfos topdecls)
+    where 
+      extractLexInfos decl 
+          = map (\name -> (name, case decl of
+                                   HsPatBind _ _ _ _          -> HsxVariable Nothing
+                                   HsFunBind _                -> HsxFunction Nothing
+                                   HsInfixDecl _ assoc prio _ -> HsxInfixOp  Nothing assoc prio
+                                   HsTypeSig _ _ typ          -> HsxTypeAnnotation typ))
+            (fromJust $ namesFromHsDecl decl)
+
+      normalizeImport (HsImportDecl { importModule=modul, importQualified=isQual, importAs=nickname })
+          = case (isQual, nickname) of
+              (True, Nothing)   -> (modul, Just modul)
+              (True, Just nick) -> (modul, Just nick)
+              (False, _)        -> (modul, Nothing)
+
+findModule :: Module -> [(Module, Maybe Module)] -> Maybe Module
+findModule m ms
+    = let (names, nicknames) = unzip ms 
+      in case filter (== m) (catMaybes nicknames) of
+        [name] -> Just name
+        _ -> Nothing
+
+unqualifiedModules :: [(Module, Maybe Module)] -> [Module]
+unqualifiedModules ms
+    = map fst (filter (isNothing . snd) ms)
+
+data GlobalE = HsxGlobalEnv (Map.Map Module ModuleE)
+  deriving (Show)
+
+makeGlobalEnv_Hsx :: [HsModule] -> GlobalE
 makeGlobalEnv_Hsx ms 
-    = HsxGlobalLexEnv (Map.fromListWith failDups 
-                              $ map (\m@(HsModule _ modul _ _ _) -> (modul, makeModuleEnv_Hsx m)) ms)
+    = HsxGlobalEnv (Map.fromListWith failDups 
+                              $ map (\m@(HsModule _ modul _ _ _) -> (modul, makeModuleEnv m)) ms)
     where failDups a b
               = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
 
-lookupGlobally :: Module -> HsQName -> GlobalLexEnv -> Maybe HsxLexInfo
-lookupGlobally m n (HsxGlobalLexEnv globalmap)
-    = Map.lookup m globalmap >>= (\(HsxLexEnv lexmap) -> Map.lookup n lexmap)
+lookup :: Module -> HsQName -> GlobalE -> Maybe HsxLexInfo
+lookup currentModule qname globalenv@(HsxGlobalEnv globalmap)
+    = do (HsxModuleEnv _ importedMs (HsxLexEnv lexmap)) <- Map.lookup currentModule globalmap
+         case qname of
+           Qual m n -> do m' <- findModule m importedMs
+                          Importer.LexEnv.lookup m' (UnQual n) globalenv
+           n -> Map.lookup n lexmap
 
 
-emptyGlobalLexEnv = HsxGlobalLexEnv Map.empty
+emptyGlobalEnv = HsxGlobalEnv (Map.empty)
