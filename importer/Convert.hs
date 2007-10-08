@@ -198,10 +198,10 @@ instance Convert HsDecl Isa.Cmd where
              modul     <- queryContext currentModule
              assert (all check [ Env.lookup modul (UnQual n) globalEnv | n <- names ]) 
                $ return (Isa.Block [])
-        where check (Just (Env.HsxVariable (Just t)))     = t == typ
-              check (Just (Env.HsxFunction (Just t)))     = t == typ
-              check (Just (Env.HsxInfixOp  (Just t) _ _)) = t == typ
-              check (Just (Env.HsxTypeAnnotation t))      = t == typ
+        where check (Just (Env.HsxVariable (Env.HsxLexInfo { Env.typeOf = Just t })))     = t == typ
+              check (Just (Env.HsxFunction (Env.HsxLexInfo { Env.typeOf = Just t })))     = t == typ
+              check (Just (Env.HsxInfixOp  (Env.HsxLexInfo { Env.typeOf = Just t }) _ _)) = t == typ
+              check (Just (Env.HsxTypeAnnotation t)) = t == typ
               check _ = False
                          
     -- Remember that at this stage there are _no_ local declarations in the Hsx
@@ -540,10 +540,14 @@ lookupSig fname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
          case (Env.lookup modul fname globalEnv) of
-           Just (Env.HsxVariable (Just typ))     -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HsxFunction (Just typ))     -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HsxInfixOp  (Just typ) _ _) -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HsxTypeAnnotation typ)      -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
+           Just (Env.HsxVariable (Env.HsxLexInfo { Env.typeOf = Just typ })) 
+               -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
+           Just (Env.HsxFunction (Env.HsxLexInfo { Env.typeOf = Just typ })) 
+               -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
+           Just (Env.HsxInfixOp  (Env.HsxLexInfo { Env.typeOf = Just typ }) _ _) 
+               -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
+           Just (Env.HsxTypeAnnotation typ)      
+               -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
            _ -> die (Msg.missing_fun_sig fname globalEnv)
 
 

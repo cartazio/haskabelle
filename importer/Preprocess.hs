@@ -40,6 +40,8 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
 --     * and finally concatenate everything.
 --
 
+-- We keep track of the names that are directly bound by a declaration,
+-- as functions must not close over them. See below for an explanation.
 type DelocalizerM a = StateT [HsQName] (State GensymCount) a
 
 withBindings       :: [HsQName] -> DelocalizerM v -> DelocalizerM v
