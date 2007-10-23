@@ -10,7 +10,7 @@ module Importer.Convert (
 
 import Language.Haskell.Hsx
 
-import List (unzip4)
+import List (unzip4, partition)
 import Monad
 import Maybe
 
@@ -401,7 +401,6 @@ instance Convert HsExp Isa.Term where
         = do t1' <- convert t1; t2' <- convert t2; t3' <- convert t3
              return (Isa.If t1' t2' t3')
 
-
     convert' (HsCase exp alts)
         = do exp'  <- convert exp
              alts' <- mapM convert alts
@@ -415,10 +414,19 @@ instance Convert HsExp Isa.Term where
           where isVar (Isa.Var _)   = True
                 isVar _             = False
 
-    convert' expr@(HsLet bindings body)
-        = die ("convert' (HsLet): Internal Error. All let expression should have been "
-               ++ "preprocessed away at this stage.")
-
+    convert' expr@(HsLet (HsBDecls bindings) body)
+        = let (_, patbindings) = partition isTypeSig bindings
+          in assert (all isPatBinding patbindings)
+             $ do let (pats, rhss) = unzip (map (\(HsPatBind _ pat rhs _) -> (pat, rhs)) patbindings)
+                  pats' <- mapM convert pats
+                  rhss' <- mapM convert rhss
+                  body' <- convert body
+                  return (Isa.Let (zip pats' rhss') body')
+          where isTypeSig (HsTypeSig _ _ _)      = True
+                isTypeSig _                      = False
+                isPatBinding (HsPatBind _ _ _ (HsBDecls [])) = True
+                isPatBinding _                   = False
+                
     convert' junk = barf "HsExp -> Isa.Term" junk
 
 

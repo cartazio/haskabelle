@@ -290,6 +290,12 @@ instance Printer Isa.Term where
                                       (map pp matchs))
            where pp (pat, term) = (pprint' pat) <+> text "=>" <+> pprint' term
 
+    pprint' (Isa.Let bindings body)
+        = text "let" <+> fsep (map ppBinding bindings)
+          $$ text "in" <+> pprint' body
+          where ppBinding (pat, term)
+                    = pprint' pat <+> equals <+> pprint' term
+
 
 pprintAsList :: [Isa.Term] -> DocM P.Doc
 pprintAsList = brackets . hsep . punctuate comma . map pprint'

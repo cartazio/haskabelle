@@ -92,10 +92,11 @@ data Term = Literal Literal
           | Lambda [VarName] Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
           | App Term Term
           | If Term Term Term
+          | Let [(Pat, Term)] Term
+          | Case Term [(Pat, Term)]
           | Parenthesized Term
           | RecConstr VarName [(Name, Term)]
           | RecUpdate Term [(Name, Term)]
-          | Case Term [(Pat, Term)]
   deriving (Show, Data, Typeable)
 
 -- FIXME place this into some kind of "Haskell system compatibility file"

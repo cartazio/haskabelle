@@ -5,7 +5,7 @@ Auxiliary.
 -}
 
 module Importer.Utilities.Hsx ( 
-  namesFromHsDecl, bindingsFromDecls, bindingsFromPats,
+  namesFromHsDecl, bindingsFromDecls, bindingsFromPats, extractBindingNs, letify,
   Renaming, renameFreeVars, renameHsDecl,
   freshIdentifiers, isFreeVar, srcloc2string, qualify,
 ) where
@@ -45,6 +45,21 @@ namesFromHsDecl (HsFunBind (m:ms))             = case m of
                                                    HsMatch _ fname _ _ _ -> Just [UnQual fname]
 namesFromHsDecl _                              = Nothing
 
+class HasBindings a where
+    extractBindingNs :: a -> [HsQName]
+
+instance HasBindings a => HasBindings [a] where
+    extractBindingNs list = concatMap extractBindingNs list
+
+instance HasBindings HsPat where
+    extractBindingNs pattern = bindingsFromPats [pattern]
+
+instance HasBindings HsDecl where
+    extractBindingNs decl = bindingsFromDecls [decl] 
+
+instance HasBindings HsBinds where
+    extractBindingNs (HsBDecls decls) = extractBindingNs decls
+
 
 bindingsFromPats          :: [HsPat] -> [HsQName]
 bindingsFromPats pattern  = [ UnQual n | HsPVar n <- universeBi pattern ] 
@@ -59,6 +74,19 @@ bindingsFromDecls decls = assert (not (hasDuplicates bindings)) bindings
 hasDuplicates :: Eq a => [a] -> Bool
 hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
     where tails' = filter (not . null) (tails list)
+
+
+class Letifiable a where
+    letify' :: HsBinds -> a -> a
+    letify  :: HsBinds -> a -> a
+    letify (HsBDecls []) body = body
+    letify bindings body      = letify' bindings body
+
+instance Letifiable HsExp where
+    letify' bindings body = HsLet bindings body
+
+instance Letifiable HsRhs where
+    letify' bindings (HsUnGuardedRhs body)  = HsUnGuardedRhs (letify bindings body)
 
 
 type Renaming = (HsQName, HsQName)
@@ -172,10 +200,15 @@ fromHsPatBind (HsPatBind loc pat rhs wherebinds)
 instance AlphaConvertable HsMatch where
     renameFreeVars renams (HsMatch loc name pats rhs (HsBDecls decls))
         = HsMatch loc name pats rhs' (HsBDecls decls')
-      where patNs  = bindingsFromPats  pats
-            declNs = bindingsFromDecls decls 
+      where patNs  = extractBindingNs pats
+            declNs = extractBindingNs decls 
             rhs'   = renameFreeVars (shadow ([UnQual name] ++ patNs ++ declNs) renams) rhs
             decls' = map (renameFreeVars (shadow (UnQual name : declNs) renams)) decls
+
+instance AlphaConvertable HsBinds where
+    renameFreeVars renams (HsBDecls decls) = HsBDecls decls'
+        where declNs = extractBindingNs decls
+              decls' = map (renameFreeVars (shadow declNs renams)) decls
 
 instance AlphaConvertable HsRhs where
     renameFreeVars renams (HsUnGuardedRhs exp)
