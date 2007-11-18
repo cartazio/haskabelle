@@ -5,7 +5,7 @@ Conversion from abstract Haskell code to abstract Isar/HOL theory.
 -}
 
 module Importer.Convert (
-  Conversion(..), convertHsModule, -- convertParseResult, cnvFileContents
+  convertHsxUnit -- convertParseResult, cnvFileContents
 ) where
 
 import Language.Haskell.Hsx
@@ -19,10 +19,45 @@ import Control.Monad.State
 import Importer.Utilities.Misc
 import Importer.Utilities.Gensym
 
+import Importer.Preprocess
+import Importer.ConversionUnit
+
+import qualified Data.Graph as Graph
+import qualified Data.Tree as Tree
+
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
 
 import qualified Importer.LexEnv as Env
+
+
+convertHsxUnit :: ConversionUnit -> ConversionUnit
+convertHsxUnit (HsxUnit hsmodules)
+    = let hsmodules' = map preprocessHsModule hsmodules
+          globalenv  = Env.makeGlobalEnv_Hsx hsmodules'
+          declgraphs = map (makeDeclGraph globalenv) hsmodules'
+          isathys    = map (convertDeclGraph globalenv) declgraphs
+      in IsaUnit isathys
+
+data ConnectedHsDecls = ConnectedHsDecls [HsDecl]
+  deriving (Show)
+
+convertDeclGraph :: Env.GlobalE -> HsxDeclGraph -> Isa.Cmd
+convertDeclGraph env (HsxDeclGraph _ modul (graph, fromVertex, _))
+    = let connectedDecls    = map ConnectedHsDecls
+                               $ map (map declFromVertex . Tree.flatten) $ Graph.scc graph 
+          (result, context) = runConversion env 
+                                $ do thy  <- convert modul
+                                     withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
+                                       $ do cmds <- mapM convert connectedDecls
+                                            return (Isa.TheoryCmd thy cmds)
+      in result
+    where declFromVertex v = let (decl,_,_) = fromVertex v in decl 
+
+-- convertHsModule :: Env.GlobalE -> HsModule -> Conversion Isa.Cmd
+-- convertHsModule env m
+--     = let (result, context) = runConversion env (convert m)
+--       in ConvSuccess result (_warnings context)
 
 data Context    = Context
     {     
@@ -100,14 +135,6 @@ class Show a => Convert a b | a -> b where
                                in prettyShow' frameName hsexpr : bt)
                      $ convert' hsexpr
 
-data Conversion a = ConvSuccess a [Warning] | ConvFailed String
-  deriving (Eq, Ord, Show)
-
-convertHsModule :: Env.GlobalE -> HsModule -> Conversion Isa.Cmd
-
-convertHsModule env m
-    = let (result, context) = runConversion env (convert m)
-      in ConvSuccess result (_warnings context)
 
 -- convertFileContents = convertParseResult . parseModule -- FIXME: remove
 
@@ -117,6 +144,17 @@ convertHsModule env m
 --     (ParseOk foo) = parseModule str2
 --   in prettyHsx foo
 
+instance Convert ConnectedHsDecls Isa.Cmd where
+    convert' (ConnectedHsDecls [])  = return (Isa.Block [])
+    convert' (ConnectedHsDecls [d]) = convert d
+    convert' (ConnectedHsDecls decls)
+        = assert (all isFunBind decls)
+            $ do funcmds <- mapM convert decls
+                 let (names, sigs, eqs) = unzip3 (map splitFunCmd funcmds)
+                 return (Isa.FunCmd names sigs (concat eqs))
+        where isFunBind (HsFunBind _) = True
+              isFunBind _             = False
+              splitFunCmd (Isa.FunCmd [n] [s] eqs) = (n, s, eqs)
 
 
 instance Convert HsModule Isa.Cmd where
@@ -225,17 +263,21 @@ instance Convert HsDecl Isa.Cmd where
              patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
              bodies'    <- mapM convert bodies
              thy        <- queryContext theory
-             return $ Isa.FunCmd fname' fsig (zip patterns' bodies')
+             return $ Isa.FunCmd [fname'] [fsig] (zip3 (cycle [fname']) patterns' bodies')
        where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of HsBDecls [] -> True; _ -> False
 
-    convert' (HsPatBind _loc pat@(HsPVar name) rhs _wherebinds)
-        = do name' <- convert name
-             pat'  <- convert pat
-             rhs'  <- convert rhs
-             sig   <- lookupSig (UnQual name)
-             return $ Isa.DefinitionCmd name' sig ([pat'], rhs')
+    convert' (HsPatBind _loc pattern rhs _wherebinds)
+        = case pattern of
+            pat@(HsPVar name) 
+                -> do name' <- convert name
+                      pat'  <- convert pat
+                      rhs'  <- convert rhs
+                      sig   <- lookupSig (UnQual name)
+                      return $ Isa.DefinitionCmd name' sig (pat', rhs')
+            _   -> die "Complex pattern binding on toplevel is not supported by Isar/HOL."
+    
 
     convert' junk = barf "HsDecl -> Isa.Cmd" junk
 

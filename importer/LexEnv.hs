@@ -10,7 +10,7 @@ import qualified Importer.IsaSyntax as Isa
 import Importer.Utilities.Hsx
 
 
-data LexE = HsxLexEnv (Map.Map HsQName  HsxIdentifier)
+data LexE = HsxLexEnv (Map.Map HsQName HsxIdentifier)
   deriving (Show)
 
 
@@ -26,6 +26,21 @@ data HsxIdentifier = HsxVariable HsxLexInfo
                    | HsxInfixOp  HsxLexInfo HsAssoc Int
                    | HsxTypeAnnotation HsType
   deriving (Show)
+
+isHsxVariable, isHsxFunction, isHsxInfixOp, isHsxTypeAnnotation :: HsxIdentifier -> Bool
+
+isHsxVariable (HsxVariable _) = True
+isHsxVariable _ = False
+
+isHsxFunction (HsxFunction _) = True
+isHsxFunction _ = False
+
+isHsxInfixOp (HsxInfixOp _ _ _) = True
+isHsxInfixOp _ = False
+
+isHsxTypeAnnotation (HsxTypeAnnotation _) = True
+isHsxTypeAnnotation _ = False
+
 
 
 emptyLexEnv_Hsx = HsxLexEnv Map.empty

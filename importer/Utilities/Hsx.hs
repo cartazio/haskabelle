@@ -5,7 +5,8 @@ Auxiliary.
 -}
 
 module Importer.Utilities.Hsx ( 
-  namesFromHsDecl, bindingsFromDecls, bindingsFromPats, extractBindingNs, letify,
+  namesFromHsDecl, bindingsFromDecls, bindingsFromPats, 
+  extractBindingNs, extractFreeVarNs, letify,
   Renaming, renameFreeVars, renameHsDecl,
   freshIdentifiers, isFreeVar, srcloc2string, qualify,
 ) where
@@ -260,9 +261,11 @@ renameHsPat renams pat
 
 -- Kludge.
 --
-isFreeVar :: HsQName -> HsExp -> Bool
 isFreeVar qname body
     = occurs qname body && let body' = renameFreeVars (runGensym 999 (freshIdentifiers [qname])) body
                            in not (occurs qname body')
     where occurs qname body 
               = not (null [ qn | HsVar qn <- universeBi body, qn == qname ])
+
+extractFreeVarNs thing
+    = filter (flip isFreeVar thing) (universeBi thing :: [HsQName])

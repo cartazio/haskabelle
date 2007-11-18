@@ -190,21 +190,23 @@ instance Printer Isa.Cmd where
 
     pprint' (Isa.DefinitionCmd vname tysig matching)
         = case matching of
-            (pattern, term)
+            (pat, term)
                 -> blankline $
                    text "definition" <+> pprint' vname <+> text "::" <+> pprint' tysig $$
                    text "where" $$
-                   space <+> (maybeWithinHOL $
-                                hsep (map pprint' pattern) <+> equals <+> pprint' term)
+                   space <+> (maybeWithinHOL $ pprint' pat <+> equals <+> pprint' term)
 
-    pprint' (Isa.FunCmd vname tysig matchs)
+    pprint' (Isa.FunCmd fnames tysigs equations)
         = blankline $
-          text "fun" <+> pprint' vname <+> text "::" <+> pprint' tysig $$
+          text "fun" <+> vcat (punctuate (text " and ") (map ppHeader (zip fnames tysigs))) $$
           text "where" $$
           vcat (zipWith (<+>) (space : repeat (char '|'))
-                              (map pp matchs))
-          where pp (pattern, term) = maybeWithinHOL $
-                                       pprint' vname <+> hsep (map pprint' pattern) <+> equals <+> pprint' term
+                              (map ppEquation equations))
+          where ppHeader (fn, sig)
+                    = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
+                ppEquation (fname, pattern, term) 
+                    = maybeWithinHOL $
+                        pprint' fname <+> hsep (map pprint' pattern) <+> equals <+> pprint' term
  
     pprint' (Isa.InfixDeclCmd op assoc prio)
         = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op

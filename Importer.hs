@@ -12,17 +12,16 @@ module Main (
 ) where
 
 import IO
+import Directory
 import Control.Monad
 import System.Environment (getArgs)
 import Text.PrettyPrint (render, vcat, text, (<>))
 
 import Language.Haskell.Hsx (ParseResult(..), parseFile, HsModule(..))
+import Importer.IsaSyntax (Cmd(..), Theory(..))
 
 import Importer.ConversionUnit
-import Importer.Preprocess
-import Importer.LexEnv
 import Importer.Convert
-import Importer.IsaSyntax (Cmd)
 import Importer.Printer (pprint)
 
 
@@ -42,32 +41,37 @@ convertFile   :: FilePath -> IO ConversionUnit
 convertFile fp = do (ParseOk initHsModule) <- parseFile fp
                     unit <- try (makeConversionUnit initHsModule)
                     case unit of
-                      Left ioerror -> error (show ioerror)
-                      Right (HsxUnit hsmodules) 
-                          -> let hsmodules' = map preprocessHsModule hsmodules
-                                 globalenv  = makeGlobalEnv_Hsx hsmodules'
-                                 isathys    = map (convertHsModule globalenv) hsmodules' 
-                             in return (IsaUnit (map (\(ConvSuccess cmd _) -> cmd) isathys))
+                      Left ioerror  -> error (show ioerror)
+                      Right hsxunit -> return (convertHsxUnit hsxunit)
+
+
 
 pprintConversionUnit (IsaUnit thys)
     = vcat (map (dashes . pprint) thys)
     where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
                     
 
--- importFile :: FilePath -> FilePath -> IO ()
--- importFile src dst = do
---   ConvSuccess abstract _ <- convertFile src
---   let concrete = (render . pprint) abstract ++ "\n"
---   writeFile dst concrete
+importFile :: FilePath -> FilePath -> IO ()
+importFile src dstdir
+    = do exists <- doesDirectoryExist dstdir
+         when (not exists) $ createDirectory dstdir
+         do IsaUnit thys <- convertFile src
+            setCurrentDirectory dstdir
+            sequence_ (map writeTheory thys)
+    where writeTheory thy@(TheoryCmd (Theory thyname) _)
+              = do let content = render (pprint thy)
+                   let dstName = map (\c -> if c == '.' then '_' else c) thyname
+                   writeFile (dstName++".thy") content
+  
 
 -- Like `convertFile' but returns the textual representation of the
 -- AST itself. 
 -- cnvFile :: FilePath -> IO String
 -- cnvFile = liftM cnvFileContents . readFile
 
--- main :: IO ()
--- main = do
---   args <- getArgs
---   case args of
---     [src, dst] -> importFile src dst
---     _ -> ioError (userError "exactly two arguments expected")
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [src, dstdir] -> importFile src dstdir
+    _ -> ioError (userError "exactly two arguments expected")

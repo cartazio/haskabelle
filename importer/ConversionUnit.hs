@@ -1,17 +1,23 @@
 
 module Importer.ConversionUnit 
-    (ConversionUnit(..), makeConversionUnit) where
+    (ConversionUnit(..), makeConversionUnit, HsxDeclGraph(..), makeDeclGraph) where
 
+import Maybe
 import IO
 import Monad
+import List (groupBy)
 import Data.Graph
 import Data.Tree
 import Language.Haskell.Hsx
 
+import Debug.Trace -- FIXME
+
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
+import qualified Importer.LexEnv as Env
 
 import Importer.Utilities.Misc
+import Importer.Utilities.Hsx
 
 data ConversionUnit = HsxUnit [HsModule]
                     | IsaUnit [Isa.Cmd]
@@ -60,3 +66,36 @@ makeConversionUnit hsmodule
          let toHsModule v = case fromVertex v of (m,_,_) -> m
          let [hsmodules]  = map (map toHsModule . flatten) (dff depGraph)
          return (HsxUnit hsmodules)
+
+
+data HsxDeclGraph = HsxDeclGraph SrcLoc Module 
+                                 (Graph, Vertex -> (HsDecl, HsQName, [HsQName]), 
+                                 HsQName -> Maybe Vertex)
+
+makeDeclGraph :: Env.GlobalE -> HsModule -> HsxDeclGraph
+makeDeclGraph env (HsModule loc modul _exports _imports decls)
+    = HsxDeclGraph loc modul funDepGraph
+      where funDepGraph = graphFromEdges 
+                            $ handleDuplicates modul env 
+                                $ concatMap makeEdgesFromHsDecl decls
+
+makeEdgesFromHsDecl :: HsDecl -> [(HsDecl, HsQName, [HsQName])]
+makeEdgesFromHsDecl decl
+    = [ (decl, name, extractFreeVarNs decl) | name <- fromJust $ namesFromHsDecl decl ]
+
+
+handleDuplicates :: Module -> Env.GlobalE -> [(HsDecl, HsQName, [HsQName])] -> [(HsDecl, HsQName, [HsQName])]
+handleDuplicates m env edges
+    = concatMap handleGroup (groupBy (\(_,x,_) (_,y,_) -> x == y) edges)
+    where handleGroup edges
+              = if (length edges > 2) then error "FOOF!"
+                else if (length edges == 2) 
+                        then let edges' = filter (not . isTypeAnnotation) edges
+                             in assert (length edges' == 1) edges'
+                        else edges
+          isTypeAnnotation ((HsTypeSig _ _ _, _ , _)) = True
+          isTypeAnnotation _ = False
+          
+
+
+

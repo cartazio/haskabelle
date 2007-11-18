@@ -46,13 +46,13 @@ data Cmd =
     -- | "fib (Suc 0) = 1"
     -- | "fib (Suc (Suc n)) = fib n + fib (Suc n)"
     --
-    | FunCmd VarName TypeSig [([Pat], Term)]
+    | FunCmd [VarName] [TypeSig] [(VarName, [Pat], Term)]
     --
     -- definition id :: "'a ⇒ 'a"
     -- where
     --   "id a = a"
     --
-    | DefinitionCmd VarName TypeSig ([Pat], Term)
+    | DefinitionCmd VarName TypeSig (Pat, Term)
     | InfixDeclCmd OpName Assoc Prio
     | Comment String
   deriving (Show, Data, Typeable)
