@@ -9,10 +9,11 @@ module Importer.Utilities.Hsx (
   extractBindingNs, extractFreeVarNs, letify,
   Renaming, renameFreeVars, renameHsDecl,
   freshIdentifiers, isFreeVar, srcloc2string, qualify,
+  orderDeclsBySourceLine, getSourceLine,
 ) where
   
 import Maybe
-import List (tails)
+import List (tails, sort)
 import Array (inRange)
 
 import Control.Monad.State
@@ -269,3 +270,31 @@ isFreeVar qname body
 
 extractFreeVarNs thing
     = filter (flip isFreeVar thing) (universeBi thing :: [HsQName])
+
+orderDeclsBySourceLine :: HsDecl -> HsDecl -> Ordering
+orderDeclsBySourceLine decl1 decl2
+    = compare (getSourceLine decl1) (getSourceLine decl2) 
+
+getSourceLine :: HsDecl -> Int
+getSourceLine decl
+    = let srclocs = childrenBi decl :: [SrcLoc]
+          lines   = map srcLine srclocs
+      in head (sort lines)
+
+foo = [HsFunBind
+        [HsMatch
+           (SrcLoc{srcFilename = "/tmp/test.hs", srcLine = 8, srcColumn = 1})
+           (HsIdent "g")
+           [HsPVar (HsIdent "x")]
+           (HsUnGuardedRhs
+              (HsLet
+                 (HsBDecls
+                    [HsPatBind
+                       (SrcLoc{srcFilename = "/tmp/test.hs", srcLine = 8, srcColumn = 11})
+                       (HsPVar (HsIdent "a"))
+                       (HsUnGuardedRhs (HsLit (HsInt 42)))
+                       (HsBDecls [])])
+                 (HsInfixApp (HsVar (UnQual (HsIdent "a")))
+                    (HsQVarOp (UnQual (HsSymbol "*")))
+                    (HsVar (UnQual (HsIdent "x"))))))
+           (HsBDecls [])]]

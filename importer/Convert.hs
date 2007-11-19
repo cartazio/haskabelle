@@ -10,7 +10,7 @@ module Importer.Convert (
 
 import Language.Haskell.Hsx
 
-import List (unzip4, partition)
+import List (unzip4, partition, sortBy)
 import Monad
 import Maybe
 
@@ -18,7 +18,7 @@ import Control.Monad.State
 
 import Importer.Utilities.Misc
 import Importer.Utilities.Gensym
-
+import Importer.Utilities.Hsx (orderDeclsBySourceLine, getSourceLine)
 import Importer.Preprocess
 import Importer.ConversionUnit
 
@@ -44,15 +44,25 @@ data ConnectedHsDecls = ConnectedHsDecls [HsDecl]
 
 convertDeclGraph :: Env.GlobalE -> HsxDeclGraph -> Isa.Cmd
 convertDeclGraph env (HsxDeclGraph _ modul (graph, fromVertex, _))
-    = let connectedDecls    = map ConnectedHsDecls
-                               $ map (map declFromVertex . Tree.flatten) $ Graph.scc graph 
+    = let connectedDecls    = sortConnectedHsDecls 
+                               $ map ConnectedHsDecls
+                                 $ map (map declFromVertex . Tree.flatten) $ Graph.scc graph 
           (result, context) = runConversion env 
                                 $ do thy  <- convert modul
                                      withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
                                        $ do cmds <- mapM convert connectedDecls
                                             return (Isa.TheoryCmd thy cmds)
-      in result
+      in trace (prettyShow (map (map declFromVertex . Tree.flatten) $ Graph.scc graph )) result
     where declFromVertex v = let (decl,_,_) = fromVertex v in decl 
+
+sortConnectedHsDecls :: [ConnectedHsDecls] -> [ConnectedHsDecls]
+sortConnectedHsDecls connectedDecls
+    = let connectedDecls' = map (\(ConnectedHsDecls decls) 
+                                     -> ConnectedHsDecls $ sortBy orderDeclsBySourceLine decls)
+                            connectedDecls
+      in sortBy (\(ConnectedHsDecls (decl1:_)) (ConnectedHsDecls (decl2:_))
+                     -> compare (getSourceLine decl1) (getSourceLine decl2))
+                 connectedDecls'
 
 -- convertHsModule :: Env.GlobalE -> HsModule -> Conversion Isa.Cmd
 -- convertHsModule env m
