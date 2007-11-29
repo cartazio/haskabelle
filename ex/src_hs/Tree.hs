@@ -13,4 +13,3 @@ insert x (Tip y) = Branch (Tip x) (Tip y)
 insert x (Branch y z) = if less_eq (size y) (size z)
   then Branch (insert x y) z
   else Branch y (insert x z)
-
