@@ -1,3 +1,5 @@
+module Primitive where
+
 data Nat = Zero | Succ Nat
 
 id :: a -> a
