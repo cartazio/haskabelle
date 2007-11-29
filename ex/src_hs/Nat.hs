@@ -26,3 +26,7 @@ divmod :: Nat -> Nat -> (Nat, Nat)
 divmod Zero n = (Zero, Zero)
 divmod m Zero = (Zero, m)
 divmod m n = if less m n then (Zero, m) else (Succ r, s) where (r, s) = divmod (minus m n) n
+
+num :: Num a => Nat -> a
+num Zero = 0
+num (Succ n) = num n + 1
