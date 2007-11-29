@@ -1,6 +1,6 @@
 module Nat where
 
-data Nat = Zero | Succ Nat
+data Nat = Zero | Succ Nat deriving Show
 
 plus :: Nat -> Nat -> Nat
 plus Zero n = n
@@ -27,6 +27,6 @@ divmod Zero n = (Zero, Zero)
 divmod m Zero = (Zero, m)
 divmod m n = if less m n then (Zero, m) else (Succ r, s) where (r, s) = divmod (minus m n) n
 
-num :: Num a => Nat -> a
-num Zero = 0
-num (Succ n) = num n + 1
+-- ~ num :: Num a => Nat -> a
+-- ~ num Zero = 0
+-- ~ num (Succ n) = num n + 1
