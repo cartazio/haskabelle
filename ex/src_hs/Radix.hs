@@ -9,4 +9,5 @@ radix ch r n = reverse (rad n) where
   rad n = ch d : rad m where
     (m, d) = divmod n r
 
+radix_10 :: Nat -> [Nat]
 radix_10 = radix id (Succ (Succ (Succ (Succ (Succ (Succ (Succ (Succ (Succ (Succ Zero))))))))))
