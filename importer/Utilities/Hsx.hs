@@ -42,7 +42,8 @@ namesFromHsDecl (HsClassDecl _ _ name _ _ _)   = Just [UnQual name]
 namesFromHsDecl (HsInstDecl _ _ qname _ _)     = Just [qname]
 namesFromHsDecl (HsTypeSig _ names _)          = Just (map UnQual names)
 namesFromHsDecl (HsInfixDecl _ _ _ ops)        = Just [UnQual n | n <- (universeBi ops :: [HsName])]
-namesFromHsDecl (HsPatBind _ pat _ _)          = Just (bindingsFromPats [pat])
+namesFromHsDecl (HsPatBind _ pat _ _)          = case bindingsFromPats [pat] of [] -> Nothing
+                                                                                bs -> Just bs
 namesFromHsDecl (HsFunBind (m:ms))             = case m of 
                                                    HsMatch _ fname _ _ _ -> Just [UnQual fname]
 namesFromHsDecl _                              = Nothing
@@ -281,20 +282,3 @@ getSourceLine decl
           lines   = map srcLine srclocs
       in head (sort lines)
 
-foo = [HsFunBind
-        [HsMatch
-           (SrcLoc{srcFilename = "/tmp/test.hs", srcLine = 8, srcColumn = 1})
-           (HsIdent "g")
-           [HsPVar (HsIdent "x")]
-           (HsUnGuardedRhs
-              (HsLet
-                 (HsBDecls
-                    [HsPatBind
-                       (SrcLoc{srcFilename = "/tmp/test.hs", srcLine = 8, srcColumn = 11})
-                       (HsPVar (HsIdent "a"))
-                       (HsUnGuardedRhs (HsLit (HsInt 42)))
-                       (HsBDecls [])])
-                 (HsInfixApp (HsVar (UnQual (HsIdent "a")))
-                    (HsQVarOp (UnQual (HsSymbol "*")))
-                    (HsVar (UnQual (HsIdent "x"))))))
-           (HsBDecls [])]]

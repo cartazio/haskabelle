@@ -8,7 +8,9 @@ import Language.Haskell.Hsx
 
 import qualified Importer.Msg as Msg
 import qualified Importer.IsaSyntax as Isa
+
 import Importer.Utilities.Hsx
+import Importer.Utilities.Misc
 
 
 data LexE = HsxLexEnv (Map.Map HsQName HsxIdentifier)
@@ -26,6 +28,7 @@ data HsxLexInfo = HsxLexInfo {
 data HsxIdentifier = HsxVariable HsxLexInfo
                    | HsxFunction HsxLexInfo
                    | HsxInfixOp  HsxLexInfo HsAssoc Int
+                   | HsxData     HsxLexInfo [HsQName] -- data constructors
                    | HsxTypeAnnotation HsType
   deriving (Show)
 
@@ -42,6 +45,9 @@ isHsxInfixOp _ = False
 
 isHsxTypeAnnotation (HsxTypeAnnotation _) = True
 isHsxTypeAnnotation _ = False
+
+isHsxData (HsxData _ _) = True
+isHsxData _ = False
 
 
 
@@ -106,7 +112,13 @@ extractLexInfos modul decl
                                 HsPatBind _ _ _ _          -> HsxVariable defaultLexInfo
                                 HsFunBind _                -> HsxFunction defaultLexInfo
                                 HsInfixDecl _ assoc prio _ -> HsxInfixOp  defaultLexInfo assoc prio
-                                HsTypeSig _ _ typ          -> HsxTypeAnnotation typ))
+                                HsTypeSig _ _ typ          -> HsxTypeAnnotation typ
+                                HsDataDecl _ _ _ _ condecls _
+                                    -> HsxData (defaultLexInfo { typeOf = Just (HsTyCon name) })
+                                               (map (qualify modul . UnQual . extractConstrName) condecls)
+                                       where extractConstrName (HsQualConDecl _ _ _ (HsConDecl n _)) = n
+                                             extractConstrName (HsQualConDecl _ _ _ (HsRecDecl n _)) = n
+                       ))
       (fromJust $ namesFromHsDecl decl)
 
 normalizeImport :: HsImportDecl -> HsxImportInfo
@@ -120,14 +132,34 @@ exportIdentifiers :: Maybe [HsExportSpec] -> LexE -> LexE
 exportIdentifiers Nothing lexenv = lexenv
 exportIdentifiers (Just exportspecs) lexenv
     = foldl export lexenv exportspecs
-      where export (HsxLexEnv lexmap) (HsEVar qname) = HsxLexEnv (Map.update updateHsxIdentifier qname lexmap)
+      where export (HsxLexEnv lexmap) (HsEVar qname) 
+                = HsxLexEnv (Map.update (updateHsxIdentifier [Var, Fun, Op, Ann]) qname lexmap)
+            export (HsxLexEnv lexmap) (HsEAbs qname)
+                = HsxLexEnv (Map.update (updateHsxIdentifier [Data]) qname lexmap)
             export env etc = error ("Not supported: " ++ show etc)
 
-updateHsxIdentifier (HsxVariable lexenv)     = Just $ HsxVariable (lexenv { exported = True })
-updateHsxIdentifier (HsxFunction lexenv)     = Just $ HsxFunction (lexenv { exported = True })
-updateHsxIdentifier (HsxInfixOp  lexenv a p) = Just $ HsxInfixOp  (lexenv { exported = True }) a p
-updateHsxIdentifier (HsxTypeAnnotation _)    = Nothing
+data AllowedIdentifier = Var | Fun | Op | Ann | Data
+  deriving (Show)
 
+updateHsxIdentifier :: [AllowedIdentifier] -> HsxIdentifier -> Maybe HsxIdentifier
+
+updateHsxIdentifier allowedIdents hsxidentifier
+    = assert (isAllowed allowedIdents hsxidentifier)
+        $ update hsxidentifier
+      where 
+        update (HsxVariable lexinfo)     = Just $ HsxVariable (lexinfo { exported = True })
+        update (HsxFunction lexinfo)     = Just $ HsxFunction (lexinfo { exported = True })
+        update (HsxInfixOp  lexinfo a p) = Just $ HsxInfixOp  (lexinfo { exported = True }) a p
+        update (HsxTypeAnnotation _)     = Nothing
+
+isAllowed :: [AllowedIdentifier] -> HsxIdentifier -> Bool
+isAllowed allowedIdents hsxidentifier
+    = or (map ($ hsxidentifier) (map toPredicate allowedIdents))
+    where toPredicate Var  = isHsxVariable
+          toPredicate Fun  = isHsxFunction
+          toPredicate Op   = isHsxInfixOp
+          toPredicate Ann  = isHsxTypeAnnotation
+          toPredicate Data = isHsxData
 
 findModule :: Module -> [HsxImportInfo] -> Maybe Module
 findModule modul imports

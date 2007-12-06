@@ -52,7 +52,9 @@ convertDeclGraph env (HsxDeclGraph _ modul (graph, fromVertex, _))
                                      withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
                                        $ do cmds <- mapM convert connectedDecls
                                             return (Isa.TheoryCmd thy cmds)
-      in trace (prettyShow (map (map declFromVertex . Tree.flatten) $ Graph.scc graph )) result
+      in -- trace ("DECLGRAPH:\n" 
+         --       ++ prettyShow' "graph" (map (map declFromVertex . Tree.flatten) $ Graph.scc graph )) result
+        result
     where declFromVertex v = let (decl,_,_) = fromVertex v in decl 
 
 sortConnectedHsDecls :: [ConnectedHsDecls] -> [ConnectedHsDecls]
@@ -61,7 +63,7 @@ sortConnectedHsDecls connectedDecls
                                      -> ConnectedHsDecls $ sortBy orderDeclsBySourceLine decls)
                             connectedDecls
       in sortBy (\(ConnectedHsDecls (decl1:_)) (ConnectedHsDecls (decl2:_))
-                     -> compare (getSourceLine decl1) (getSourceLine decl2))
+                     -> orderDeclsBySourceLine decl1 decl2)
                  connectedDecls'
 
 -- convertHsModule :: Env.GlobalE -> HsModule -> Conversion Isa.Cmd

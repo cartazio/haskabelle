@@ -72,12 +72,13 @@ data HsxDeclGraph = HsxDeclGraph SrcLoc Module
                                  (Graph, Vertex -> (HsDecl, HsQName, [HsQName]), 
                                  HsQName -> Maybe Vertex)
 
+
 makeDeclGraph :: Env.GlobalE -> HsModule -> HsxDeclGraph
 makeDeclGraph env (HsModule loc modul _exports _imports decls)
     = HsxDeclGraph loc modul funDepGraph
       where funDepGraph = graphFromEdges 
                             $ handleDuplicates modul env 
-                                $ concatMap makeEdgesFromHsDecl decls
+                                $ concatMap makeEdgesFromHsDecl decls                                  
 
 makeEdgesFromHsDecl :: HsDecl -> [(HsDecl, HsQName, [HsQName])]
 makeEdgesFromHsDecl decl
@@ -90,9 +91,9 @@ handleDuplicates m env edges
     where handleGroup edges
               = if (length edges > 2) then error "FOOF!"
                 else if (length edges == 2) 
-                        then let edges' = filter (not . isTypeAnnotation) edges
-                             in assert (length edges' == 1) edges'
-                        else edges
+                     then let edges' = filter (not . isTypeAnnotation) edges
+                          in assert (length edges' == 1) edges'
+                     else edges
           isTypeAnnotation ((HsTypeSig _ _ _, _ , _)) = True
           isTypeAnnotation _ = False
           
