@@ -6,6 +6,7 @@ import Maybe
 import qualified Data.Map as Map
 import Language.Haskell.Hsx
 
+import qualified Importer.Msg as Msg
 import qualified Importer.IsaSyntax as Isa
 import Importer.Utilities.Hsx
 
@@ -17,7 +18,8 @@ data LexE = HsxLexEnv (Map.Map HsQName HsxIdentifier)
 data HsxLexInfo = HsxLexInfo { 
                               identifier :: HsQName,
                               exported   :: Bool,
-                              typeOf     :: Maybe HsType
+                              typeOf     :: Maybe HsType,
+                              moduleOf   :: Module
                              }
   deriving (Show)
 
@@ -78,21 +80,28 @@ isExported (HsxTypeAnnotation _)     = False
 data ModuleE = HsxModuleEnv Module [HsxImportInfo] LexE
   deriving (Show)
 
-data HsxImportInfo = HsxImportInfo (Module, Maybe Module)
+data HsxImportInfo = HsxImportInfo (Module, Maybe Module) -- (importedModule, qualifiedName)
   deriving (Show)
+
+isQualifiedImport, isUnqualifiedImport :: HsxImportInfo -> Bool
+isQualifiedImport (HsxImportInfo (_, Just _)) = True
+isQualifiedImport _                           = False
+isUnqualifiedImport = not . isQualifiedImport
+
 
 emptyModuleEnv = HsxModuleEnv (Module "Main") [] emptyLexEnv_Hsx
 
 makeModuleEnv :: HsModule -> ModuleE
 makeModuleEnv (HsModule loc modul exports imports topdecls)
-    = let lexenv   = makeLexEnv_Hsx (concatMap extractLexInfos topdecls)
+    = let lexenv   = makeLexEnv_Hsx (concatMap (extractLexInfos modul) topdecls)
           lexenv'  = exportIdentifiers exports lexenv
           imports' = map normalizeImport imports
       in HsxModuleEnv modul imports' lexenv'
 
-extractLexInfos :: HsDecl -> [(HsQName, HsxIdentifier)]
-extractLexInfos decl 
-    = map (\name -> let defaultLexInfo = HsxLexInfo { identifier=name, exported=False, typeOf=Nothing}
+extractLexInfos :: Module -> HsDecl -> [(HsQName, HsxIdentifier)]
+extractLexInfos modul decl 
+    = map (\name -> let defaultLexInfo = HsxLexInfo { identifier=name, exported=False, 
+                                                      typeOf=Nothing, moduleOf=modul}
                     in (name, case decl of
                                 HsPatBind _ _ _ _          -> HsxVariable defaultLexInfo
                                 HsFunBind _                -> HsxFunction defaultLexInfo
@@ -121,11 +130,13 @@ updateHsxIdentifier (HsxTypeAnnotation _)    = Nothing
 
 
 findModule :: Module -> [HsxImportInfo] -> Maybe Module
-findModule m imports
-    = let (names, nicknames) = unzip (map (\(HsxImportInfo x) -> x) imports)
-      in case filter (== m) (catMaybes nicknames) of
-        [name] -> Just name
-        _ -> Nothing
+findModule modul imports
+    = let ms = map (\i@(HsxImportInfo (m,n)) 
+                         -> if isUnqualifiedImport i then m else fromJust n)
+                   imports
+      in case filter (== modul) ms of
+           [name] -> Just name
+           _ -> Nothing
 
 
 
@@ -152,12 +163,13 @@ lookup currentModule qname globalenv = lookup' currentModule qname globalenv
                                     if isExported hsxidentifier then Just hsxidentifier
                                                                 else Nothing
                      UnQual n -> let first_try = Map.lookup (UnQual n) lexmap
-                                     tries     = map (\(HsxImportInfo (m,_)) 
-                                                          -> lookup' currentModule (Qual m n) globalenv) importedMs
+                                     tries     = map (\(HsxImportInfo (m, _)) 
+                                                          -> lookup' currentModule (Qual m n) globalenv) 
+                                                     (filter isUnqualifiedImport importedMs)
                           in case catMaybes (first_try : tries) of
                                []   -> Nothing
                                [x]  -> Just x
-                               x:xs -> Just x
+                               x:xs -> error (Msg.ambiguous_occurences currentModule qname (x:xs))
 
 
 

@@ -10,6 +10,7 @@ import Importer.Utilities.Hsx (srcloc2string)
 import Importer.Utilities.Misc (prettyShow', prettyHsx)
 
 spacify x = x ++ " "
+linify  x = x ++ "\n\n"
 
 quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
@@ -47,3 +48,8 @@ cycle_in_dependency_graph moduleNs
 free_vars_found loc freeVariableNames
     = srcloc2string loc ++ ": " ++ "Closures disallowed. The following variables occur free: "
       ++ concatMap (spacify . quote . prettyHsx) freeVariableNames
+
+ambiguous_occurences curModule qname foundIdentifiers
+    = "Ambiguous occurences found for " ++ quote qname ++ "\n"
+      ++ "while trying to look it up in " ++ quote curModule ++ ":\n\n" 
+      ++ concatMap (linify . prettyShow' (show qname)) foundIdentifiers
