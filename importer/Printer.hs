@@ -194,7 +194,7 @@ instance Printer Isa.Cmd where
                 -> blankline $
                    text "definition" <+> pprint' vname <+> text "::" <+> pprint' tysig $$
                    text "where" $$
-                   space <+> (maybeWithinHOL $ pprint' pat <+> equals <+> pprint' term)
+                   space <+> (maybeWithinHOL $ pprint' pat <+> equals <+> parens (pprint' term))
 
     pprint' (Isa.FunCmd fnames tysigs equations)
         = blankline $
@@ -206,7 +206,7 @@ instance Printer Isa.Cmd where
                     = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
                 ppEquation (fname, pattern, term) 
                     = maybeWithinHOL $
-                        pprint' fname <+> hsep (map pprint' pattern) <+> equals <+> pprint' term
+                        pprint' fname <+> hsep (map pprint' pattern) <+> equals <+> parens (pprint' term)
  
     pprint' (Isa.InfixDeclCmd op assoc prio)
         = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op
