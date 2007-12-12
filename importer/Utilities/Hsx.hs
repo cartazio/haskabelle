@@ -13,7 +13,7 @@ module Importer.Utilities.Hsx (
 ) where
   
 import Maybe
-import List (tails, sort)
+import List (sort)
 import Array (inRange)
 
 import Control.Monad.State
@@ -21,7 +21,7 @@ import Data.Generics.PlateData
 import Language.Haskell.Hsx
 
 
-import Importer.Utilities.Misc (concatMapM, assert)
+import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates)
 import Importer.Utilities.Gensym
 
 qualify :: Module -> HsQName -> HsQName
@@ -73,11 +73,6 @@ bindingsFromDecls decls = assert (not (hasDuplicates bindings)) bindings
     where bindings = concatMap (fromJust . namesFromHsDecl) (filter (not . isTypeSig) decls)
           isTypeSig (HsTypeSig _ _ _) = True
           isTypeSig _                 = False
-
-hasDuplicates :: Eq a => [a] -> Bool
-hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
-    where tails' = filter (not . null) (tails list)
-
 
 class Letifiable a where
     letify' :: HsBinds -> a -> a

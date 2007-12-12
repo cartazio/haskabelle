@@ -5,7 +5,7 @@ Generic functions.
 -}
 
 module Importer.Utilities.Misc (
-  assert, trace, concatMapM, map2,
+  assert, trace, concatMapM, map2, hasDuplicates,
   unfoldr, unfoldr1, unfoldl, unfoldl1,
   prettyShow', prettyShow, prettyHsx,
 ) where
@@ -43,6 +43,11 @@ concatMapM f xs = liftM concat (mapM f xs)
 
 map2 :: (a -> b -> c) -> [a] -> [b] -> [c]
 map2 = zipWith
+
+hasDuplicates :: Eq a => [a] -> Bool
+hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
+    where tails' = filter (not . null) (List.tails list)
+
 
 prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
                              (Hsx.ParseOk (Hsx.HsModule _ _ _ _ decls)) = Hsx.parseModule str
