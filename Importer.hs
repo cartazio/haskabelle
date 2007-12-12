@@ -20,6 +20,7 @@ import Text.PrettyPrint (render, vcat, text, (<>))
 import Language.Haskell.Hsx (ParseResult(..), parseFile, HsModule(..))
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
+import Importer.Utilities.Hsx (srcloc2string)
 import Importer.ConversionUnit
 import Importer.Convert
 import Importer.Printer (pprint)
@@ -38,11 +39,16 @@ import Importer.Printer (pprint)
 --       return (pprint ast)
 --
 convertFile   :: FilePath -> IO ConversionUnit
-convertFile fp = do (ParseOk initHsModule) <- parseFile fp
-                    unit <- try (makeConversionUnit initHsModule)
+convertFile fp = do hsModule <- parseFileOrLose fp
+                    unit <- try (makeConversionUnit hsModule)
                     case unit of
                       Left ioerror  -> error (show ioerror)
                       Right hsxunit -> return (convertHsxUnit hsxunit)
+    where parseFileOrLose fp = do result <- parseFile fp
+                                  case result of
+                                    ParseOk hsm -> return hsm
+                                    ParseFailed loc msg
+                                        -> error (srcloc2string loc ++ ": " ++ msg)
 
 
 
