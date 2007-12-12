@@ -173,7 +173,8 @@ instance Printer Isa.Cmd where
         = text "theory" <+> pprint' thy $$
           text "imports Main"           $$
           text "begin"                  $$
-          (vcat $ map pprint' cmds)
+          (vcat $ map pprint' cmds)     $$
+          text "end"
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $

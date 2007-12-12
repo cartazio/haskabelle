@@ -12,8 +12,16 @@ EXECPATH="$(dirname "$0")/.."
 
 cd "$EXECPATH"
 
-for SRC in ex/src_hs/*
+for SRC in ex/src_hs/*.hs
 do
-  DST=ex/dst_thy/"$(basename "$SRC" .hs)".thy
-  ./bin/import_file "$SRC" "$DST"
+  DST=ex/dst_thy/
+  ./bin/import_file "$SRC" "$DST" || fail "could not import $SRC"
+done
+
+cd ex/dst_thy/
+for THY in *.thy
+do
+  THY_NAME="$(basename $THY .thy)"
+  DST="../../ex/dst_hs/"
+  isatool codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell file \"$DST\"" || fail "could not re_import $THY"
 done
