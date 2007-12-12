@@ -3,6 +3,8 @@ module Importer.LexEnv where
 
 import Maybe
 
+import Data.Generics.PlateData (universeBi, contextsBi)
+
 import qualified Data.Map as Map
 import Language.Haskell.Hsx
 
@@ -12,25 +14,23 @@ import qualified Importer.IsaSyntax as Isa
 import Importer.Utilities.Hsx
 import Importer.Utilities.Misc
 
-
-data LexE = HsxLexEnv (Map.Map HsQName HsxIdentifier)
-  deriving (Show)
-
+--
+-- LexEnv
+--
 
 data HsxLexInfo = HsxLexInfo { 
                               identifier :: HsQName,
-                              exported   :: Bool,
                               typeOf     :: Maybe HsType,
                               moduleOf   :: Module
                              }
-  deriving (Show)
+  deriving (Eq, Show)
 
 data HsxIdentifier = HsxVariable HsxLexInfo
                    | HsxFunction HsxLexInfo
                    | HsxInfixOp  HsxLexInfo HsAssoc Int
                    | HsxData     HsxLexInfo [HsQName] -- data constructors
                    | HsxTypeAnnotation HsType
-  deriving (Show)
+  deriving (Eq, Show)
 
 isHsxVariable, isHsxFunction, isHsxInfixOp, isHsxTypeAnnotation :: HsxIdentifier -> Bool
 
@@ -49,6 +49,28 @@ isHsxTypeAnnotation _ = False
 isHsxData (HsxData _ _) = True
 isHsxData _ = False
 
+identifier2name :: HsxIdentifier -> HsQName
+identifier2name hsxidentifier
+    = identifier (extractLexInfo hsxidentifier)
+    where extractLexInfo (HsxVariable i)    = i
+          extractLexInfo (HsxFunction i)    = i
+          extractLexInfo (HsxInfixOp i _ _) = i
+          extractLexInfo (HsxData i _)      = i
+
+
+makeUnqualified :: HsxIdentifier -> HsxIdentifier
+makeUnqualified hsxidentifier
+    = case identifier2name hsxidentifier of
+        UnQual n -> hsxidentifier
+        Qual _ n -> case hsxidentifier of
+                      HsxVariable lexinfo     -> HsxVariable (lexinfo { identifier = UnQual n })
+                      HsxFunction lexinfo     -> HsxFunction (lexinfo { identifier = UnQual n })
+                      HsxInfixOp  lexinfo a p -> HsxInfixOp  (lexinfo { identifier = UnQual n }) a p
+                      HsxData     lexinfo cs  -> HsxData     (lexinfo { identifier = UnQual n }) cs
+
+
+data LexE = HsxLexEnv (Map.Map HsQName HsxIdentifier)
+  deriving (Show)
 
 
 emptyLexEnv_Hsx = HsxLexEnv Map.empty
@@ -57,57 +79,79 @@ makeLexEnv_Hsx :: [(HsQName, HsxIdentifier)] -> LexE
 makeLexEnv_Hsx initbindings
     = HsxLexEnv (Map.fromListWith mergeLexInfos initbindings)
 
+mergeLexInfos :: HsxIdentifier -> HsxIdentifier -> HsxIdentifier
+mergeLexInfos ident1 ident2
+    = case (ident1, ident2) of
+        (HsxVariable i,       HsxTypeAnnotation t) -> HsxVariable (updateLexInfo i t)
+        (HsxFunction i,       HsxTypeAnnotation t) -> HsxFunction (updateLexInfo i t)
+        (HsxInfixOp  i a p,   HsxTypeAnnotation t) -> HsxInfixOp  (updateLexInfo i t) a p
+        (HsxTypeAnnotation t, HsxVariable i)       -> HsxVariable (updateLexInfo i t)
+        (HsxTypeAnnotation t, HsxFunction i)       -> HsxFunction (updateLexInfo i t)
+        (HsxTypeAnnotation t, HsxInfixOp  i a p)   -> HsxInfixOp  (updateLexInfo i t) a p
+        (_,_) 
+            -> error ("Internal error (mergeLexInfo): Merge collision between `" ++ show ident1 ++ "'"
+                      ++ " and `" ++ show ident2 ++ "'.")
+    where updateLexInfo lexinfo@(HsxLexInfo { typeOf = Nothing }) typ = lexinfo { typeOf = Just typ }
+          updateLexInfo lexinfo typ
+              = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
+                       ++ " and `" ++ show typ ++ "'.")
+        
 
-mergeLexInfos (HsxVariable lexinfo@(HsxLexInfo { typeOf=Nothing })) (HsxTypeAnnotation typ) 
-    = HsxVariable (lexinfo { typeOf = Just typ })
+--
+-- ModuleEnv 
+--
 
-mergeLexInfos (HsxFunction lexinfo@(HsxLexInfo { typeOf=Nothing })) (HsxTypeAnnotation typ) 
-    = HsxFunction (lexinfo { typeOf = Just typ })
-
-mergeLexInfos (HsxInfixOp lexinfo@(HsxLexInfo { typeOf=Nothing }) a p) (HsxTypeAnnotation typ) 
-    = HsxInfixOp (lexinfo { typeOf = Just typ }) a p
-
-mergeLexInfos (HsxTypeAnnotation typ) (HsxVariable lexinfo@(HsxLexInfo { typeOf=Nothing })) 
-    = HsxVariable (lexinfo { typeOf = Just typ })
-
-mergeLexInfos (HsxTypeAnnotation typ) (HsxFunction lexinfo@(HsxLexInfo { typeOf=Nothing })) 
-    = HsxFunction (lexinfo { typeOf = Just typ })
-
-mergeLexInfos (HsxTypeAnnotation typ) (HsxInfixOp lexinfo@(HsxLexInfo { typeOf=Nothing }) a p) 
-    = HsxInfixOp (lexinfo { typeOf = Just typ }) a p
-
-isExported :: HsxIdentifier -> Bool
-isExported (HsxVariable lexinfo)     = exported lexinfo
-isExported (HsxFunction lexinfo)     = exported lexinfo
-isExported (HsxInfixOp  lexinfo _ _) = exported lexinfo
-isExported (HsxTypeAnnotation _)     = False
-
-
-data ModuleE = HsxModuleEnv Module [HsxImportInfo] LexE
+data ModuleE = HsxModuleEnv Module [HsImportDecl] [HsExportSpec] LexE
   deriving (Show)
 
-data HsxImportInfo = HsxImportInfo (Module, Maybe Module) -- (importedModule, qualifiedName)
-  deriving (Show)
-
-isQualifiedImport, isUnqualifiedImport :: HsxImportInfo -> Bool
-isQualifiedImport (HsxImportInfo (_, Just _)) = True
-isQualifiedImport _                           = False
-isUnqualifiedImport = not . isQualifiedImport
-
-
-emptyModuleEnv = HsxModuleEnv (Module "Main") [] emptyLexEnv_Hsx
+emptyModuleEnv = HsxModuleEnv (Module "Main") [] [] emptyLexEnv_Hsx
 
 makeModuleEnv :: HsModule -> ModuleE
 makeModuleEnv (HsModule loc modul exports imports topdecls)
     = let lexenv   = makeLexEnv_Hsx (concatMap (extractLexInfos modul) topdecls)
-          lexenv'  = exportIdentifiers exports lexenv
-          imports' = map normalizeImport imports
-      in HsxModuleEnv modul imports' lexenv'
+          imports' = checkImports imports
+          exports' = if isNothing exports then [HsEModuleContents modul] 
+                                          else checkExports (fromJust exports) imports
+      in HsxModuleEnv modul imports' exports' lexenv
+    where 
+      checkImports imports 
+          = checkForDuplicateImport (map checkImport imports)
+
+      checkImport (HsImportDecl { importSpecs = Just _ }) 
+          = error "Not supported yet: Explicit import specifications."
+      checkImport etc = etc
+
+      checkForDuplicateImport imports 
+          = if hasDuplicates (importedModules imports)
+            then error ("Duplicates found in import list: " ++ show imports)
+            else imports
+
+      checkExports :: [HsExportSpec] -> [HsImportDecl] -> [HsExportSpec]
+      checkExports exports imports 
+          = do export <- checkForDuplicateExport (map checkExport exports)
+               let [(qname, restoreExport)] = contextsBi export :: [(HsQName, HsQName -> HsExportSpec)]
+               case qname of 
+                 UnQual _ -> return (restoreExport qname)
+                 Qual m _ 
+                     -> if isImportedModule_aux m imports then return (restoreExport qname)
+                        else error ("Module of `" ++ show qname ++ "'"
+                                    ++ " is not in import list, but in export list.")
+
+      checkExport e@(HsEVar _)            = e
+      checkExport e@(HsEAbs _)            = e
+      checkExport e@(HsEThingAll _)       = e
+      checkExport e@(HsEModuleContents _) = e
+      checkExport etc                     = error ("Not supported yet: " ++ show etc)
+
+      checkForDuplicateExport :: [HsExportSpec] -> [HsExportSpec]
+      checkForDuplicateExport exports 
+          = if hasDuplicates (universeBi exports :: [HsName]) -- strip off qualifiers
+            then error ("Duplicates found in export list: " ++ show exports)
+            else exports
 
 extractLexInfos :: Module -> HsDecl -> [(HsQName, HsxIdentifier)]
 extractLexInfos modul decl 
-    = map (\name -> let defaultLexInfo = HsxLexInfo { identifier=name, exported=False, 
-                                                      typeOf=Nothing, moduleOf=modul}
+    = map (\name -> let defaultLexInfo = HsxLexInfo { identifier=name, typeOf=Nothing, moduleOf=modul}
                     in (name, case decl of
                                 HsPatBind _ _ _ _          -> HsxVariable defaultLexInfo
                                 HsFunBind _                -> HsxFunction defaultLexInfo
@@ -121,56 +165,62 @@ extractLexInfos modul decl
                        ))
       (fromJust $ namesFromHsDecl decl)
 
-normalizeImport :: HsImportDecl -> HsxImportInfo
-normalizeImport (HsImportDecl { importModule=modul, importQualified=isQual, importAs=nickname })
-    = case (isQual, nickname) of
-        (True, Nothing)   -> HsxImportInfo (modul, Just modul)
-        (True, Just nick) -> HsxImportInfo (modul, Just nick)
-        (False, _)        -> HsxImportInfo (modul, Nothing)
 
-exportIdentifiers :: Maybe [HsExportSpec] -> LexE -> LexE
-exportIdentifiers Nothing lexenv = lexenv
-exportIdentifiers (Just exportspecs) lexenv
-    = foldl export lexenv exportspecs
-      where export (HsxLexEnv lexmap) (HsEVar qname) 
-                = HsxLexEnv (Map.update (updateHsxIdentifier [Var, Fun, Op, Ann]) qname lexmap)
-            export (HsxLexEnv lexmap) (HsEAbs qname)
-                = HsxLexEnv (Map.update (updateHsxIdentifier [Data]) qname lexmap)
-            export env etc = error ("Not supported: " ++ show etc)
+importedModules :: [HsImportDecl] -> [Module]
+importedModules imports
+    = map (\(HsImportDecl { importModule=m, importQualified=isQualified, importAs=nickname }) 
+               -> if isQualified && isJust nickname then fromJust nickname 
+                                                    else m)
+          imports
 
-data AllowedIdentifier = Var | Fun | Op | Ann | Data
-  deriving (Show)
-
-updateHsxIdentifier :: [AllowedIdentifier] -> HsxIdentifier -> Maybe HsxIdentifier
-
-updateHsxIdentifier allowedIdents hsxidentifier
-    = assert (isAllowed allowedIdents hsxidentifier)
-        $ update hsxidentifier
-      where 
-        update (HsxVariable lexinfo)     = Just $ HsxVariable (lexinfo { exported = True })
-        update (HsxFunction lexinfo)     = Just $ HsxFunction (lexinfo { exported = True })
-        update (HsxInfixOp  lexinfo a p) = Just $ HsxInfixOp  (lexinfo { exported = True }) a p
-        update (HsxTypeAnnotation _)     = Nothing
-
-isAllowed :: [AllowedIdentifier] -> HsxIdentifier -> Bool
-isAllowed allowedIdents hsxidentifier
-    = or (map ($ hsxidentifier) (map toPredicate allowedIdents))
-    where toPredicate Var  = isHsxVariable
-          toPredicate Fun  = isHsxFunction
-          toPredicate Op   = isHsxInfixOp
-          toPredicate Ann  = isHsxTypeAnnotation
-          toPredicate Data = isHsxData
-
-findModule :: Module -> [HsxImportInfo] -> Maybe Module
-findModule modul imports
-    = let ms = map (\i@(HsxImportInfo (m,n)) 
-                         -> if isUnqualifiedImport i then m else fromJust n)
-                   imports
+isImportedModule_aux :: Module -> [HsImportDecl] -> Bool
+isImportedModule_aux modul imports
+    = let ms = importedModules imports
       in case filter (== modul) ms of
-           [name] -> Just name
-           _ -> Nothing
+           []     -> False
+           [name] -> True
+           etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
+
+computeImportedModules :: Module -> GlobalE -> [Module]
+computeImportedModules modul globalEnv
+    = let (HsxModuleEnv _ imports _ _) = findModuleEnvOrLose modul globalEnv
+      in importedModules imports
+
+isImportedModule modul (HsxModuleEnv _ imports _ _)
+    = isImportedModule_aux modul imports
 
 
+computeExportedNames :: Module -> GlobalE -> [HsName]
+computeExportedNames modul globalEnv
+    = map (\qn -> case qn of { UnQual n -> n; Qual m n -> n }) 
+       $ computeExportedQNames (findModuleEnvOrLose modul globalEnv) globalEnv
+      where  
+        computeExportedQNames (HsxModuleEnv modul _ exports (HsxLexEnv lexmap)) globalEnv
+            = concatMap computeQNames exports
+              where computeQNames (HsEVar qn) = [qn]
+                    computeQNames (HsEAbs qn) = [qn]
+                    computeQNames (HsEThingAll qn) 
+                        = case Importer.LexEnv.lookup modul qn globalEnv of
+                            Just (HsxData _ constructors) 
+                                -> constructors
+                            etc -> error ("Internal error (computeExportedNames): " ++ show etc)
+                    computeQNames (HsEModuleContents m)
+                        = if m == modul then Map.keys lexmap -- export everything
+                                        else computeExportedQNames (findModuleEnvOrLose m globalEnv) 
+                                                                   globalEnv
+
+isExported :: HsxIdentifier -> Module -> GlobalE -> Bool
+isExported identifier modul globalEnv
+    = case identifier2name identifier of
+        Qual m _  -> if  m == modul then isExported (makeUnqualified identifier) m globalEnv 
+                                    else False
+        UnQual n  -> n `elem` (computeExportedNames modul globalEnv)
+
+
+
+--
+-- GlobalEnv
+--
 
 data GlobalE = HsxGlobalEnv (Map.Map Module ModuleE)
   deriving (Show)
@@ -185,23 +235,43 @@ makeGlobalEnv_Hsx ms
               = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
 
+findModuleEnv :: Module -> GlobalE -> Maybe ModuleE
+findModuleEnv m (HsxGlobalEnv globalmap) = Map.lookup m globalmap
+
+findModuleEnvOrLose m globalEnv
+    = case findModuleEnv m globalEnv of
+        Just env -> env
+        Nothing  -> error ("Couldn't find module `" ++ show m ++ "'.")
+
+
+isAccessible :: HsxIdentifier -> Module -> GlobalE -> Bool
+isAccessible identifier currentModule globalEnv
+    | Just currentModuleE <- findModuleEnv currentModule globalEnv
+    = case identifier2name identifier of 
+           UnQual n -> True
+           Qual m _ -> if isImportedModule m currentModuleE 
+                       && isExported (makeUnqualified identifier) m globalEnv
+                       then True else False
+    | True = False
+
+
 lookup :: Module -> HsQName -> GlobalE -> Maybe HsxIdentifier
-lookup currentModule qname globalenv = lookup' currentModule qname globalenv
-    where lookup' currentModule qname globalenv@(HsxGlobalEnv globalmap)
-              = do (HsxModuleEnv _ importedMs (HsxLexEnv lexmap)) <- Map.lookup currentModule globalmap
+lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- ambiguous occurence `lookup'
+    where lookup' currentModule qname globalEnv                              -- between LexEnv and Prelude
+              = do currentModuleEnv <- findModuleEnv currentModule globalEnv
                    case qname of
-                     Qual m n -> do m' <- findModule m importedMs
-                                    hsxidentifier <- lookup' m' (UnQual n) globalenv
-                                    if isExported hsxidentifier then Just hsxidentifier
-                                                                else Nothing
-                     UnQual n -> let first_try = Map.lookup (UnQual n) lexmap
-                                     tries     = map (\(HsxImportInfo (m, _)) 
-                                                          -> lookup' currentModule (Qual m n) globalenv) 
-                                                     (filter isUnqualifiedImport importedMs)
-                          in case catMaybes (first_try : tries) of
-                               []   -> Nothing
-                               [x]  -> Just x
-                               x:xs -> error (Msg.ambiguous_occurences currentModule qname (x:xs))
-
-
-
+                     Qual m n | m == currentModule || isImportedModule m currentModuleEnv
+                                  -> do hsxidentifier <- lookup' m (UnQual n) globalEnv
+                                        if isExported hsxidentifier m globalEnv then Just hsxidentifier
+                                                                                else Nothing
+                     Qual _ _ -> Nothing
+                     UnQual n -> let (HsxModuleEnv _ imports _ (HsxLexEnv lexmap)) 
+                                                = currentModuleEnv
+                                     first_try  = Map.lookup (UnQual n) lexmap
+                                     tries      = map (\(HsImportDecl { importModule = m, importQualified = False }) 
+                                                           -> lookup' currentModule (Qual m n) globalEnv) 
+                                                      imports
+                                 in case catMaybes (first_try : tries) of
+                                      []   -> Nothing
+                                      [x]  -> Just x
+                                      x:xs -> error (Msg.ambiguous_occurences currentModule qname (x:xs))
