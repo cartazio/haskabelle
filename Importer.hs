@@ -8,7 +8,7 @@ module Main (
   module Importer.Convert,
   module Importer.IsaSyntax,
   module Importer.Printer,
-  convertFile, -- importFile, cnvFile
+  convertFile, importFile -- , cnvFile
 ) where
 
 import IO
