@@ -13,16 +13,19 @@ module Main (
 
 import IO
 import Directory
+import Data.Tree
 import Control.Monad
-import System.Environment (getArgs)
+import System.Environment (getArgs, getProgName)
 import Text.PrettyPrint (render, vcat, text, (<>))
 
 import Language.Haskell.Hsx (ParseResult(..), parseFile, HsModule(..))
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
-import Importer.Utilities.Hsx (srcloc2string)
+import Importer.Utilities.Hsx (srcloc2string, module2FilePath, isHaskellSourceFile)
+import Importer.Utilities.Misc (assert)
 import Importer.ConversionUnit
 import Importer.Convert
+import Importer.Adapt
 import Importer.Printer (pprint)
 
 
@@ -38,46 +41,85 @@ import Importer.Printer (pprint)
 --    do (ConvSuccess ast _) <- convertFile "/path/foo.hs"
 --       return (pprint ast)
 --
-convertFile   :: FilePath -> IO ConversionUnit
-convertFile fp = do hsModule <- parseFileOrLose fp
-                    unit <- try (makeConversionUnit hsModule)
-                    case unit of
-                      Left ioerror  -> error (show ioerror)
-                      Right hsxunit -> return (convertHsxUnit hsxunit)
-    where parseFileOrLose fp = do result <- parseFile fp
-                                  case result of
-                                    ParseOk hsm -> return hsm
-                                    ParseFailed loc msg
-                                        -> error (srcloc2string loc ++ ": " ++ msg)
 
+convertFile :: FilePath -> IO ConversionUnit
+convertFile fp = do [unit] <- convertFiles [fp]; return unit
+
+convertFiles :: [FilePath] -> IO [ConversionUnit]
+convertFiles []   = return []
+convertFiles (fp:fps)
+    = do unit@(HsxUnit hsmodules) <- makeConversionUnitFromFile fp
+         let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
+         let dependentFiles    = map module2FilePath dependentModuleNs
+         units <- convertFiles (filter (`notElem` dependentFiles) fps) 
+         return (convertHsxUnit unit : units)
+
+getDirectoryTree :: FilePath -> IO (Tree FilePath)
+getDirectoryTree dirpath
+    = do fps <- getDirectoryContents dirpath `catch` const (return [])
+         let fps' = filter (`notElem` [".", ".."]) fps
+         subtrees <- mapM getDirectoryTree fps'
+         return (Node { rootLabel = dirpath, subForest = subtrees })
+     
+getFilesRecursively :: FilePath -> IO [FilePath]
+getFilesRecursively dirpath 
+    = getDirectoryTree dirpath >>= filterM doesFileExist . flatten . absolutify ""
+    where absolutify cwd (Node { rootLabel = filename, subForest = children })
+              = Node { rootLabel = cwd ++ filename, 
+                       subForest = map (absolutify (cwd ++ filename ++ "/")) children }
+
+convertDir :: FilePath -> IO ConversionUnit
+convertDir dirpath
+    = do fps   <- getFilesRecursively dirpath
+         units <- convertFiles (filter isHaskellSourceFile fps)
+         return $ IsaUnit (concatMap (\(IsaUnit thys) -> thys) units)
 
 
 pprintConversionUnit (IsaUnit thys)
     = vcat (map (dashes . pprint) thys)
     where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
-                    
 
-importFile :: FilePath -> FilePath -> IO ()
-importFile src dstdir
+      
+withCurrentDirectory :: FilePath -> IO a -> IO a
+withCurrentDirectory fp body 
+    = do oldcwd <- getCurrentDirectory
+         bracket_ (setCurrentDirectory fp) (const (setCurrentDirectory oldcwd)) body
+
+importFiles :: [FilePath] -> FilePath -> IO ()
+importFiles sources dstdir
     = do exists <- doesDirectoryExist dstdir
          when (not exists) $ createDirectory dstdir
-         do IsaUnit thys <- convertFile src
-            setCurrentDirectory dstdir
-            sequence_ (map writeTheory thys)
-    where writeTheory thy@(TheoryCmd (Theory thyname) _)
-              = do let content = render (pprint thy)
-                   let dstName = map (\c -> if c == '.' then '_' else c) thyname
-                   writeFile (dstName++".thy") content
+         do convertedUnits <- convertFiles sources
+            let thys = concatMap (\(IsaUnit thys) -> thys) convertedUnits
+            withCurrentDirectory dstdir
+              $ sequence_ (map writeTheory thys)
+
+importDir :: FilePath -> FilePath -> IO ()
+importDir srcdir dstdir
+    = do exists <- doesDirectoryExist dstdir
+         when (not exists) $ createDirectory dstdir
+         do (IsaUnit thys) <- convertDir srcdir
+            withCurrentDirectory dstdir
+              $ sequence_ (map writeTheory thys)
+
+writeTheory thy@(TheoryCmd (Theory thyname) _)
+    = do let content = render (pprint thy)
+         let dstName = map (\c -> if c == '.' then '_' else c) thyname
+         writeFile (dstName++".thy") content
   
-
--- Like `convertFile' but returns the textual representation of the
--- AST itself. 
--- cnvFile :: FilePath -> IO String
--- cnvFile = liftM cnvFileContents . readFile
-
 main :: IO ()
 main = do
-  args <- getArgs
+  progname <- getProgName
+  args     <- getArgs
   case args of
-    [src, dstdir] -> importFile src dstdir
-    _ -> ioError (userError "exactly two arguments expected")
+    []   -> ioError $ userError ("Usage: " ++ progname ++ " [[source_file | source_dir]]* destination_dir")
+    args -> let destdir = last args 
+                fps     = init args
+            in do dirs  <- filterM doesDirectoryExist fps
+                  files <- filterM doesFileExist fps
+                  assert (all (`elem` dirs ++ files) fps)
+                    $ sequence_ ([importFiles files destdir] 
+                                 ++ map (\srcdir -> importDir srcdir destdir) dirs)
+                                  
+            
+            

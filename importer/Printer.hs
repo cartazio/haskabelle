@@ -302,7 +302,9 @@ instance Printer Isa.Term where
 
 
 pprintAsList :: [Isa.Term] -> DocM P.Doc
-pprintAsList = brackets . hsep . punctuate comma . map pprint'
+pprintAsList list = let (xs, [Isa.Var nil]) = splitAt (length list - 1) list
+                    in assert (Isa.isNil nil) 
+                         $ brackets (hsep (punctuate comma (map pprint' xs)))
 
 pprintAsTuple :: [Isa.Term] -> DocM P.Doc
 pprintAsTuple = parens . hsep . punctuate comma . map pprint'
@@ -351,6 +353,10 @@ isCompound t = case t of                        --  checking for infix prioritie
                 Isa.Var _            -> False
                 Isa.Literal _        -> False
                 Isa.Parenthesized _  -> False
+                Isa.App _ _          -> case categorizeApp t of
+                                          ListApp  _ -> False
+                                          TupleApp _ -> False
+                                          _          -> True
                 _ -> True
 
 isCompoundType :: Isa.Type -> Bool

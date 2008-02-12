@@ -6,7 +6,7 @@ Messages.
 
 module Importer.Msg where
 
-import Importer.Utilities.Hsx (srcloc2string)
+import Importer.Utilities.Hsx (srcloc2string, module2FilePath)
 import Importer.Utilities.Misc (prettyShow', prettyHsx)
 
 spacify x = x ++ " "
@@ -33,9 +33,9 @@ missing_fun_sig name env
     = "Missing function signature for " ++ (quote name) ++ ". (FIXME)\n\n"
       ++ printEnv env
 
-failed_import importloc importname errormsg
+failed_import importloc m errormsg
     = srcloc2string importloc ++ ": "
-      ++ "While trying to import " ++ (quote importname) 
+      ++ "While trying to import " ++ quote (module2FilePath m)
       ++ ", the following error occured:\n" ++ errormsg
 
 failed_parsing loc msg

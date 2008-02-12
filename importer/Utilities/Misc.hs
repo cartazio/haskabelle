@@ -6,7 +6,7 @@ Generic functions.
 
 module Importer.Utilities.Misc (
   assert, trace, concatMapM, map2, hasDuplicates,
-  unfoldr, unfoldr1, unfoldl, unfoldl1,
+  unfoldr, unfoldr1, unfoldl, unfoldl1, wordsBy,
   prettyShow', prettyShow, prettyHsx,
 ) where
 
@@ -16,7 +16,6 @@ import Monad (liftM)
 import qualified List
 
 import qualified Language.Haskell.Hsx as Hsx
-
 
 unfoldr, unfoldl    :: (b -> Maybe (a,b)) -> b -> [a]
 unfoldr1, unfoldl1  :: (a -> Maybe (a, a)) -> a -> [a]
@@ -43,6 +42,12 @@ concatMapM f xs = liftM concat (mapM f xs)
 
 map2 :: (a -> b -> c) -> [a] -> [b] -> [c]
 map2 = zipWith
+
+wordsBy            :: (a -> Bool) -> [a] -> [[a]]
+wordsBy pred l     =  case dropWhile pred l of
+                      [] -> []
+                      l' -> w : wordsBy pred l''
+                            where (w, l'') = break pred l'
 
 hasDuplicates :: Eq a => [a] -> Bool
 hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')

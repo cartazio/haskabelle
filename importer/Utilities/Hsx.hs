@@ -8,20 +8,22 @@ module Importer.Utilities.Hsx (
   namesFromHsDecl, bindingsFromDecls, bindingsFromPats, 
   extractBindingNs, extractFreeVarNs, letify,
   Renaming, renameFreeVars, renameHsDecl,
-  freshIdentifiers, isFreeVar, srcloc2string, qualify,
+  freshIdentifiers, isFreeVar, qualify,
+  srcloc2string, module2FilePath, isHaskellSourceFile,
   orderDeclsBySourceLine, getSourceLine,
 ) where
   
 import Maybe
 import List (sort)
 import Array (inRange)
+import Char (toLower)
 
 import Control.Monad.State
 import Data.Generics.PlateData
 import Language.Haskell.Hsx
 
 
-import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates)
+import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates, wordsBy)
 import Importer.Utilities.Gensym
 
 qualify :: Module -> HsQName -> HsQName
@@ -31,6 +33,13 @@ qualify m (UnQual n) = Qual m n
 srcloc2string :: SrcLoc -> String
 srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })
     = filename ++ ":" ++ (show line) ++ ":" ++ (show column)
+
+module2FilePath :: Module -> FilePath
+module2FilePath (Module name)
+    = map (\c -> if c == '.' then '/' else c) name ++ ".hs"
+
+isHaskellSourceFile :: FilePath -> Bool
+isHaskellSourceFile fp = map toLower (last (wordsBy (== '.') fp)) == "hs"
 
 
 namesFromHsDecl :: HsDecl -> Maybe [HsQName]
