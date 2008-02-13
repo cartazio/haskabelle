@@ -49,7 +49,7 @@ free_vars_found loc freeVariableNames
     = srcloc2string loc ++ ": " ++ "Closures disallowed. The following variables occur free: "
       ++ concatMap (spacify . quote . prettyHsx) freeVariableNames
 
-ambiguous_occurences curModule qname foundIdentifiers
+identifier_collision_in_lookup curModule qname foundIdentifiers
     = "Ambiguous occurences found for " ++ quote qname ++ "\n"
       ++ "while trying to look it up in " ++ quote curModule ++ ":\n\n" 
       ++ concatMap (linify . prettyShow' (show qname)) foundIdentifiers

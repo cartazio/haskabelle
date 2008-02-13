@@ -122,7 +122,7 @@ makeModuleEnv (HsModule loc modul exports imports topdecls)
       checkImport etc = etc
 
       checkForDuplicateImport imports 
-          = if hasDuplicates (importedModules imports)
+          = if hasDuplicates (modulesFromImports imports)
             then error ("Duplicates found in import list: " ++ show imports)
             else imports
 
@@ -166,8 +166,8 @@ extractLexInfos modul decl
       (fromJust $ namesFromHsDecl decl)
 
 
-importedModules :: [HsImportDecl] -> [Module]
-importedModules imports
+modulesFromImports :: [HsImportDecl] -> [Module]
+modulesFromImports imports
     = map (\(HsImportDecl { importModule=m, importQualified=isQualified, importAs=nickname }) 
                -> if isQualified && isJust nickname then fromJust nickname 
                                                     else m)
@@ -175,46 +175,14 @@ importedModules imports
 
 isImportedModule_aux :: Module -> [HsImportDecl] -> Bool
 isImportedModule_aux modul imports
-    = let ms = importedModules imports
+    = let ms = modulesFromImports imports
       in case filter (== modul) ms of
            []     -> False
            [name] -> True
            etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
 
-computeImportedModules :: Module -> GlobalE -> [Module]
-computeImportedModules modul globalEnv
-    = let (HsxModuleEnv _ imports _ _) = findModuleEnvOrLose modul globalEnv
-      in importedModules imports
-
 isImportedModule modul (HsxModuleEnv _ imports _ _)
     = isImportedModule_aux modul imports
-
-
-computeExportedNames :: Module -> GlobalE -> [HsName]
-computeExportedNames modul globalEnv
-    = map (\qn -> case qn of { UnQual n -> n; Qual m n -> n }) 
-       $ computeExportedQNames (findModuleEnvOrLose modul globalEnv) globalEnv
-      where  
-        computeExportedQNames (HsxModuleEnv modul _ exports (HsxLexEnv lexmap)) globalEnv
-            = concatMap computeQNames exports
-              where computeQNames (HsEVar qn) = [qn]
-                    computeQNames (HsEAbs qn) = [qn]
-                    computeQNames (HsEThingAll qn) 
-                        = case Importer.LexEnv.lookup modul qn globalEnv of
-                            Just (HsxData _ constructors) 
-                                -> constructors
-                            etc -> error ("Internal error (computeExportedNames): " ++ show etc)
-                    computeQNames (HsEModuleContents m)
-                        = if m == modul then Map.keys lexmap -- export everything
-                                        else computeExportedQNames (findModuleEnvOrLose m globalEnv) 
-                                                                   globalEnv
-
-isExported :: HsxIdentifier -> Module -> GlobalE -> Bool
-isExported identifier modul globalEnv
-    = case identifier2name identifier of
-        Qual m _  -> if  m == modul then isExported (makeUnqualified identifier) m globalEnv 
-                                    else False
-        UnQual n  -> n `elem` (computeExportedNames modul globalEnv)
 
 
 
@@ -244,34 +212,57 @@ findModuleEnvOrLose m globalEnv
         Nothing  -> error ("Couldn't find module `" ++ show m ++ "'.")
 
 
-isAccessible :: HsxIdentifier -> Module -> GlobalE -> Bool
-isAccessible identifier currentModule globalEnv
-    | Just currentModuleE <- findModuleEnv currentModule globalEnv
-    = case identifier2name identifier of 
-           UnQual n -> True
-           Qual m _ -> if isImportedModule m currentModuleE 
-                       && isExported (makeUnqualified identifier) m globalEnv
-                       then True else False
-    | True = False
+-- computeImportedModules :: Module -> GlobalE -> [Module]
+-- computeImportedModules modul globalEnv
+--     = let (HsxModuleEnv _ imports _ _) = findModuleEnvOrLose modul globalEnv
+--       in importedModules imports
+
+computeExportedNames :: Module -> GlobalE -> [HsName]
+computeExportedNames modul globalEnv
+    = map (\qn -> case qn of { UnQual n -> n; Qual m n -> n }) 
+       $ computeExportedQNames (findModuleEnvOrLose modul globalEnv) globalEnv
+      where  
+        computeExportedQNames (HsxModuleEnv modul _ exports (HsxLexEnv lexmap)) globalEnv
+            = concatMap computeQNames exports
+              where computeQNames (HsEVar qn) = [qn]
+                    computeQNames (HsEAbs qn) = [qn]
+                    computeQNames (HsEThingAll qn) 
+                        = case Importer.LexEnv.lookup modul qn globalEnv of
+                            Just (HsxData _ constructors) 
+                                -> constructors
+                            etc -> error ("Internal error (computeExportedNames): " ++ show etc)
+                    computeQNames (HsEModuleContents m)
+                        = if m == modul then Map.keys lexmap -- export everything
+                                        else computeExportedQNames (findModuleEnvOrLose m globalEnv) 
+                                                                   globalEnv
+isExported :: HsxIdentifier -> Module -> GlobalE -> Bool
+isExported identifier modul globalEnv
+    = case identifier2name identifier of
+        Qual m _  -> if  m == modul then isExported (makeUnqualified identifier) m globalEnv 
+                                    else False
+        UnQual n  -> n `elem` (computeExportedNames modul globalEnv)
 
 
 lookup :: Module -> HsQName -> GlobalE -> Maybe HsxIdentifier
 lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- ambiguous occurence `lookup'
-    where lookup' currentModule qname globalEnv                              -- between LexEnv and Prelude
-              = do currentModuleEnv <- findModuleEnv currentModule globalEnv
-                   case qname of
-                     Qual m n | m == currentModule || isImportedModule m currentModuleEnv
-                                  -> do hsxidentifier <- lookup' m (UnQual n) globalEnv
-                                        if isExported hsxidentifier m globalEnv then Just hsxidentifier
-                                                                                else Nothing
-                     Qual _ _ -> Nothing
-                     UnQual n -> let (HsxModuleEnv _ imports _ (HsxLexEnv lexmap)) 
-                                                = currentModuleEnv
-                                     first_try  = Map.lookup (UnQual n) lexmap
-                                     tries      = map (\(HsImportDecl { importModule = m, importQualified = False }) 
-                                                           -> lookup' currentModule (Qual m n) globalEnv) 
-                                                      imports
-                                 in case catMaybes (first_try : tries) of
-                                      []   -> Nothing
-                                      [x]  -> Just x
-                                      x:xs -> error (Msg.ambiguous_occurences currentModule qname (x:xs))
+    where                                                                    -- between LexEnv and Prelude
+      lookup' currentModule qname globalEnv                              
+          = do currentModuleEnv <- findModuleEnv currentModule globalEnv
+               case qname of
+                 Qual m n | m == currentModule || isImportedModule m currentModuleEnv
+                          -> do hsxidentifier <- lookup' m (UnQual n) globalEnv
+                                if isExported hsxidentifier m globalEnv then Just hsxidentifier
+                                                                        else Nothing
+                 Qual _ _ -> Nothing
+                 UnQual n -> let (HsxModuleEnv _ imports _ (HsxLexEnv lexmap)) 
+                                            = currentModuleEnv
+                                 local_try  = Map.lookup (UnQual n) lexmap
+                                 tries      = map (\(HsImportDecl { importModule = m }) 
+                                                       -> lookup' currentModule (Qual m n) globalEnv) 
+                                               $ filter (not . importQualified) imports
+                             in case catMaybes (local_try : tries) of
+                                  []   -> Nothing
+                                  [x]  -> Just x
+                                  x:xs -> error (Msg.identifier_collision_in_lookup currentModule qname (x:xs))
+
+
