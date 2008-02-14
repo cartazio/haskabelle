@@ -1,11 +1,12 @@
 
 module Importer.ConversionUnit 
-    (ConversionUnit(..), makeConversionUnitFromFile, HsxDeclGraph(..), makeDeclGraph) where
+    (ConversionUnit(..), makeConversionUnitFromFile, 
+     HsxDeclDepGraph(..), makeDeclDepGraph, flattenDeclDepGraph) where
 
 import Maybe
 import IO
 import Monad
-import List (groupBy)
+import List (groupBy, sortBy)
 import Data.Graph
 import Data.Tree
 import Language.Haskell.Hsx
@@ -77,39 +78,36 @@ parseImportOrFail (HsImportDecl { importLoc=importloc, importModule=m })
 
 
 
-
-
-
 -- An Haskell Declaration Graph
 
-data HsxDeclGraph = HsxDeclGraph SrcLoc Module 
-                                 (Graph, Vertex -> (HsDecl, HsQName, [HsQName]), 
-                                 HsQName -> Maybe Vertex)
+data HsxDeclDepGraph = HsxDeclDepGraph (Graph, 
+                                        Vertex -> (HsDecl, HsQName, [HsQName]), 
+                                        HsQName -> Maybe Vertex)
 
-
-makeDeclGraph :: Env.GlobalE -> HsModule -> HsxDeclGraph
-makeDeclGraph env (HsModule loc modul _exports _imports decls)
-    = HsxDeclGraph loc modul funDepGraph
-      where funDepGraph = graphFromEdges 
-                            $ handleDuplicates modul env 
-                                $ concatMap makeEdgesFromHsDecl decls                                  
+makeDeclDepGraph :: [HsDecl] -> HsxDeclDepGraph
+makeDeclDepGraph decls = HsxDeclDepGraph declDepGraph
+    where declDepGraph = graphFromEdges
+                           $ handleDuplicateEdges
+                               $ concatMap makeEdgesFromHsDecl decls
 
 makeEdgesFromHsDecl :: HsDecl -> [(HsDecl, HsQName, [HsQName])]
 makeEdgesFromHsDecl decl
     = [ (decl, name, extractFreeVarNs decl) | name <- fromJust $ namesFromHsDecl decl ]
 
-
-handleDuplicates :: Module -> Env.GlobalE -> [(HsDecl, HsQName, [HsQName])] -> [(HsDecl, HsQName, [HsQName])]
-handleDuplicates m env edges
+handleDuplicateEdges :: [(HsDecl, HsQName, [HsQName])] -> [(HsDecl, HsQName, [HsQName])]
+handleDuplicateEdges edges
     = concatMap handleGroup (groupBy (\(_,x,_) (_,y,_) -> x == y) edges)
     where handleGroup edges
-              = if (length edges > 2) then error "FOOF!"
-                else if (length edges == 2) 
-                     then let edges' = filter (not . isTypeAnnotation) edges
-                          in assert (length edges' == 1) edges'
-                     else edges
+              = let edges' = filter (not . isTypeAnnotation) edges
+                in if (length edges' > 1) then error (Msg.ambiguous_decl_definitions edges')
+                                          else edges'
           isTypeAnnotation ((HsTypeSig _ _ _, _ , _)) = True
           isTypeAnnotation _ = False
+
+flattenDeclDepGraph :: HsxDeclDepGraph -> [[HsDecl]]
+flattenDeclDepGraph (HsxDeclDepGraph (graph, fromVertex, _))
+    = map (sortBy orderDeclsBySourceLine . map declFromVertex . flatten) $ scc graph
+    where declFromVertex v = let (decl,_,_) = fromVertex v in decl 
           
 
 

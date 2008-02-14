@@ -6,8 +6,12 @@ Messages.
 
 module Importer.Msg where
 
-import Importer.Utilities.Hsx (srcloc2string, module2FilePath)
+import List (intersperse)
+import Maybe (fromMaybe)
+
+import Importer.Utilities.Hsx (srcloc2string, module2FilePath, namesFromHsDecl)
 import Importer.Utilities.Misc (prettyShow', prettyHsx)
+
 
 spacify x = x ++ " "
 linify  x = x ++ "\n\n"
@@ -53,3 +57,6 @@ identifier_collision_in_lookup curModule qname foundIdentifiers
     = "Ambiguous occurences found for " ++ quote qname ++ "\n"
       ++ "while trying to look it up in " ++ quote curModule ++ ":\n\n" 
       ++ concatMap (linify . prettyShow' (show qname)) foundIdentifiers
+
+ambiguous_decl_definitions decls
+    = "Ambiguous definitions between\n" ++ concatMap (linify . prettyShow' "decl") decls

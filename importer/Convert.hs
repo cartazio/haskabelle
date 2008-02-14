@@ -33,43 +33,33 @@ import qualified Importer.LexEnv as Env
 
 convertHsxUnit :: ConversionUnit -> ConversionUnit
 convertHsxUnit (HsxUnit hsmodules)
-    = let hsmodules' = map preprocessHsModule hsmodules
-          globalenv  = Env.makeGlobalEnv_Hsx hsmodules'
-          declgraphs = map (makeDeclGraph globalenv) hsmodules'
-          isathys    = map (convertDeclGraph globalenv) declgraphs
+    = let hsmodules'   = map preprocessHsModule hsmodules
+          globalenv    = Env.makeGlobalEnv_Hsx hsmodules'
+          hsxmodules   = map (toHsxModule globalenv) hsmodules'
+          (isathys, _) = runConversion globalenv
+                           $ mapM convert hsxmodules 
       in IsaUnit isathys
+    where toHsxModule globalEnv (HsModule loc modul _exports _imports decls)
+              = let declDepGraph = makeDeclDepGraph decls 
+                in HsxModule loc modul 
+                     $ map HsxDependentDecls (flattenDeclDepGraph declDepGraph)
 
-data ConnectedHsDecls = ConnectedHsDecls [HsDecl]
+
+-- The naming scheme "HsFoo" is treated as being owned by the parser
+-- libary Language.Haskell.Hsx. We use "HsxFoo" instead to
+-- differentiate between what's defined by us and by that library. 
+--
+-- (Ok, this might sound somewhat confusing, at least we're consistent
+-- about it.)
+
+data HsxModule = HsxModule SrcLoc Module [HsxDependentDecls]
   deriving (Show)
 
-convertDeclGraph :: Env.GlobalE -> HsxDeclGraph -> Isa.Cmd
-convertDeclGraph env (HsxDeclGraph _ modul (graph, fromVertex, _))
-    = let connectedDecls    = sortConnectedHsDecls 
-                               $ map ConnectedHsDecls
-                                 $ map (map declFromVertex . Tree.flatten) $ Graph.scc graph 
-          (result, context) = runConversion env 
-                                $ do thy  <- convert modul
-                                     withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
-                                       $ do cmds <- mapM convert connectedDecls
-                                            return (Isa.TheoryCmd thy cmds)
-      in -- trace ("DECLGRAPH:\n" 
-         --       ++ prettyShow' "graph" (map (map declFromVertex . Tree.flatten) $ Graph.scc graph )) result
-        result
-    where declFromVertex v = let (decl,_,_) = fromVertex v in decl 
+-- Contains all declarations that are dependent on each other,
+-- i.e. all those functions that are mutually recursive.
+data HsxDependentDecls = HsxDependentDecls [HsDecl]
+  deriving (Show)
 
-sortConnectedHsDecls :: [ConnectedHsDecls] -> [ConnectedHsDecls]
-sortConnectedHsDecls connectedDecls
-    = let connectedDecls' = map (\(ConnectedHsDecls decls) 
-                                     -> ConnectedHsDecls $ sortBy orderDeclsBySourceLine decls)
-                            connectedDecls
-      in sortBy (\(ConnectedHsDecls (decl1:_)) (ConnectedHsDecls (decl2:_))
-                     -> orderDeclsBySourceLine decl1 decl2)
-                 connectedDecls'
-
--- convertHsModule :: Env.GlobalE -> HsModule -> Conversion Isa.Cmd
--- convertHsModule env m
---     = let (result, context) = runConversion env (convert m)
---       in ConvSuccess result (_warnings context)
 
 data Context    = Context
     {     
@@ -148,18 +138,20 @@ class Show a => Convert a b | a -> b where
                      $ convert' hsexpr
 
 
--- convertFileContents = convertParseResult . parseModule -- FIXME: remove
+instance Convert HsxModule Isa.Cmd where
+    convert' (HsxModule _loc modul dependentDecls)
+        = do thy <- convert modul
+             withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
+               $ do cmds <- mapM convert dependentDecls
+                    return (Isa.TheoryCmd thy cmds)
 
--- cnvFileContents str = let
---     (ConvSuccess res warnings) = convertFileContents str
---     str2 = "warnings = " ++ show warnings ++ "\n" ++ "convResult = " ++ show res
---     (ParseOk foo) = parseModule str2
---   in prettyHsx foo
-
-instance Convert ConnectedHsDecls Isa.Cmd where
-    convert' (ConnectedHsDecls [])  = return (Isa.Block [])
-    convert' (ConnectedHsDecls [d]) = convert d
-    convert' (ConnectedHsDecls decls)
+instance Convert HsxDependentDecls Isa.Cmd where
+    -- Mutual recursive function definitions must be specified specially
+    -- in Isabelle/HOL (via an explicit "and" statement between the
+    -- definitions that are dependent on each other.)
+    convert' (HsxDependentDecls [])  = return (Isa.Block [])
+    convert' (HsxDependentDecls [d]) = convert d
+    convert' (HsxDependentDecls decls)
         = assert (all isFunBind decls)
             $ do funcmds <- mapM convert decls
                  let (names, sigs, eqs) = unzip3 (map splitFunCmd funcmds)
@@ -171,10 +163,7 @@ instance Convert ConnectedHsDecls Isa.Cmd where
 
 instance Convert HsModule Isa.Cmd where
     convert' (HsModule _loc modul _exports _imports decls)
-        = do thy <- convert modul
-             withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
-               $ do cmds <- mapM convert decls
-                    return (Isa.TheoryCmd thy cmds)
+        = die "Internal Error: Each HsModule should have been pre-converted to HsxModule."
 
 instance Convert Module Isa.Theory where
     convert' (Module name) = return (Isa.Theory name)
