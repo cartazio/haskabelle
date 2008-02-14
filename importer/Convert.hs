@@ -18,9 +18,10 @@ import Control.Monad.State
 
 import Importer.Utilities.Misc
 import Importer.Utilities.Gensym
-import Importer.Utilities.Hsx (orderDeclsBySourceLine, getSourceLine)
+import Importer.Utilities.Hsx (orderDeclsBySourceLine)
 import Importer.Preprocess
 import Importer.ConversionUnit
+import Importer.DeclDependencyGraph
 
 import qualified Data.Graph as Graph
 import qualified Data.Tree as Tree
