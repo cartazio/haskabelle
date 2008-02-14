@@ -198,7 +198,7 @@ emptyGlobalEnv = HsxGlobalEnv (Map.empty)
 makeGlobalEnv_Hsx :: [HsModule] -> GlobalE
 makeGlobalEnv_Hsx ms 
     = HsxGlobalEnv (Map.fromListWith failDups 
-                              $ map (\m@(HsModule _ modul _ _ _) -> (modul, makeModuleEnv m)) ms)
+                     $ map (\m@(HsModule _ modul _ _ _) -> (modul, makeModuleEnv m)) ms)
     where failDups a b
               = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
@@ -264,5 +264,13 @@ lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- 
                                   []   -> Nothing
                                   [x]  -> Just x
                                   x:xs -> error (Msg.identifier_collision_in_lookup currentModule qname (x:xs))
+                 Special s -> Just (translateSpecialConstructor s)
 
-
+-- FIXME: Kludge; what we actually need is an initial environment.
+translateSpecialConstructor :: HsSpecialCon -> HsxIdentifier
+translateSpecialConstructor HsCons = HsxInfixOp consLexInfo HsAssocRight 5
+    where consLexInfo = HsxLexInfo { identifier = Special HsCons,
+                                     typeOf     = Just (HsTyFun (HsTyVar (HsIdent "a"))
+                                                                (HsTyApp (HsTyCon (Special HsListCon))
+                                                                         (HsTyCon (UnQual (HsIdent "a"))))),
+                                     moduleOf   = Module "Prelude" }

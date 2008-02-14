@@ -350,6 +350,7 @@ convertHsPat (HsPVar name)    = return $ HsVar (UnQual name)
 convertHsPat (HsPList pats)   = liftM HsList  $ mapM convertHsPat pats
 convertHsPat (HsPTuple pats)  = liftM HsTuple $ mapM convertHsPat pats
 convertHsPat (HsPParen pat)   = liftM HsParen $ convertHsPat pat
+convertHsPat (HsPWildCard)    = return HsWildCard
 
 convertHsPat (HsPInfixApp pat1 qname pat2)
     = do pat1' <- convertHsPat pat1
@@ -408,6 +409,7 @@ instance Convert HsExp Isa.Term where
     convert' (HsVar qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
+    convert' (HsWildCard)      = return (Isa.Var (Isa.Name "_"))
 
     convert' (HsList [])       = return (Isa.Var Isa.cnameNil)
     convert' (HsList exps)
