@@ -42,5 +42,10 @@ handleDuplicateEdges edges
 
 flattenDeclDepGraph :: HsxDeclDepGraph -> [[HsDecl]]
 flattenDeclDepGraph (HsxDeclDepGraph (graph, fromVertex, _))
-    = map (sortBy orderDeclsBySourceLine . map declFromVertex . flatten) $ scc graph
+    -- We sort each declaration within a component (consisting of inter-dependent decls)
+    -- source-line wise, and then sort each such component also source-line wise.
+    -- Objective: To preserve the ordering of the original source code file as
+    --            much as possible.
+    = sortBy (\decls1 decls2 -> orderDeclsBySourceLine (head decls1) (head decls2))
+        $ map (sortBy orderDeclsBySourceLine . map declFromVertex . flatten) $ scc graph
     where declFromVertex v = let (decl,_,_) = fromVertex v in decl 
