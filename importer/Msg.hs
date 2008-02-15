@@ -9,7 +9,7 @@ module Importer.Msg where
 import List (intersperse)
 import Maybe (fromMaybe)
 
-import Importer.Utilities.Hsx (srcloc2string, module2FilePath, namesFromHsDecl)
+import Importer.Utilities.Hsk (srcloc2string, module2FilePath, namesFromHsDecl)
 import Importer.Utilities.Misc (prettyShow', prettyHsx)
 
 

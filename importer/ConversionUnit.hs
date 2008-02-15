@@ -14,12 +14,12 @@ import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Hsx
+import Importer.Utilities.Hsk
 
 
 -- A Conversion Unit
 
-data ConversionUnit = HsxUnit [HsModule]
+data ConversionUnit = HskUnit [HsModule]
                     | IsaUnit [Isa.Cmd]
   deriving (Show)
 
@@ -41,7 +41,7 @@ makeConversionUnit hsmodule
                 in fail (Msg.cycle_in_dependency_graph (map toModuleName (head cycles)))
          let toHsModule v = case fromVertex v of (m,_,_) -> m
          let [hsmodules]  = map (map toHsModule . flatten) (components depGraph)
-         return (HsxUnit hsmodules)
+         return (HskUnit hsmodules)
 
 cyclesFromGraph :: Graph -> [[Vertex]]
 cyclesFromGraph graph

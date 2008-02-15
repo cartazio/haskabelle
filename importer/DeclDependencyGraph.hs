@@ -1,6 +1,6 @@
 
 module Importer.DeclDependencyGraph 
-    (HsxDeclDepGraph(..), makeDeclDepGraph, flattenDeclDepGraph) where
+    (HskDeclDepGraph(..), makeDeclDepGraph, flattenDeclDepGraph) where
 
 import Monad
 import Maybe
@@ -11,17 +11,17 @@ import Data.Tree
 import Language.Haskell.Hsx
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Hsx
+import Importer.Utilities.Hsk
 
 import qualified Importer.Msg as Msg
 
 
-data HsxDeclDepGraph = HsxDeclDepGraph (Graph, 
+data HskDeclDepGraph = HskDeclDepGraph (Graph, 
                                         Vertex -> (HsDecl, HsQName, [HsQName]), 
                                         HsQName -> Maybe Vertex)
 
-makeDeclDepGraph :: [HsDecl] -> HsxDeclDepGraph
-makeDeclDepGraph decls = HsxDeclDepGraph declDepGraph
+makeDeclDepGraph :: [HsDecl] -> HskDeclDepGraph
+makeDeclDepGraph decls = HskDeclDepGraph declDepGraph
     where declDepGraph = graphFromEdges
                            $ handleDuplicateEdges
                                $ concatMap makeEdgesFromHsDecl decls
@@ -40,8 +40,8 @@ handleDuplicateEdges edges
           isTypeAnnotation ((HsTypeSig _ _ _, _ , _)) = True
           isTypeAnnotation _ = False
 
-flattenDeclDepGraph :: HsxDeclDepGraph -> [[HsDecl]]
-flattenDeclDepGraph (HsxDeclDepGraph (graph, fromVertex, _))
+flattenDeclDepGraph :: HskDeclDepGraph -> [[HsDecl]]
+flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
     -- We sort each declaration within a component (consisting of inter-dependent decls)
     -- source-line wise, and then sort each such component also source-line wise.
     -- Objective: To preserve the ordering of the original source code file as

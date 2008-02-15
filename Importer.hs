@@ -13,19 +13,21 @@ module Main (
 
 import IO
 import Directory
-import Data.Tree
-import Control.Monad
 import System.Environment (getArgs, getProgName)
+
+import List (intersperse)
+import Control.Monad
+
+import Data.Tree
 import Text.PrettyPrint (render, vcat, text, (<>))
 
 import Language.Haskell.Hsx (ParseResult(..), parseFile, HsModule(..))
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
-import Importer.Utilities.Hsx (srcloc2string, module2FilePath, isHaskellSourceFile)
-import Importer.Utilities.Misc (assert)
+import Importer.Utilities.Hsk (srcloc2string, module2FilePath, isHaskellSourceFile)
+import Importer.Utilities.Misc (assert, wordsBy)
 import Importer.ConversionUnit
 import Importer.Convert
-import Importer.Adapt
 import Importer.Printer (pprint)
 
 
@@ -48,11 +50,21 @@ convertFile fp = do [unit] <- convertFiles [fp]; return unit
 convertFiles :: [FilePath] -> IO [ConversionUnit]
 convertFiles []   = return []
 convertFiles (fp:fps)
-    = do unit@(HsxUnit hsmodules) <- makeConversionUnitFromFile fp
-         let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
-         let dependentFiles    = map module2FilePath dependentModuleNs
-         units <- convertFiles (filter (`notElem` dependentFiles) fps) 
-         return (convertHsxUnit unit : units)
+    = let dir      = dirname fp
+          filename = basename fp
+      -- We have to do this to find imported source files.
+      in withCurrentDirectory dir
+        $ do unit@(HskUnit hsmodules) <- makeConversionUnitFromFile filename
+             let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
+             let dependentFiles    = map module2FilePath dependentModuleNs
+             units <- convertFiles (filter (`notElem` dependentFiles) fps) 
+             return (convertHskUnit unit : units)
+
+dirname :: FilePath -> FilePath
+dirname fp = reverse $ dropWhile (/= '/') (reverse fp)
+
+basename :: FilePath -> FilePath
+basename fp = reverse $ takeWhile (/= '/') (reverse fp)
 
 getDirectoryTree :: FilePath -> IO (Tree FilePath)
 getDirectoryTree dirpath

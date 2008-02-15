@@ -9,7 +9,7 @@ import Language.Haskell.Hsx
 import Data.Generics.Biplate
 
 import Importer.Utilities.Misc -- (concatMapM, assert)
-import Importer.Utilities.Hsx
+import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
 
 import qualified Importer.Msg as Msg
@@ -164,8 +164,10 @@ flattenHsTypeSig (HsTypeSig loc names typ)
 --
 
 checkForClosures :: [HsQName] -> [HsDecl] -> [HsDecl]
-checkForClosures closedNs decls = map check decls
-    where check decl = let [loc]  = childrenBi decl :: [SrcLoc]
-                           exprs  = childrenBi decl :: [HsExp]
-                           freeNs = concatMap (\e -> filter (flip isFreeVar e) closedNs) exprs
-                       in if (null freeNs) then decl else error (Msg.free_vars_found loc freeNs)
+checkForClosures closedNs decls = trace (prettyShow' "decls" decls) $ map check decls
+    where check decl = trace (prettyShow' "locs"  (childrenBi decl :: [SrcLoc])
+                              ++ "\n" ++ prettyShow' "exprs" (childrenBi decl :: [HsExp]))
+                         $ let [loc]  = childrenBi decl :: [SrcLoc]
+                               exprs  = childrenBi decl :: [HsExp]
+                               freeNs = concatMap (\e -> filter (flip isFreeVar e) closedNs) exprs
+                           in if (null freeNs) then decl else error (Msg.free_vars_found loc freeNs)

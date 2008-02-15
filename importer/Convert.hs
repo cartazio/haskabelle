@@ -5,12 +5,12 @@ Conversion from abstract Haskell code to abstract Isar/HOL theory.
 -}
 
 module Importer.Convert (
-  convertHsxUnit -- convertParseResult, cnvFileContents
+  convertHskUnit
 ) where
 
 import Language.Haskell.Hsx
 
-import List (unzip4, partition, sortBy)
+import List (unzip4, partition)
 import Monad
 import Maybe
 
@@ -18,13 +18,9 @@ import Control.Monad.State
 
 import Importer.Utilities.Misc
 import Importer.Utilities.Gensym
-import Importer.Utilities.Hsx (orderDeclsBySourceLine)
 import Importer.Preprocess
 import Importer.ConversionUnit
 import Importer.DeclDependencyGraph
-
-import qualified Data.Graph as Graph
-import qualified Data.Tree as Tree
 
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
@@ -32,33 +28,33 @@ import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 
 
-convertHsxUnit :: ConversionUnit -> ConversionUnit
-convertHsxUnit (HsxUnit hsmodules)
+convertHskUnit :: ConversionUnit -> ConversionUnit
+convertHskUnit (HskUnit hsmodules)
     = let hsmodules'   = map preprocessHsModule hsmodules
-          globalenv    = Env.makeGlobalEnv_Hsx hsmodules'
-          hsxmodules   = map (toHsxModule globalenv) hsmodules'
+          globalenv    = Env.makeGlobalEnv_Hsk hsmodules'
+          hsxmodules   = map (toHskModule globalenv) hsmodules'
           (isathys, _) = runConversion globalenv
                            $ mapM convert hsxmodules 
       in IsaUnit isathys
-    where toHsxModule globalEnv (HsModule loc modul _exports _imports decls)
+    where toHskModule globalEnv (HsModule loc modul _exports _imports decls)
               = let declDepGraph = makeDeclDepGraph decls 
-                in HsxModule loc modul 
-                     $ map HsxDependentDecls (flattenDeclDepGraph declDepGraph)
+                in HskModule loc modul 
+                     $ map HskDependentDecls (flattenDeclDepGraph declDepGraph)
 
 
 -- The naming scheme "HsFoo" is treated as being owned by the parser
--- libary Language.Haskell.Hsx. We use "HsxFoo" instead to
+-- libary Language.Haskell.Hsx. We use "HskFoo" instead to
 -- differentiate between what's defined by us and by that library. 
 --
 -- (Ok, this might sound somewhat confusing, at least we're consistent
 -- about it.)
 
-data HsxModule = HsxModule SrcLoc Module [HsxDependentDecls]
+data HskModule = HskModule SrcLoc Module [HskDependentDecls]
   deriving (Show)
 
 -- Contains all declarations that are dependent on each other,
 -- i.e. all those functions that are mutually recursive.
-data HsxDependentDecls = HsxDependentDecls [HsDecl]
+data HskDependentDecls = HskDependentDecls [HsDecl]
   deriving (Show)
 
 
@@ -139,20 +135,20 @@ class Show a => Convert a b | a -> b where
                      $ convert' hsexpr
 
 
-instance Convert HsxModule Isa.Cmd where
-    convert' (HsxModule _loc modul dependentDecls)
+instance Convert HskModule Isa.Cmd where
+    convert' (HskModule _loc modul dependentDecls)
         = do thy <- convert modul
              withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
                $ do cmds <- mapM convert dependentDecls
                     return (Isa.TheoryCmd thy cmds)
 
-instance Convert HsxDependentDecls Isa.Cmd where
+instance Convert HskDependentDecls Isa.Cmd where
     -- Mutual recursive function definitions must be specified specially
     -- in Isabelle/HOL (via an explicit "and" statement between the
     -- definitions that are dependent on each other.)
-    convert' (HsxDependentDecls [])  = return (Isa.Block [])
-    convert' (HsxDependentDecls [d]) = convert d
-    convert' (HsxDependentDecls decls)
+    convert' (HskDependentDecls [])  = return (Isa.Block [])
+    convert' (HskDependentDecls [d]) = convert d
+    convert' (HskDependentDecls decls)
         = assert (all isFunBind decls)
             $ do funcmds <- mapM convert decls
                  let (names, sigs, eqs) = unzip3 (map splitFunCmd funcmds)
@@ -164,7 +160,7 @@ instance Convert HsxDependentDecls Isa.Cmd where
 
 instance Convert HsModule Isa.Cmd where
     convert' (HsModule _loc modul _exports _imports decls)
-        = die "Internal Error: Each HsModule should have been pre-converted to HsxModule."
+        = die "Internal Error: Each HsModule should have been pre-converted to HskModule."
 
 instance Convert Module Isa.Theory where
     convert' (Module name) = return (Isa.Theory name)
@@ -228,7 +224,7 @@ instance Convert HsDecl Isa.Cmd where
              modul     <- queryContext currentModule
              assert (all check [ Env.lookup modul (toHsQName op) globalEnv | op <- ops ]) 
                $ return (Isa.Block [])
-        where check (Just (Env.HsxInfixOp _ a p)) = a == assoc && p == prio
+        where check (Just (Env.HskInfixOp _ a p)) = a == assoc && p == prio
               check _ = False
               toHsQName (HsVarOp n) = UnQual n
               toHsQName (HsConOp n) = UnQual n
@@ -238,10 +234,10 @@ instance Convert HsDecl Isa.Cmd where
              modul     <- queryContext currentModule
              assert (all check [ Env.lookup modul (UnQual n) globalEnv | n <- names ]) 
                $ return (Isa.Block [])
-        where check (Just (Env.HsxVariable (Env.HsxLexInfo { Env.typeOf = Just t })))     = t == typ
-              check (Just (Env.HsxFunction (Env.HsxLexInfo { Env.typeOf = Just t })))     = t == typ
-              check (Just (Env.HsxInfixOp  (Env.HsxLexInfo { Env.typeOf = Just t }) _ _)) = t == typ
-              check (Just (Env.HsxTypeAnnotation t)) = t == typ
+        where check (Just (Env.HskVariable (Env.HskLexInfo { Env.typeOf = Just t })))     = t == typ
+              check (Just (Env.HskFunction (Env.HskLexInfo { Env.typeOf = Just t })))     = t == typ
+              check (Just (Env.HskInfixOp  (Env.HskLexInfo { Env.typeOf = Just t }) _ _)) = t == typ
+              check (Just (Env.HskTypeAnnotation t)) = t == typ
               check _ = False
                          
     -- Remember that at this stage there are _no_ local declarations in the Hsx
@@ -583,7 +579,7 @@ lookupOp qop
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
          case Env.lookup modul (qop2name qop) globalEnv of
-           Just (Env.HsxInfixOp _ assoc prio) -> return (assoc, prio)
+           Just (Env.HskInfixOp _ assoc prio) -> return (assoc, prio)
            Nothing -> do warn (Msg.missing_infix_decl qop globalEnv)
                          return (HsAssocLeft, 9) -- default values in Haskell98
     where qop2name (HsQVarOp n) = n
@@ -594,13 +590,13 @@ lookupSig fname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
          case (Env.lookup modul fname globalEnv) of
-           Just (Env.HsxVariable (Env.HsxLexInfo { Env.typeOf = Just typ })) 
+           Just (Env.HskVariable (Env.HskLexInfo { Env.typeOf = Just typ })) 
                -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HsxFunction (Env.HsxLexInfo { Env.typeOf = Just typ })) 
+           Just (Env.HskFunction (Env.HskLexInfo { Env.typeOf = Just typ })) 
                -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HsxInfixOp  (Env.HsxLexInfo { Env.typeOf = Just typ }) _ _) 
+           Just (Env.HskInfixOp  (Env.HskLexInfo { Env.typeOf = Just typ }) _ _) 
                -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HsxTypeAnnotation typ)      
+           Just (Env.HskTypeAnnotation typ)      
                -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
            _ -> die (Msg.missing_fun_sig fname globalEnv)
 

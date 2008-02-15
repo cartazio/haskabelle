@@ -4,7 +4,7 @@
 Auxiliary.
 -}
 
-module Importer.Utilities.Hsx ( 
+module Importer.Utilities.Hsk ( 
   namesFromHsDecl, bindingsFromDecls, bindingsFromPats, 
   extractBindingNs, extractFreeVarNs, letify,
   Renaming, renameFreeVars, renameHsDecl,
