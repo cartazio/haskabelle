@@ -52,13 +52,13 @@ convertFiles []   = return []
 convertFiles (fp:fps)
     = let dir      = dirname fp
           filename = basename fp
-      -- We have to do this to find imported source files.
-      in withCurrentDirectory dir
-        $ do unit@(HskUnit hsmodules) <- makeConversionUnitFromFile filename
-             let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
-             let dependentFiles    = map module2FilePath dependentModuleNs
-             units <- convertFiles (filter (`notElem` dependentFiles) fps) 
-             return (convertHskUnit unit : units)
+      -- We have to do this to find the source files of imported modules.
+      in withCurrentDirectory (if dir == "" then "./" else dir)
+          $ do unit@(HskUnit hsmodules) <- makeConversionUnitFromFile filename
+               let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
+               let dependentFiles    = map module2FilePath dependentModuleNs
+               units <- convertFiles (filter (`notElem` dependentFiles) fps) 
+               return (convertHskUnit unit : units)
 
 dirname :: FilePath -> FilePath
 dirname fp = reverse $ dropWhile (/= '/') (reverse fp)
