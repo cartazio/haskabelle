@@ -49,9 +49,11 @@ isHskTypeAnnotation _ = False
 isHskData (HskData _ _) = True
 isHskData _ = False
 
+
 identifier2name :: HskIdentifier -> HsQName
 identifier2name hsxidentifier
-    = identifier (extractLexInfo hsxidentifier)
+    = let name = identifier (extractLexInfo hsxidentifier)
+      in assert (not $ isQualifiedName name) name
     where extractLexInfo (HskVariable i)    = i
           extractLexInfo (HskFunction i)    = i
           extractLexInfo (HskInfixOp i _ _) = i
@@ -69,6 +71,10 @@ makeUnqualified hsxidentifier
                       HskData     lexinfo cs  -> HskData     (lexinfo { identifier = UnQual n }) cs
 
 
+-- We must use HsQName as key (and not just HsName) because HsQName
+-- does additionally contain special constructor names. We, however,
+-- guarantee that a LexE does _not_ contain any qualified names, only
+-- UnQual and Special constructors.
 data LexE = HskLexEnv (Map.Map HsQName HskIdentifier)
   deriving (Show)
 
@@ -77,7 +83,8 @@ emptyLexEnv_Hsk = HskLexEnv Map.empty
 
 makeLexEnv_Hsk :: [(HsQName, HskIdentifier)] -> LexE
 makeLexEnv_Hsk initbindings
-    = HskLexEnv (Map.fromListWith mergeLexInfos initbindings)
+    = assert (all (not . isQualifiedName) $ map fst initbindings)
+        $ HskLexEnv (Map.fromListWith mergeLexInfos initbindings)
 
 mergeLexInfos :: HskIdentifier -> HskIdentifier -> HskIdentifier
 mergeLexInfos ident1 ident2
@@ -151,17 +158,18 @@ makeModuleEnv (HsModule loc modul exports imports topdecls)
 
 extractLexInfos :: Module -> HsDecl -> [(HsQName, HskIdentifier)]
 extractLexInfos modul decl 
-    = map (\name -> let defaultLexInfo = HskLexInfo { identifier=name, typeOf=Nothing, moduleOf=modul}
-                    in (name, case decl of
-                                HsPatBind _ _ _ _          -> HskVariable defaultLexInfo
-                                HsFunBind _                -> HskFunction defaultLexInfo
-                                HsInfixDecl _ assoc prio _ -> HskInfixOp  defaultLexInfo assoc prio
-                                HsTypeSig _ _ typ          -> HskTypeAnnotation typ
-                                HsDataDecl _ _ _ _ condecls _
-                                    -> HskData (defaultLexInfo { typeOf = Just (HsTyCon name) })
-                                               (map (qualify modul . UnQual . extractConstrName) condecls)
-                                       where extractConstrName (HsQualConDecl _ _ _ (HsConDecl n _)) = n
-                                             extractConstrName (HsQualConDecl _ _ _ (HsRecDecl n _)) = n
+    = map (\name -> let name' = unqualify name
+                        defaultLexInfo = HskLexInfo { identifier=name, typeOf=Nothing, moduleOf=modul}
+                    in (name', case decl of
+                                 HsPatBind _ _ _ _          -> HskVariable defaultLexInfo
+                                 HsFunBind _                -> HskFunction defaultLexInfo
+                                 HsInfixDecl _ assoc prio _ -> HskInfixOp  defaultLexInfo assoc prio
+                                 HsTypeSig _ _ typ          -> HskTypeAnnotation typ
+                                 HsDataDecl _ _ _ _ condecls _
+                                     -> HskData (defaultLexInfo { typeOf = Just (HsTyCon name') })
+                                           $ map (UnQual . extractConstrName) condecls
+                                        where extractConstrName (HsQualConDecl _ _ _ (HsConDecl n _)) = n
+                                              extractConstrName (HsQualConDecl _ _ _ (HsRecDecl n _)) = n
                        ))
       (fromJust $ namesFromHsDecl decl)
 
@@ -238,8 +246,9 @@ computeExportedNames modul globalEnv
 isExported :: HskIdentifier -> Module -> GlobalE -> Bool
 isExported identifier modul globalEnv
     = case identifier2name identifier of
-        Qual m _  -> if  m == modul then isExported (makeUnqualified identifier) m globalEnv 
-                                    else False
+        Qual m _  -> error ("Internal Error: All identifiers should be unqualified: " 
+                            ++ prettyShow' "identifier" identifier ++ "\n" 
+                            ++ prettyShow' "globalEnv" globalEnv)
         UnQual n  -> n `elem` (computeExportedNames modul globalEnv)
 
 
@@ -274,3 +283,5 @@ translateSpecialConstructor HsCons = HskInfixOp consLexInfo HsAssocRight 5
                                                                 (HsTyApp (HsTyCon (Special HsListCon))
                                                                          (HsTyCon (UnQual (HsIdent "a"))))),
                                      moduleOf   = Module "Prelude" }
+
+

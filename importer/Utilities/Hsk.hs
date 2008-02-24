@@ -8,7 +8,8 @@ module Importer.Utilities.Hsk (
   namesFromHsDecl, bindingsFromDecls, bindingsFromPats, 
   extractBindingNs, extractFreeVarNs, letify,
   Renaming, renameFreeVars, renameHsDecl,
-  freshIdentifiers, isFreeVar, qualify,
+  freshIdentifiers, isFreeVar, 
+  qualify, unqualify, isQualifiedName,
   srcloc2string, module2FilePath, isHaskellSourceFile,
   orderDeclsBySourceLine, getSourceLine,
 ) where
@@ -26,9 +27,17 @@ import Language.Haskell.Hsx
 import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates, wordsBy)
 import Importer.Utilities.Gensym
 
+isQualifiedName :: HsQName -> Bool
+isQualifiedName (Qual _ _) = True
+isQualifiedName _          = False
+
 qualify :: Module -> HsQName -> HsQName
 qualify _ (Qual m n) = Qual m n
 qualify m (UnQual n) = Qual m n
+
+unqualify :: HsQName -> HsQName
+unqualify (Qual _ n) = UnQual n
+unqualify etc = etc
 
 srcloc2string :: SrcLoc -> String
 srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })
