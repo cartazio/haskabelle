@@ -17,4 +17,4 @@ DST="$2"
 cd "$EXECPATH"
 
 echo "Importing $SRC into $DST..."
-ghc -fglasgow-exts -e "importFile \"$SRC\" \"$DST\"" Importer.hs || exit $?
+ghc -fglasgow-exts -e "importFiles [\"$SRC\"] \"$DST\"" Importer.hs || exit $?
