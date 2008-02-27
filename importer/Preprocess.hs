@@ -164,7 +164,7 @@ flattenHsTypeSig (HsTypeSig loc names typ)
 --
 
 checkForClosures :: [HsQName] -> [HsDecl] -> [HsDecl]
-checkForClosures closedNs decls = trace (prettyShow' "decls" decls) $ map check decls
+checkForClosures closedNs decls = map check decls
     where check decl = trace (prettyShow' "locs"  (childrenBi decl :: [SrcLoc])
                               ++ "\n" ++ prettyShow' "exprs" (childrenBi decl :: [HsExp]))
                          $ let [loc]  = childrenBi decl :: [SrcLoc]

@@ -22,20 +22,26 @@ import Importer.Preprocess
 import Importer.ConversionUnit
 import Importer.DeclDependencyGraph
 
+import Importer.Mapping (initialGlobalEnv, adaptionTable)
+import Importer.Adapt (convertAndAdapt_GlobalEnv, adaptIsaUnit)
+
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
 
 import qualified Importer.LexEnv as Env
 
+import qualified Data.Map as Map
 
 convertHskUnit :: ConversionUnit -> ConversionUnit
-convertHskUnit (HskUnit hsmodules)
-    = let hsmodules'   = map preprocessHsModule hsmodules
-          globalenv    = Env.makeGlobalEnv_Hsk hsmodules'
-          hsxmodules   = map (toHskModule globalenv) hsmodules'
-          (isathys, _) = runConversion globalenv
-                           $ mapM convert hsxmodules 
-      in IsaUnit isathys
+convertHskUnit (HskUnit hsmodules _emptyEnv)
+    = let hsmodules'     = map preprocessHsModule hsmodules
+          globalenv_hsk  = Env.makeGlobalEnv_Hsk hsmodules'
+          globalenv_hsk' = Env.mergeGlobalEnvs globalenv_hsk initialGlobalEnv
+          hskmodules     = map (toHskModule globalenv_hsk') hsmodules'
+          (isathys, _)   = runConversion globalenv_hsk'
+                             $ mapM convert hskmodules 
+      in adaptIsaUnit globalenv_hsk' adaptionTable 
+           $ IsaUnit isathys (convertAndAdapt_GlobalEnv globalenv_hsk' adaptionTable)
     where toHskModule globalEnv (HsModule loc modul _exports _imports decls)
               = let declDepGraph = makeDeclDepGraph decls 
                 in HskModule loc modul 
@@ -366,9 +372,18 @@ instance Convert HsRhs Isa.Term where
     convert' junk = barf "HsRhs -> Isa.Term" junk
 
 
--- Language.Haskell.Hsx.Syntax calls an an operator `HsQOp' when it's
--- used within an expression, but `HsOp' when used within an infix
--- declaration. A bit confusing, unfortunately.
+instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
+    convert' (HsFieldUpdate qname exp)
+        = do qname' <- convert qname
+             exp'   <- convert exp
+             return (qname', exp')
+
+
+instance Convert HsAlt (Isa.Term, Isa.Term) where
+    convert' (HsAlt _loc pat (HsUnGuardedAlt exp) _wherebinds)
+        = do pat' <- convert pat; exp' <- convert exp; return (pat', exp')
+    convert' junk 
+        = barf "HsAlt -> (Isa.Term, Isa.Term)" junk
 
 instance Convert HsQOp Isa.Term where
     convert' (HsQVarOp qname) = do qname' <- convert qname; return (Isa.Var qname')
@@ -385,19 +400,6 @@ instance Convert HsLiteral Isa.Literal where
     convert' (HsString str) = return (Isa.String str)
     convert' junk           = barf "HsLiteral -> Isa.Literal" junk
 
-
-instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
-    convert' (HsFieldUpdate qname exp)
-        = do qname' <- convert qname
-             exp'   <- convert exp
-             return (qname', exp')
-
-
-instance Convert HsAlt (Isa.Term, Isa.Term) where
-    convert' (HsAlt _loc pat (HsUnGuardedAlt exp) _wherebinds)
-        = do pat' <- convert pat; exp' <- convert exp; return (pat', exp')
-    convert' junk 
-        = barf "HsAlt -> (Isa.Term, Isa.Term)" junk
 
 
 instance Convert HsExp Isa.Term where

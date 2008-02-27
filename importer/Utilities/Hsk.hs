@@ -9,7 +9,7 @@ module Importer.Utilities.Hsk (
   extractBindingNs, extractFreeVarNs, letify,
   Renaming, renameFreeVars, renameHsDecl,
   freshIdentifiers, isFreeVar, 
-  qualify, unqualify, isQualifiedName,
+  qualify, unqualify, isQualifiedName, string2HsName,
   srcloc2string, module2FilePath, isHaskellSourceFile,
   orderDeclsBySourceLine, getSourceLine,
 ) where
@@ -38,6 +38,13 @@ qualify m (UnQual n) = Qual m n
 unqualify :: HsQName -> HsQName
 unqualify (Qual _ n) = UnQual n
 unqualify etc = etc
+
+string2HsName :: String -> HsName
+string2HsName string = case isSymbol string of
+                         True  -> HsSymbol string
+                         False -> HsIdent string
+    where isSymbol string = and $ map (`elem` symbols) string
+          symbols = "!@$%&*+./<=>?¹\\^|~"
 
 srcloc2string :: SrcLoc -> String
 srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })

@@ -9,15 +9,21 @@ module Importer.Printer where
 import Importer.Utilities.Misc
 import qualified Importer.IsaSyntax as Isa
 
+import qualified Importer.LexEnv as Env
+
 import qualified Text.PrettyPrint as P
 
 
 
-data PPState = PPState { withinHOL :: Bool }
+data PPState = PPState { globalEnv     :: Env.GlobalE,
+                         currentTheory :: Isa.Theory,
+                         withinHOL     :: Bool}
 
 data DocM v = DocM (PPState -> (v, PPState))
 
-emptyPPState = PPState { withinHOL = False }
+emptyPPState = PPState { globalEnv = Env.emptyGlobalEnv, 
+                         currentTheory = Isa.Theory "Scratch", 
+                         withinHOL = False }
 
 instance Monad DocM where
     return value = DocM (\state -> (value, state))
@@ -108,6 +114,14 @@ parensIf :: Bool -> Doc -> Doc
 parensIf True  = parens
 parensIf False = id
 
+withCurrentTheory :: Isa.Theory -> Doc -> Doc
+withCurrentTheory thy d
+    = do oldthy <- queryPP (\pps -> currentTheory pps)
+         updatePP (\pps -> pps { currentTheory = thy })
+         result <- d
+         updatePP (\pps -> pps { currentTheory = thy })
+         return result
+
 maybeWithinHOL :: Doc -> Doc
 maybeWithinHOL d   
     = do within_p <- queryPP withinHOL
@@ -159,22 +173,23 @@ indent = 3
 
 class Printer a where
     pprint' :: a -> DocM P.Doc
-    pprint  :: a -> P.Doc
-    pprint obj = let DocM sf          = pprint' obj
-                     (result, _state) = sf emptyPPState
-                     doc              = result
-                 in doc
+    pprint  :: a -> Env.GlobalE -> P.Doc
+    pprint obj env = let DocM sf          = pprint' obj
+                         (result, _state) = sf (emptyPPState { globalEnv = env })
+                         doc              = result
+                     in doc
 
 
 instance Printer Isa.Cmd where
     pprint' (Isa.Comment string) = empty -- blankline $ comment string
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
     pprint' (Isa.TheoryCmd thy cmds)
-        = text "theory" <+> pprint' thy $$
+        = 
+          text "theory" <+> pprint' thy $$
           text "imports Main"           $$
           text "begin"                  $$
           (vcat $ map pprint' cmds)     $$
-          text "end"
+           text "end"
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $
@@ -235,7 +250,7 @@ instance Printer Isa.Type where
 
     pprint' (Isa.TyCon cname []) = pprint' cname 
     pprint' (Isa.TyCon cname tyvars) 
-        = maybeWithinHOL $
+        = do maybeWithinHOL $
                hsep (map pp tyvars) <+> pprint' cname
           where pp tyvar = parensIf (isCompoundType tyvar) (pprint' tyvar)
 
@@ -261,13 +276,16 @@ instance Printer Isa.Term where
     pprint' (Isa.Parenthesized t)   = parens $ pprint' t
 
     pprint' app @ (Isa.App t1 t2)   
-        = case categorizeApp app of
-            ListApp  l      -> pprintAsList l
-            TupleApp l      -> pprintAsTuple l
-            InfixApp x op y -> let x' = parensIf (isCompound x) $ pprint' x
-                                   y' = parensIf (isCompound y) $ pprint' y
-                               in  x' <+> pprint' op <+> y'
-            MiscApp         -> pprint' t1 <+> parensIf (isCompound t2) (pprint' t2)
+        = do thy <- queryPP currentTheory 
+             env <- queryPP globalEnv
+             let lookup = (\n -> Env.lookup_isa thy n env)
+             case categorizeApp app lookup of
+               ListApp  l      -> pprintAsList l
+               TupleApp l      -> pprintAsTuple l
+               InfixApp x op y -> let x' = parensIf (isCompound x lookup) $ pprint' x
+                                      y' = parensIf (isCompound y lookup) $ pprint' y
+                                  in  x' <+> pprint' op <+> y'
+               MiscApp         -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
 
     pprint' (Isa.If t1 t2 t3)
         = fsep [text "if"   <+> pprint' t1,
@@ -321,12 +339,12 @@ data AppFlavor = ListApp [Isa.Term]
 --
 -- Cf. http://www.haskell.org/ghc/docs/latest/html/users_guide/syntax-extns.html#pattern-guards
 --
-categorizeApp :: Isa.Term -> AppFlavor
-categorizeApp app@(Isa.App (Isa.App (Isa.Var c) t1) t2) 
-    | Isa.isCons c,    Just list <- flattenListApp app  = ListApp list
-    | Isa.isPairCon c, Just list <- flattenTupleApp app = TupleApp list
-    | isInfixOp c                                       = InfixApp t1 (Isa.Var c) t2
-categorizeApp _                                         = MiscApp
+categorizeApp :: Isa.Term -> (Isa.Name -> Maybe Env.IsaIdentifier) -> AppFlavor
+categorizeApp app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
+    | Isa.isCons opN,    Just list <- flattenListApp app  = ListApp list
+    | Isa.isPairCon opN, Just list <- flattenTupleApp app = TupleApp list
+    | isInfixOp opN lookupFn                              = InfixApp t1 (Isa.Var opN) t2
+categorizeApp _ _                                         = MiscApp
 
 flattenListApp :: Isa.Term -> Maybe [Isa.Term]
 flattenListApp app = let list = unfoldr1 split app in 
@@ -346,23 +364,28 @@ flattenTupleApp app = let list = unfoldr1 split app in
     split _ = Nothing
 
 
-isCompound :: Isa.Term -> Bool
-isCompound (Isa.App (Isa.App (Isa.Var c) _) _)  -- FIXME: temporary to avoid the extra parens
-    | Isa.isPairCon c = False                   --  in `((x,y)) : z'; should be handled by
-isCompound t = case t of                        --  checking for infix priorities.
-                Isa.Var _            -> False
-                Isa.Literal _        -> False
-                Isa.Parenthesized _  -> False
-                Isa.App _ _          -> case categorizeApp t of
-                                          ListApp  _ -> False
-                                          TupleApp _ -> False
-                                          _          -> True
-                _ -> True
+isCompound :: Isa.Term -> (Isa.Name -> Maybe Env.IsaIdentifier) -> Bool
+isCompound (Isa.App (Isa.App (Isa.Var c) _) _) _  -- FIXME: temporary to avoid the extra parens
+    | Isa.isPairCon c = False                     --  in `((x,y)) : z'; should be handled by
+isCompound t lookupFn                             --  checking for infix priorities.
+    = case t of
+        Isa.Var _            -> False
+        Isa.Literal _        -> False
+        Isa.Parenthesized _  -> False
+        Isa.App _ _          -> case categorizeApp t lookupFn of
+                                  ListApp  _ -> False
+                                  TupleApp _ -> False
+                                  _          -> True
+        _ -> True
 
 isCompoundType :: Isa.Type -> Bool
 isCompoundType t = case t of
                      Isa.TyVar _    -> False
                      Isa.TyCon _ [] -> False
                      _              -> True
-                                      
-isInfixOp name = Isa.isCons name -- FIXME
+                     
+isInfixOp :: Isa.Name -> (Isa.Name -> Maybe Env.IsaIdentifier) -> Bool                 
+isInfixOp name lookupFn
+    = case lookupFn name of
+        Just (Env.IsaInfixOp _ _ _) -> True
+        _ -> False

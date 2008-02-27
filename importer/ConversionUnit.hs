@@ -13,14 +13,16 @@ import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 
+import Importer.Mapping (initialGlobalEnv)
+
 import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
 
 
 -- A Conversion Unit
 
-data ConversionUnit = HskUnit [HsModule]
-                    | IsaUnit [Isa.Cmd]
+data ConversionUnit = HskUnit [HsModule] Env.GlobalE
+                    | IsaUnit [Isa.Cmd] Env.GlobalE
   deriving (Show)
 
 makeConversionUnitFromFile :: FilePath -> IO ConversionUnit
@@ -41,7 +43,7 @@ makeConversionUnit hsmodule
                 in fail (Msg.cycle_in_dependency_graph (map toModuleName (head cycles)))
          let toHsModule v = case fromVertex v of (m,_,_) -> m
          let [hsmodules]  = map (map toHsModule . flatten) (components depGraph)
-         return (HskUnit hsmodules)
+         return (HskUnit hsmodules Env.emptyGlobalEnv)
 
 cyclesFromGraph :: Graph -> [[Vertex]]
 cyclesFromGraph graph

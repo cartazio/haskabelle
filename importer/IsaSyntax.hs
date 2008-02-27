@@ -11,10 +11,10 @@ import Data.Generics.Instances
 
 
 newtype Theory = Theory String
-  deriving (Eq, Ord, Show, Data, Typeable)
+  deriving (Show, Eq, Ord, Data, Typeable)
 
 data Name      = QName Theory String | Name String
-  deriving (Eq, Show, Data, Typeable)
+  deriving (Show, Eq, Ord, Data, Typeable)
 
 type VarName   = Name
 type ConName   = Name
@@ -66,22 +66,22 @@ data Assoc = AssocNone | AssocLeft | AssocRight
 type Pat = Term
 
 data TypeSpec = TypeSpec [VarName] ConName
-  deriving (Show, Data, Typeable)
+  deriving (Show, Eq, Data, Typeable)
 
 data TypeSig = TypeSig Name Type
-  deriving (Show, Data, Typeable)
+  deriving (Show, Eq, Data, Typeable)
 
 data Type = TyVar VarName
           | TyCon ConName [Type]
           | TyFun Type Type
           | TyTuple [Type]
-  deriving (Show, Data, Typeable)
+  deriving (Show, Eq, Data, Typeable)
 
 data ConSpec = Constructor ConName [Type]
-  deriving (Show, Data, Typeable)
+  deriving (Show, Eq, Data, Typeable)
 
 data Literal = Int Integer | String String
-  deriving (Show, Data, Typeable)
+  deriving (Show, Eq, Data, Typeable)
 
 
 type Const = String
@@ -106,7 +106,7 @@ cnamePair   = QName (Theory "Prelude") "(,)"
 
 tnameList   = QName (Theory "Prelude") "list"
 cnameNil    = QName (Theory "Prelude") "[]"
-cnameCons   = QName (Theory "Prelude") ":"
+cnameCons   = QName (Theory "Prelude") "#"
 
 mknil       = Var cnameNil
 mkcons x y  = App (App (Var cnameCons) x) y

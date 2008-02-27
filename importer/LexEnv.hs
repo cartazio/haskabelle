@@ -15,8 +15,9 @@ import Importer.Utilities.Hsk
 import Importer.Utilities.Misc
 
 --
--- LexEnv
+-- Identifier information
 --
+
 
 data HskLexInfo = HskLexInfo { 
                               identifier :: HsQName,
@@ -54,10 +55,11 @@ identifier2name :: HskIdentifier -> HsQName
 identifier2name hsxidentifier
     = let name = identifier (extractLexInfo hsxidentifier)
       in assert (not $ isQualifiedName name) name
-    where extractLexInfo (HskVariable i)    = i
-          extractLexInfo (HskFunction i)    = i
-          extractLexInfo (HskInfixOp i _ _) = i
-          extractLexInfo (HskData i _)      = i
+
+extractLexInfo (HskVariable i)    = i
+extractLexInfo (HskFunction i)    = i
+extractLexInfo (HskInfixOp i _ _) = i
+extractLexInfo (HskData i _)      = i
 
 
 makeUnqualified :: HskIdentifier -> HskIdentifier
@@ -71,11 +73,37 @@ makeUnqualified hsxidentifier
                       HskData     lexinfo cs  -> HskData     (lexinfo { identifier = UnQual n }) cs
 
 
+
+data IsaLexInfo = IsaLexInfo { 
+                              _identifier :: Isa.Name,
+                              _typeOf     :: Isa.Type,
+                              _theoryOf   :: Isa.Theory
+                             }
+  deriving (Eq, Show)
+
+data IsaIdentifier = IsaVariable IsaLexInfo
+                   | IsaFunction IsaLexInfo
+                   | IsaInfixOp  IsaLexInfo Isa.Assoc Int
+  deriving (Eq, Show)
+
+isaIdentifier2name (IsaVariable i)     = _identifier i
+isaIdentifier2name (IsaFunction i)     = _identifier i
+isaIdentifier2name (IsaInfixOp  i _ _) = _identifier i
+
+extractLexInfo_isa (IsaVariable i)    = i
+extractLexInfo_isa (IsaFunction i)    = i
+extractLexInfo_isa (IsaInfixOp i _ _) = i
+
+--
+-- LexEnv
+--
+
 -- We must use HsQName as key (and not just HsName) because HsQName
 -- does additionally contain special constructor names. We, however,
 -- guarantee that a LexE does _not_ contain any qualified names, only
 -- UnQual and Special constructors.
 data LexE = HskLexEnv (Map.Map HsQName HskIdentifier)
+          | IsaLexEnv (Map.Map Isa.Name IsaIdentifier)
   deriving (Show)
 
 
@@ -84,39 +112,67 @@ emptyLexEnv_Hsk = HskLexEnv Map.empty
 makeLexEnv_Hsk :: [(HsQName, HskIdentifier)] -> LexE
 makeLexEnv_Hsk initbindings
     = assert (all (not . isQualifiedName) $ map fst initbindings)
-        $ HskLexEnv (Map.fromListWith mergeLexInfos initbindings)
+        $ HskLexEnv (Map.fromListWith mergeLexInfosOrFail initbindings)
 
-mergeLexInfos :: HskIdentifier -> HskIdentifier -> HskIdentifier
+
+mergeLexInfosOrFail :: HskIdentifier -> HskIdentifier -> HskIdentifier
+mergeLexInfosOrFail ident1 ident2
+    = case mergeLexInfos ident1 ident2 of
+        Just result -> result
+        Nothing     -> error ("Internal error (mergeLexInfo): Merge collision between `" 
+                              ++ show ident1 ++ "'" ++ " and `" ++ show ident2 ++ "'.")
+
+mergeLexInfos :: HskIdentifier -> HskIdentifier -> Maybe HskIdentifier
 mergeLexInfos ident1 ident2
     = case (ident1, ident2) of
-        (HskVariable i,       HskTypeAnnotation t) -> HskVariable (updateLexInfo i t)
-        (HskFunction i,       HskTypeAnnotation t) -> HskFunction (updateLexInfo i t)
-        (HskInfixOp  i a p,   HskTypeAnnotation t) -> HskInfixOp  (updateLexInfo i t) a p
-        (HskTypeAnnotation t, HskVariable i)       -> HskVariable (updateLexInfo i t)
-        (HskTypeAnnotation t, HskFunction i)       -> HskFunction (updateLexInfo i t)
-        (HskTypeAnnotation t, HskInfixOp  i a p)   -> HskInfixOp  (updateLexInfo i t) a p
-        (_,_) 
-            -> error ("Internal error (mergeLexInfo): Merge collision between `" ++ show ident1 ++ "'"
-                      ++ " and `" ++ show ident2 ++ "'.")
-    where updateLexInfo lexinfo@(HskLexInfo { typeOf = Nothing }) typ = lexinfo { typeOf = Just typ }
-          updateLexInfo lexinfo typ
+        (HskVariable i,       HskTypeAnnotation t) -> Just $ HskVariable (update i t)
+        (HskFunction i,       HskTypeAnnotation t) -> Just $ HskFunction (update i t)
+        (HskInfixOp  i a p,   HskTypeAnnotation t) -> Just $ HskInfixOp  (update i t) a p
+        (HskTypeAnnotation t, HskVariable i)       -> Just $ HskVariable (update i t)
+        (HskTypeAnnotation t, HskFunction i)       -> Just $ HskFunction (update i t)
+        (HskTypeAnnotation t, HskInfixOp  i a p)   -> Just $ HskInfixOp  (update i t) a p
+        (_,_) -> Nothing
+    where update lexinfo@(HskLexInfo { typeOf = Nothing }) typ = lexinfo { typeOf = Just typ }
+          update lexinfo typ
               = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
                        ++ " and `" ++ show typ ++ "'.")
-        
+
+mergeLexEnvs (HskLexEnv map1) (HskLexEnv map2)
+    = HskLexEnv
+        $ Map.unionWithKey
+              (\n identifier1 identifier2
+                   -> let id1 = if Map.member n map1 then identifier1 else identifier1
+                          id2 = if Map.member n map1 then identifier2 else identifier2
+                      in -- id1 is identifier that belongs to `map1'.
+                        case mergeLexInfos id1 id2 of
+                          Nothing     -> id2  -- favoritize second argument.
+                          Just result -> result)
+              map1 map2
 
 --
 -- ModuleEnv 
 --
 
 data ModuleE = HskModuleEnv Module [HsImportDecl] [HsExportSpec] LexE
+             | IsaTheoryEnv Isa.Theory LexE
   deriving (Show)
 
 emptyModuleEnv = HskModuleEnv (Module "Main") [] [] emptyLexEnv_Hsk
 
+defaultImports = [HsImportDecl { importLoc       = srcloc,
+                                 importModule    = Module "Prelude",
+                                 importQualified = False,
+                                 importAs        = Nothing,
+                                 importSpecs     = Nothing
+                               }
+                 ]
+    where srcloc = SrcLoc { srcFilename = "Importer/LexEnv.hs",
+                            srcLine = 135, srcColumn = 0 }
+
 makeModuleEnv :: HsModule -> ModuleE
 makeModuleEnv (HsModule loc modul exports imports topdecls)
     = let lexenv   = makeLexEnv_Hsk (concatMap (extractLexInfos modul) topdecls)
-          imports' = checkImports imports
+          imports' = checkImports imports ++ defaultImports
           exports' = if isNothing exports then [HsEModuleContents modul] 
                                           else checkExports (fromJust exports) imports
       in HskModuleEnv modul imports' exports' lexenv
@@ -174,6 +230,13 @@ extractLexInfos modul decl
       (fromJust $ namesFromHsDecl decl)
 
 
+mergeModuleEnvs (HskModuleEnv m1 is1 es1 lex1) (HskModuleEnv m2 is2 es2 lex2)
+    = assert (m1 == m2)
+        $ HskModuleEnv m1 (is1 ++ is2) (es1 ++ es2) (mergeLexEnvs lex1 lex2)
+
+
+-- returns module name as can be found in source code, i.e.
+-- returns qualified nicknames if any.
 modulesFromImports :: [HsImportDecl] -> [Module]
 modulesFromImports imports
     = map (\(HsImportDecl { importModule=m, importQualified=isQualified, importAs=nickname }) 
@@ -199,6 +262,7 @@ isImportedModule modul (HskModuleEnv _ imports _ _)
 --
 
 data GlobalE = HskGlobalEnv (Map.Map Module ModuleE)
+             | IsaGlobalEnv (Map.Map Isa.Theory ModuleE)
   deriving (Show)
 
 emptyGlobalEnv = HskGlobalEnv (Map.empty)
@@ -219,6 +283,17 @@ findModuleEnvOrLose m globalEnv
         Just env -> env
         Nothing  -> error ("Couldn't find module `" ++ show m ++ "'.")
 
+mergeGlobalEnvs :: GlobalE -> GlobalE -> GlobalE
+mergeGlobalEnvs (HskGlobalEnv map1) (HskGlobalEnv map2)
+    = HskGlobalEnv 
+        $ Map.unionWithKey
+              (\m moduleEnv1 moduleEnv2
+                   -> let env1 = if Map.member m map1 then moduleEnv1 else moduleEnv2
+                          env2 = if Map.member m map1 then moduleEnv2 else moduleEnv1
+                      in -- env1 contains ModuleE that belongs to `map1'.
+                        mergeModuleEnvs env1 env2)
+              map1 map2
+                  
 
 -- computeImportedModules :: Module -> GlobalE -> [Module]
 -- computeImportedModules modul globalEnv
@@ -255,7 +330,7 @@ isExported identifier modul globalEnv
 lookup :: Module -> HsQName -> GlobalE -> Maybe HskIdentifier
 lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- ambiguous occurence `lookup'
     where                                                                    -- between LexEnv and Prelude
-      lookup' currentModule qname globalEnv                              
+      lookup' currentModule qname globalEnv                            
           = do currentModuleEnv <- findModuleEnv currentModule globalEnv
                case qname of
                  Qual m n | m == currentModule || isImportedModule m currentModuleEnv
@@ -268,20 +343,24 @@ lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- 
                                  local_try  = Map.lookup (UnQual n) lexmap
                                  tries      = map (\(HsImportDecl { importModule = m }) 
                                                        -> lookup' currentModule (Qual m n) globalEnv) 
-                                               $ filter (not . importQualified) imports
+                                                $ filter (not . importQualified) imports
                              in case catMaybes (local_try : tries) of
                                   []   -> Nothing
                                   [x]  -> Just x
                                   x:xs -> error (Msg.identifier_collision_in_lookup currentModule qname (x:xs))
-                 Special s -> Just (translateSpecialConstructor s)
+                 Special s -> lookup' currentModule (translateSpecialConstructor s) globalEnv
 
--- FIXME: Kludge; what we actually need is an initial environment.
-translateSpecialConstructor :: HsSpecialCon -> HskIdentifier
-translateSpecialConstructor HsCons = HskInfixOp consLexInfo HsAssocRight 5
-    where consLexInfo = HskLexInfo { identifier = Special HsCons,
-                                     typeOf     = Just (HsTyFun (HsTyVar (HsIdent "a"))
-                                                                (HsTyApp (HsTyCon (Special HsListCon))
-                                                                         (HsTyCon (UnQual (HsIdent "a"))))),
-                                     moduleOf   = Module "Prelude" }
+translateSpecialConstructor :: HsSpecialCon -> HsQName
+translateSpecialConstructor HsCons = Qual (Module "Prelude") (HsIdent "cons")
 
-
+lookup_isa :: Isa.Theory -> Isa.Name -> GlobalE -> Maybe IsaIdentifier
+lookup_isa theory name globalEnv
+    = case lookup' theory name globalEnv of
+        Nothing  -> lookup' (Isa.Theory "Prelude") name globalEnv
+        Just foo -> Just foo
+    where lookup' theory (Isa.QName thy string) globalEnv
+              = if theory == thy then lookup' theory (Isa.Name string) globalEnv
+                                 else Nothing
+          lookup' theory name@(Isa.Name _) (IsaGlobalEnv globalmap)
+              = do (IsaTheoryEnv _ (IsaLexEnv lexmap)) <- Map.lookup theory globalmap
+                   Map.lookup name lexmap

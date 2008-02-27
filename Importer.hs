@@ -25,7 +25,7 @@ import Language.Haskell.Hsx (ParseResult(..), parseFile, HsModule(..))
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
 import Importer.Utilities.Hsk (srcloc2string, module2FilePath, isHaskellSourceFile)
-import Importer.Utilities.Misc (assert, wordsBy)
+import Importer.Utilities.Misc (assert, wordsBy, prettyShow)
 import Importer.ConversionUnit
 import Importer.Convert
 import Importer.Printer (pprint)
@@ -54,7 +54,7 @@ convertFiles (fp:fps)
           filename = basename fp
       -- We have to do this to find the source files of imported modules.
       in withCurrentDirectory (if dir == "" then "./" else dir)
-          $ do unit@(HskUnit hsmodules) <- makeConversionUnitFromFile filename
+          $ do unit@(HskUnit hsmodules _) <- makeConversionUnitFromFile filename
                let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
                let dependentFiles    = map module2FilePath dependentModuleNs
                units <- convertFiles (filter (`notElem` dependentFiles) fps) 
@@ -80,20 +80,24 @@ getFilesRecursively dirpath
               = Node { rootLabel = cwd ++ filename, 
                        subForest = map (absolutify (cwd ++ filename ++ "/")) children }
 
-convertDir :: FilePath -> IO ConversionUnit
+convertDir :: FilePath -> IO [ConversionUnit]
 convertDir dirpath
     = do fps   <- getFilesRecursively dirpath
          units <- convertFiles (filter isHaskellSourceFile fps)
-         return $ IsaUnit (concatMap (\(IsaUnit thys) -> thys) units)
+         return units
 
 
-pprintConversionUnit (IsaUnit thys)
-    = vcat (map (dashes . pprint) thys)
+pprintConversionUnit (IsaUnit thys env)
+    = vcat (map (dashes . flip pprint env) thys)
+    where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
+
+printAST (IsaUnit thys env)
+    = vcat (map (dashes . text . prettyShow) thys)
     where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
 
       
 withCurrentDirectory :: FilePath -> IO a -> IO a
-withCurrentDirectory fp body 
+withCurrentDirectory fp body
     = do oldcwd <- getCurrentDirectory
          bracket_ (setCurrentDirectory fp) (const (setCurrentDirectory oldcwd)) body
 
@@ -102,20 +106,22 @@ importFiles sources dstdir
     = do exists <- doesDirectoryExist dstdir
          when (not exists) $ createDirectory dstdir
          do convertedUnits <- convertFiles sources
-            let thys = concatMap (\(IsaUnit thys) -> thys) convertedUnits
             withCurrentDirectory dstdir
-              $ sequence_ (map writeTheory thys)
+              $ sequence_ (map writeIsaUnit convertedUnits)
 
 importDir :: FilePath -> FilePath -> IO ()
 importDir srcdir dstdir
     = do exists <- doesDirectoryExist dstdir
          when (not exists) $ createDirectory dstdir
-         do (IsaUnit thys) <- convertDir srcdir
+         do convertedUnits <- convertDir srcdir
             withCurrentDirectory dstdir
-              $ sequence_ (map writeTheory thys)
+              $ sequence_ (map writeIsaUnit convertedUnits)
 
-writeTheory thy@(TheoryCmd (Theory thyname) _)
-    = do let content = render (pprint thy)
+writeIsaUnit (IsaUnit thys env)
+    = mapM (flip writeTheory env) thys
+
+writeTheory thy@(TheoryCmd (Theory thyname) _) env 
+    = do let content = render (pprint thy env)
          let dstName = map (\c -> if c == '.' then '_' else c) thyname
          writeFile (dstName++".thy") content
   
