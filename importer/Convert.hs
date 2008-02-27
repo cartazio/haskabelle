@@ -429,7 +429,10 @@ instance Convert HsExp Isa.Term where
              exp1' <- convert exp1 
              op'   <- convert op
              exp2' <- convert exp2
-             return (Isa.mkInfixApp exp1' op' exp2')
+             return $ trace (prettyShow' "infixapp" infixapp ++ "\n\n" 
+                             ++ prettyShow' "__infixapp__" (HsInfixApp exp1 op exp2)
+                             ++ "\n===========================\n")
+                        $ (Isa.mkInfixApp exp1' op' exp2')
 
     convert' (HsRecConstr qname updates)
         = do qname'   <- convert qname
@@ -534,8 +537,7 @@ makeRecordCmd tyconN tyvarNs [HsRecDecl name slots] -- cf. `isRecDecls'
 -- we gotta fix that up ourselves. (We also properly consider infix
 -- declarations to get user defined operator right.)
 
--- fixOperatorFixities :: Isa.Term -> ContextM Isa.Term
-
+fixOperatorFixities :: HsExp -> ContextM HsExp
 
 -- Notice that `1 * 2 + 3 / 4' is parsed as `((1 * 2) + 3) / 4', i.e.
 -- 

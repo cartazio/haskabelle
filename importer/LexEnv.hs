@@ -29,8 +29,8 @@ data HskLexInfo = HskLexInfo {
 data HskIdentifier = HskVariable HskLexInfo
                    | HskFunction HskLexInfo
                    | HskInfixOp  HskLexInfo HsAssoc Int
-                   | HskData     HskLexInfo [HsQName] -- data constructors
                    | HskTypeAnnotation HsType
+                   | HskType HskLexInfo [HsQName]
   deriving (Eq, Show)
 
 isHskVariable, isHskFunction, isHskInfixOp, isHskTypeAnnotation :: HskIdentifier -> Bool
@@ -47,8 +47,8 @@ isHskInfixOp _ = False
 isHskTypeAnnotation (HskTypeAnnotation _) = True
 isHskTypeAnnotation _ = False
 
-isHskData (HskData _ _) = True
-isHskData _ = False
+isHskType (HskType _ _) = True
+isHskType _ = False
 
 
 identifier2name :: HskIdentifier -> HsQName
@@ -59,7 +59,7 @@ identifier2name hsxidentifier
 extractLexInfo (HskVariable i)    = i
 extractLexInfo (HskFunction i)    = i
 extractLexInfo (HskInfixOp i _ _) = i
-extractLexInfo (HskData i _)      = i
+extractLexInfo (HskType i _)      = i
 
 
 makeUnqualified :: HskIdentifier -> HskIdentifier
@@ -70,7 +70,7 @@ makeUnqualified hsxidentifier
                       HskVariable lexinfo     -> HskVariable (lexinfo { identifier = UnQual n })
                       HskFunction lexinfo     -> HskFunction (lexinfo { identifier = UnQual n })
                       HskInfixOp  lexinfo a p -> HskInfixOp  (lexinfo { identifier = UnQual n }) a p
-                      HskData     lexinfo cs  -> HskData     (lexinfo { identifier = UnQual n }) cs
+                      HskType     lexinfo cs  -> HskType     (lexinfo { identifier = UnQual n }) cs
 
 
 
@@ -84,15 +84,15 @@ data IsaLexInfo = IsaLexInfo {
 data IsaIdentifier = IsaVariable IsaLexInfo
                    | IsaFunction IsaLexInfo
                    | IsaInfixOp  IsaLexInfo Isa.Assoc Int
+                   | IsaType     IsaLexInfo
   deriving (Eq, Show)
 
-isaIdentifier2name (IsaVariable i)     = _identifier i
-isaIdentifier2name (IsaFunction i)     = _identifier i
-isaIdentifier2name (IsaInfixOp  i _ _) = _identifier i
+isaIdentifier2name id  = _identifier (extractLexInfo_isa id)
 
 extractLexInfo_isa (IsaVariable i)    = i
 extractLexInfo_isa (IsaFunction i)    = i
 extractLexInfo_isa (IsaInfixOp i _ _) = i
+extractLexInfo_isa (IsaType i)        = i
 
 --
 -- LexEnv
@@ -222,7 +222,7 @@ extractLexInfos modul decl
                                  HsInfixDecl _ assoc prio _ -> HskInfixOp  defaultLexInfo assoc prio
                                  HsTypeSig _ _ typ          -> HskTypeAnnotation typ
                                  HsDataDecl _ _ _ _ condecls _
-                                     -> HskData (defaultLexInfo { typeOf = Just (HsTyCon name') })
+                                     -> HskType (defaultLexInfo { typeOf = Just (HsTyCon name') })
                                            $ map (UnQual . extractConstrName) condecls
                                         where extractConstrName (HsQualConDecl _ _ _ (HsConDecl n _)) = n
                                               extractConstrName (HsQualConDecl _ _ _ (HsRecDecl n _)) = n
@@ -311,7 +311,7 @@ computeExportedNames modul globalEnv
                     computeQNames (HsEAbs qn) = [qn]
                     computeQNames (HsEThingAll qn) 
                         = case Importer.LexEnv.lookup modul qn globalEnv of
-                            Just (HskData _ constructors) 
+                            Just (HskType _ constructors) 
                                 -> constructors
                             etc -> error ("Internal error (computeExportedNames): " ++ show etc)
                     computeQNames (HsEModuleContents m)
@@ -351,7 +351,7 @@ lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- 
                  Special s -> lookup' currentModule (translateSpecialConstructor s) globalEnv
 
 translateSpecialConstructor :: HsSpecialCon -> HsQName
-translateSpecialConstructor HsCons = Qual (Module "Prelude") (HsIdent "cons")
+translateSpecialConstructor HsCons = Qual (Module "Prelude") (HsIdent ":")
 
 lookup_isa :: Isa.Theory -> Isa.Name -> GlobalE -> Maybe IsaIdentifier
 lookup_isa theory name globalEnv

@@ -45,7 +45,6 @@ convertAndAdapt_GlobalEnv (HskGlobalEnv globalmap) (AdaptionTable adaptionTable)
                                           lexmap
                     in Map.mapKeys (\name -> isaIdentifier2name (fromJust $ Map.lookup name lexmap')) 
                                    lexmap'
-                                    
 
           maybeAdaptIdentifier :: HskIdentifier -> Maybe IsaIdentifier
           maybeAdaptIdentifier hskidentifier 
@@ -66,8 +65,9 @@ convertHskLexInfo (HskLexInfo { identifier = i, typeOf = t, moduleOf = m })
 convertHskIdentifier :: HskIdentifier -> IsaIdentifier
 convertHskIdentifier (HskVariable lexinfo)     = IsaVariable (convertHskLexInfo lexinfo)
 convertHskIdentifier (HskFunction lexinfo)     = IsaFunction (convertHskLexInfo lexinfo)
+convertHskIdentifier (HskType     lexinfo _)   = IsaType (convertHskLexInfo lexinfo)
 convertHskIdentifier (HskInfixOp  lexinfo a p) 
-    = IsaInfixOp  (convertHskLexInfo lexinfo) (convert_trivia a) p
+    = IsaInfixOp (convertHskLexInfo lexinfo) (convert_trivia a) p
 
 
 shadow :: [Isa.Name] -> (Isa.Term -> Isa.Term) -> (Isa.Term -> Isa.Term)

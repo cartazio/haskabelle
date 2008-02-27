@@ -8,7 +8,7 @@ import qualified Data.Map as Map
 import Language.Haskell.Hsx
 
 import Importer.LexEnv
-import Importer.Utilities.Misc (wordsBy)
+import Importer.Utilities.Misc (wordsBy, prettyShow')
 import Importer.Utilities.Hsk (string2HsName)
 
 import Importer.Convert.Trivia (convert_trivia)
@@ -16,7 +16,7 @@ import Importer.Convert.Trivia (convert_trivia)
 import qualified Importer.IsaSyntax as Isa
 
 
-data OpKind = Function | InfixOp Assoc Int
+data OpKind = Function | InfixOp Assoc Int | Type
   deriving Show
 
 data Assoc = RightAssoc | LeftAssoc | NoneAssoc
@@ -37,13 +37,22 @@ rawAdaptionTable
        (Haskell  "Prelude.-"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
         Isabelle "Main.-"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
 
+       (Haskell  "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool",
+        Isabelle "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool"),
+
+       (Haskell  "Prelude.head" Function "[a] -> a",
+        Isabelle "Prelude.hd"   Function "[a] -> a"),
+       (Haskell  "Prelude.tail" Function "[a] -> a",
+        Isabelle "Prelude.tl"   Function "[a] -> a"),
        (Haskell  "Prelude.++" (InfixOp RightAssoc 5) "[a] -> [a] -> [a]",
         Isabelle "List.@"     (InfixOp RightAssoc 5) "[a] -> [a] -> [a]"),
 
-       (Haskell  "Arrows.&&&" (InfixOp RightAssoc 5) "[a] -> [a] -> [a]",
-        Isabelle "Foo.%%%"    (InfixOp RightAssoc 5) "[a] -> [a] -> [a]"),
-       (Haskell  "Prelude.!!" (InfixOp RightAssoc 5) "[a] -> [a] -> [a]",
-        Isabelle "List.!"     (InfixOp RightAssoc 5) "[a] -> [a] -> [a]")
+       (Haskell  "Prelude.Bool"  Type "Bool",
+        Isabelle "Prelude.bool"  Type "bool"),
+       (Haskell  "Prelude.True"  Function "Bool",
+        Isabelle "Prelude.True"  Function "bool"),
+       (Haskell  "Prelude.False" Function "Bool",
+        Isabelle "Prelude.False" Function "bool")
       ]
 
 adaptionTable :: AdaptionTable
@@ -78,7 +87,8 @@ mk_initialLexEnv :: [HskIdentifier] -> LexE
 mk_initialLexEnv hskidents
     = HskLexEnv $ Map.fromListWith failDups (zip (map identifier2name hskidents) hskidents)
     where failDups a b
-              = error ("Duplicate entries in the Adaption Table: " ++ show a ++ ", " ++ show b)
+              = error ("Duplicate entries in the Adaption Table: " 
+                       ++ prettyShow' "a" a ++ "\n" ++ prettyShow' "b" b)
 
 
 parseHaskellEntry :: AdaptionEntry -> (Module, HskIdentifier)
@@ -106,6 +116,8 @@ makeHskIdentifier Function m identifier t
     = HskFunction $ makeHskLexInfo m identifier t
 makeHskIdentifier (InfixOp assoc prio) m identifier t
     = HskInfixOp (makeHskLexInfo m identifier t) (toHsAssoc assoc) prio
+makeHskIdentifier Type m identifier t
+    = HskType (makeHskLexInfo m identifier t) []
 
 makeHskLexInfo :: Module -> HsName -> HsType -> HskLexInfo
 makeHskLexInfo m identifier t
@@ -131,6 +143,8 @@ makeIsaIdentifier Function thy identifier t
     = IsaFunction $ makeIsaLexInfo thy identifier t
 makeIsaIdentifier (InfixOp assoc prio) thy identifier t
     = IsaInfixOp (makeIsaLexInfo thy identifier t) (toIsaAssoc assoc) prio
+makeIsaIdentifier Type thy identifier t
+    = IsaType $ makeIsaLexInfo thy identifier t
 
 makeIsaLexInfo :: Isa.Theory -> Isa.Name -> Isa.Type -> IsaLexInfo
 makeIsaLexInfo thy identifier t

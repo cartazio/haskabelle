@@ -185,11 +185,11 @@ instance Printer Isa.Cmd where
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
     pprint' (Isa.TheoryCmd thy cmds)
         = 
-          text "theory" <+> pprint' thy $$
-          text "imports Main"           $$
-          text "begin"                  $$
-          (vcat $ map pprint' cmds)     $$
-           text "end"
+          text "theory" <+> pprint' thy $+$
+          text "imports Main"           $+$
+          text "begin"                  $+$
+          (vcat $ map pprint' cmds)     $+$
+          text "\nend"
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $
@@ -221,8 +221,14 @@ instance Printer Isa.Cmd where
           where ppHeader (fn, sig)
                     = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
                 ppEquation (fname, pattern, term) 
-                    = maybeWithinHOL $
-                        pprint' fname <+> hsep (map pprint' pattern) <+> equals <+> parens (pprint' term)
+                    = do do thy <- queryPP currentTheory 
+                            env <- queryPP globalEnv
+                            let lookup = (\n -> Env.lookup_isa thy n env)
+                            maybeWithinHOL $
+                              pprint' fname <+> 
+                              hsep (map pprint' pattern) <+> 
+                              equals <+> 
+                              parensIf (isCompound term lookup) (pprint' term)
  
     pprint' (Isa.InfixDeclCmd op assoc prio)
         = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op
@@ -366,16 +372,17 @@ flattenTupleApp app = let list = unfoldr1 split app in
 
 isCompound :: Isa.Term -> (Isa.Name -> Maybe Env.IsaIdentifier) -> Bool
 isCompound (Isa.App (Isa.App (Isa.Var c) _) _) _  -- FIXME: temporary to avoid the extra parens
-    | Isa.isPairCon c = False                     --  in `((x,y)) : z'; should be handled by
+    | Isa.isPairCon c = False                     --  in `((x,y)) # z'; should be handled by
 isCompound t lookupFn                             --  checking for infix priorities.
     = case t of
         Isa.Var _            -> False
         Isa.Literal _        -> False
         Isa.Parenthesized _  -> False
         Isa.App _ _          -> case categorizeApp t lookupFn of
-                                  ListApp  _ -> False
-                                  TupleApp _ -> False
-                                  _          -> True
+                                  ListApp  _     -> False
+                                  TupleApp _     -> False
+                                  MiscApp        -> False
+                                  InfixApp _ _ _ -> True
         _ -> True
 
 isCompoundType :: Isa.Type -> Bool
