@@ -429,10 +429,7 @@ instance Convert HsExp Isa.Term where
              exp1' <- convert exp1 
              op'   <- convert op
              exp2' <- convert exp2
-             return $ trace (prettyShow' "infixapp" infixapp ++ "\n\n" 
-                             ++ prettyShow' "__infixapp__" (HsInfixApp exp1 op exp2)
-                             ++ "\n===========================\n")
-                        $ (Isa.mkInfixApp exp1' op' exp2')
+             return (Isa.mkInfixApp exp1' op' exp2')
 
     convert' (HsRecConstr qname updates)
         = do qname'   <- convert qname
