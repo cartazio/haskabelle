@@ -6,7 +6,7 @@ Generic functions.
 
 module Importer.Utilities.Misc (
   assert, trace, concatMapM, map2, hasDuplicates,
-  unfoldr, unfoldr1, unfoldl, unfoldl1, wordsBy,
+  unfoldr, unfoldr1, unfoldl, unfoldl1, lookupBy, wordsBy,
   prettyShow', prettyShow, prettyHsx,
 ) where
 
@@ -42,6 +42,12 @@ concatMapM f xs = liftM concat (mapM f xs)
 
 map2 :: (a -> b -> c) -> [a] -> [b] -> [c]
 map2 = zipWith
+
+lookupBy                :: (a -> a -> Bool) -> a -> [(a, b)] -> Maybe b
+lookupBy eq key []      =  Nothing
+lookupBy eq key ((x,y):xys)
+    | key `eq` x        =  Just y
+    | otherwise         =  lookupBy eq key xys
 
 wordsBy            :: (a -> Bool) -> [a] -> [[a]]
 wordsBy pred l     =  case dropWhile pred l of

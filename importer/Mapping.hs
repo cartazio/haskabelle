@@ -7,16 +7,17 @@ import qualified Data.Map as Map
 
 import Language.Haskell.Hsx
 
-import Importer.LexEnv
 import Importer.Utilities.Misc (wordsBy, prettyShow')
 import Importer.Utilities.Hsk (string2HsName)
+
+import qualified Importer.LexEnv as Env
 
 import Importer.Convert.Trivia (convert_trivia)
 
 import qualified Importer.IsaSyntax as Isa
 
 
-data OpKind = Function | InfixOp Assoc Int | Type
+data OpKind = Variable | Function | InfixOp Assoc Int | Type
   deriving Show
 
 data Assoc = RightAssoc | LeftAssoc | NoneAssoc
@@ -26,7 +27,7 @@ data AdaptionEntry = Haskell String OpKind String
                    | Isabelle String OpKind String
   deriving Show
 
-data AdaptionTable = AdaptionTable [(HskIdentifier, IsaIdentifier)]
+data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
 
 rawAdaptionTable 
     = [(Haskell  "Prelude.:" (InfixOp RightAssoc  5) "a -> [a] -> [a]",
@@ -58,45 +59,46 @@ rawAdaptionTable
 adaptionTable :: AdaptionTable
 adaptionTable 
     = AdaptionTable 
-        $ map (\(hEntry, iEntry) 
-                   -> (snd $ parseHaskellEntry hEntry, snd $ parseIsabelleEntry iEntry))
+        $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
               rawAdaptionTable
 
-initialGlobalEnv :: GlobalE
+initialGlobalEnv :: Env.GlobalE
 initialGlobalEnv 
-    = mk_initialGlobalE (map (parseHaskellEntry . fst) rawAdaptionTable)
+    = Env.makeGlobalEnv exportAll (hskIdentifiers adaptionTable)
+    where exportAll = const True
+          hskIdentifiers (AdaptionTable mapping) = map fst mapping
+
+-- mk_initialGlobalE :: [(Module, HskIdentifier)] -> GlobalE
+-- mk_initialGlobalE hskentries
+--     = HskGlobalEnv $ Map.fromList (map (\(m, hsks) -> (m, mk_initialModuleEnv (m, hsks)))
+--                                        (unzipAdaptionEntries hskentries))
+--     where unzipAdaptionEntries :: [(Module, HskIdentifier)] -> [(Module, [HskIdentifier])]
+--           unzipAdaptionEntries entries
+--               = map (\(m:_, hsks) -> (m, hsks)) 
+--                 $ map unzip 
+--                   $ groupBy (\(m1,_) (m2,_) -> m1 == m2) 
+--                     $ sortBy (\(m1,_) (m2,_) -> m1 `compare` m2) entries
+
+-- mk_initialModuleEnv :: (Module, [HskIdentifier]) -> ModuleE
+-- mk_initialModuleEnv (m, hskidents)
+--     = HskModuleEnv m [] (mk_exports_list hskidents) (mk_initialLexEnv hskidents)
+--     where mk_exports_list idents = map (HsEVar . identifier2name) idents
+
+-- mk_initialLexEnv :: [HskIdentifier] -> LexE
+-- mk_initialLexEnv hskidents
+--     = HskLexEnv $ Map.fromListWith failDups (zip (map identifier2name hskidents) hskidents)
+--     where failDups a b
+--               = error ("Duplicate entries in the Adaption Table: " 
+--                        ++ prettyShow' "a" a ++ "\n" ++ prettyShow' "b" b)
 
 
-mk_initialGlobalE :: [(Module, HskIdentifier)] -> GlobalE
-mk_initialGlobalE hskentries
-    = HskGlobalEnv $ Map.fromList (map (\(m, hsks) -> (m, mk_initialModuleEnv (m, hsks)))
-                                       (unzipAdaptionEntries hskentries))
-    where unzipAdaptionEntries :: [(Module, HskIdentifier)] -> [(Module, [HskIdentifier])]
-          unzipAdaptionEntries entries
-              = map (\(m:_, hsks) -> (m, hsks)) 
-                $ map unzip 
-                  $ groupBy (\(m1,_) (m2,_) -> m1 == m2) 
-                    $ sortBy (\(m1,_) (m2,_) -> m1 `compare` m2) entries
-
-mk_initialModuleEnv :: (Module, [HskIdentifier]) -> ModuleE
-mk_initialModuleEnv (m, hskidents)
-    = HskModuleEnv m [] (mk_exports_list hskidents) (mk_initialLexEnv hskidents)
-    where mk_exports_list idents = map (HsEVar . identifier2name) idents
-
-mk_initialLexEnv :: [HskIdentifier] -> LexE
-mk_initialLexEnv hskidents
-    = HskLexEnv $ Map.fromListWith failDups (zip (map identifier2name hskidents) hskidents)
-    where failDups a b
-              = error ("Duplicate entries in the Adaption Table: " 
-                       ++ prettyShow' "a" a ++ "\n" ++ prettyShow' "b" b)
-
-
-parseHaskellEntry :: AdaptionEntry -> (Module, HskIdentifier)
-parseHaskellEntry (Haskell raw_identifier op raw_type)
-     = let (modul, ident) = parseRawIdentifier raw_identifier
-           modul' = Module modul
-           ident' = string2HsName ident
-       in (modul', makeHskIdentifier op modul' ident' (parseRawType raw_type))
+parseEntry :: AdaptionEntry -> Env.Identifier
+parseEntry (Haskell raw_identifier op raw_type)
+     = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
+       in  (makeIdentifier op moduleID identifierID (parseRawType raw_type))
+parseEntry (Isabelle raw_identifier op raw_type)
+     = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
+       in  (makeIdentifier op moduleID identifierID (parseRawType raw_type))
 
 parseRawIdentifier :: String -> (String, String)
 parseRawIdentifier string
@@ -105,54 +107,23 @@ parseRawIdentifier string
           modul      = concat $ intersperse "." (init parts)
       in (modul, identifier)
 
-parseRawType :: String -> HsType
+parseRawType :: String -> Env.EnvType
 parseRawType string
-    = let (ParseOk (HsModule _ _ _ _ [HsTypeSig _ _ typ])) 
+    = let (ParseOk (HsModule _ _ _ _ [HsTypeSig _ _ hstyp])) 
               = parseFileContents ("foo :: " ++ string)
-      in typ
+      in Env.fromHsk hstyp
 
-makeHskIdentifier :: OpKind -> Module -> HsName -> HsType -> HskIdentifier
-makeHskIdentifier Function m identifier t
-    = HskFunction $ makeHskLexInfo m identifier t
-makeHskIdentifier (InfixOp assoc prio) m identifier t
-    = HskInfixOp (makeHskLexInfo m identifier t) (toHsAssoc assoc) prio
-makeHskIdentifier Type m identifier t
-    = HskType (makeHskLexInfo m identifier t) []
+makeIdentifier :: OpKind -> Env.ModuleID -> Env.IdentifierID -> Env.EnvType -> Env.Identifier
+makeIdentifier Variable m identifier t
+    = Env.Variable $ Env.makeLexInfo m identifier t
+makeIdentifier Function m identifier t
+    = Env.Function $ Env.makeLexInfo m identifier t
+makeIdentifier (InfixOp assoc prio) m identifier t
+    = Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
+makeIdentifier Type m identifier t
+    = Env.Type (Env.makeLexInfo m identifier t) []
 
-makeHskLexInfo :: Module -> HsName -> HsType -> HskLexInfo
-makeHskLexInfo m identifier t
-    = HskLexInfo { identifier = UnQual identifier,
-                    typeOf    = Just t,
-                    moduleOf  = m }
-
-toHsAssoc :: Assoc -> HsAssoc
-toHsAssoc RightAssoc = HsAssocRight
-toHsAssoc LeftAssoc  = HsAssocLeft
-toHsAssoc NoneAssoc  = HsAssocNone
-
-
-parseIsabelleEntry :: AdaptionEntry -> (Isa.Theory, IsaIdentifier)
-parseIsabelleEntry (Isabelle raw_identifier op raw_type)
-     = let (thy, ident) = parseRawIdentifier raw_identifier
-           thy'   = Isa.Theory thy
-           ident' = Isa.Name ident
-       in (thy', makeIsaIdentifier op thy' ident' (convert_trivia (parseRawType raw_type)))
-
-makeIsaIdentifier :: OpKind -> Isa.Theory -> Isa.Name -> Isa.Type -> IsaIdentifier
-makeIsaIdentifier Function thy identifier t
-    = IsaFunction $ makeIsaLexInfo thy identifier t
-makeIsaIdentifier (InfixOp assoc prio) thy identifier t
-    = IsaInfixOp (makeIsaLexInfo thy identifier t) (toIsaAssoc assoc) prio
-makeIsaIdentifier Type thy identifier t
-    = IsaType $ makeIsaLexInfo thy identifier t
-
-makeIsaLexInfo :: Isa.Theory -> Isa.Name -> Isa.Type -> IsaLexInfo
-makeIsaLexInfo thy identifier t
-    = IsaLexInfo {  _identifier =  identifier,
-                    _typeOf     =  t,
-                    _theoryOf   =  thy }
-
-toIsaAssoc :: Assoc -> Isa.Assoc
-toIsaAssoc RightAssoc = Isa.AssocRight
-toIsaAssoc LeftAssoc  = Isa.AssocLeft
-toIsaAssoc NoneAssoc  = Isa.AssocNone
+transformAssoc :: Assoc -> Env.EnvAssoc
+transformAssoc RightAssoc = Env.EnvAssocRight
+transformAssoc LeftAssoc  = Env.EnvAssocLeft
+transformAssoc NoneAssoc  = Env.EnvAssocNone

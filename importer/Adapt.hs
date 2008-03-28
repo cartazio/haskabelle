@@ -1,74 +1,34 @@
 
-module Importer.Adapt (convertAndAdapt_GlobalEnv, adaptIsaUnit) where
+module Importer.Adapt (adaptGlobalEnv, adaptIsaUnit) where
 
-import List (lookup, concatMap)
-import Maybe (fromJust, fromMaybe)
+-- import List (lookupBy, concatMap)
+-- import Maybe (fromJust, fromMaybe)
 
 import qualified Data.Map as Map
 
-import Importer.LexEnv
+import qualified Importer.LexEnv as Env
 import Importer.ConversionUnit
-import Importer.Utilities.Misc (wordsBy, assert)
-import Importer.Utilities.Hsk (string2HsName)
+import Importer.Utilities.Misc (lookupBy, wordsBy, assert)
+-- import Importer.Utilities.Hsk (string2HsName)
 
 import Importer.Mapping (AdaptionTable(..))
-import Importer.Convert.Trivia (convert_trivia)
 
 import qualified Importer.IsaSyntax as Isa
 import Language.Haskell.Hsx
 
--- adaptionTable = [(UnQual (HsIdent "append"), UnQual (HsSymbol "@"))]
-
-
-
--- adaptHskUnit :: ConversionUnit -> ConversionUnit
--- adaptHskUnit (HskUnit hsmods) = HskUnit (map adapt hsmods)
-
--- adapt :: HsModule -> HsModule
--- adapt (HsModule loc modul exports imports decls)
---     = HsModule loc modul exports imports (map (renameFreeVars adaptionTable) decls)
-
-convertAndAdapt_GlobalEnv :: GlobalE -> AdaptionTable -> GlobalE
-convertAndAdapt_GlobalEnv (HskGlobalEnv globalmap) (AdaptionTable adaptionTable)
-    = IsaGlobalEnv 
-        $ Map.map convertModuleEnv (Map.mapKeys convert_trivia globalmap) 
-    where 
-          convertModuleEnv :: ModuleE -> ModuleE
-          convertModuleEnv (HskModuleEnv m _ _ lexenv)
-              = IsaTheoryEnv (convert_trivia m) (convertLexEnv lexenv)
-
-          convertLexEnv :: LexE -> LexE
-          convertLexEnv (HskLexEnv lexmap)
-              = IsaLexEnv 
-                  $ let lexmap' = Map.map (\id -> fromMaybe (convertHskIdentifier id) 
-                                                            (maybeAdaptIdentifier id)) 
-                                          lexmap
-                    in Map.mapKeys (\name -> isaIdentifier2name (fromJust $ Map.lookup name lexmap')) 
-                                   lexmap'
-
-          maybeAdaptIdentifier :: HskIdentifier -> Maybe IsaIdentifier
-          maybeAdaptIdentifier hskidentifier 
-              = case List.lookup (identifier $ extractLexInfo hskidentifier) adaptionTable' of
-                  Just (hskId, isaId) -> assert (hskId == hskidentifier) $ Just isaId
-                  Nothing -> Nothing
-              where adaptionTable' 
-                        = map (\(hskId, isaId) 
-                                   -> (identifier $ extractLexInfo hskId, (hskId, isaId))) 
-                              adaptionTable
-
-convertHskLexInfo :: HskLexInfo -> IsaLexInfo
-convertHskLexInfo (HskLexInfo { identifier = i, typeOf = t, moduleOf = m })
-    = IsaLexInfo { _identifier = convert_trivia i,
-                   _typeOf     = convert_trivia (fromJust t),
-                   _theoryOf   = convert_trivia m }
-
-convertHskIdentifier :: HskIdentifier -> IsaIdentifier
-convertHskIdentifier (HskVariable lexinfo)     = IsaVariable (convertHskLexInfo lexinfo)
-convertHskIdentifier (HskFunction lexinfo)     = IsaFunction (convertHskLexInfo lexinfo)
-convertHskIdentifier (HskType     lexinfo _)   = IsaType (convertHskLexInfo lexinfo)
-convertHskIdentifier (HskInfixOp  lexinfo a p) 
-    = IsaInfixOp (convertHskLexInfo lexinfo) (convert_trivia a) p
-
+adaptGlobalEnv :: Env.GlobalE -> AdaptionTable -> Env.GlobalE
+adaptGlobalEnv globalEnv (AdaptionTable mappings)
+    = Env.mapGlobalEnv maybeAdaptIdentifier globalEnv
+    where maybeAdaptIdentifier :: Env.Identifier -> Maybe Env.Identifier
+          maybeAdaptIdentifier identifier 
+              = lookupBy check identifier mappings
+              where check id1 id2
+                        -- We make sure that the identifier that shall be adapted,
+                        -- hasn't changed in the GlobalE.
+                        = let n1 = Env.identifier2name id1 
+                              n2 = Env.identifier2name id2
+                          in if n1 == n2 then assert (id1 == identifier) True
+                                         else False
 
 shadow :: [Isa.Name] -> (Isa.Term -> Isa.Term) -> (Isa.Term -> Isa.Term)
 shadow boundNs translator  
@@ -76,29 +36,20 @@ shadow boundNs translator
                then term else translator term
 
 
-makeTranslator :: GlobalE -> AdaptionTable -> (Isa.Theory -> (Isa.Term -> Isa.Term))
-makeTranslator globalEnv@(HskGlobalEnv _) (AdaptionTable adaptionTable) thy
+makeTranslator :: Env.GlobalE -> AdaptionTable -> (Isa.Theory -> (Isa.Term -> Isa.Term))
+makeTranslator globalEnv (AdaptionTable adaptionTable) thy
     = \term -> case term of
-                     Isa.Var n -> case lookupName thy n of
-                                    Just id@(IsaVariable _)    -> Isa.Var $ isaIdentifier2name id
-                                    Just id@(IsaFunction _)    -> Isa.Var $ isaIdentifier2name id
-                                    Just id@(IsaInfixOp i _ _) -> Isa.Var $ isaIdentifier2name id
+                     Isa.Var n -> case Env.lookup (Env.fromIsa thy) (Env.fromIsa n) globalEnv of
+                                    Just id@(Env.Variable _)    -> Isa.Var $ Env.toIsa (Env.identifier2name id)
+                                    Just id@(Env.Function _)    -> Isa.Var $ Env.toIsa (Env.identifier2name id)
+                                    Just id@(Env.InfixOp _ _ _) -> Isa.Var $ Env.toIsa (Env.identifier2name id)
                                     _ -> Isa.Var n
                      etc   -> etc
-      where lookupName :: Isa.Theory -> Isa.Name -> Maybe IsaIdentifier
-            lookupName (Isa.Theory thyN) name
-                = case Importer.LexEnv.lookup (Module thyN) (toHsQName name) globalEnv of
-                    Just hskidentifier -> List.lookup hskidentifier adaptionTable
-                    Nothing            -> Nothing
 
-            toHsQName :: Isa.Name -> HsQName
-            toHsQName (Isa.QName (Isa.Theory thyN) n) = Qual (Module thyN) (string2HsName n)
-            toHsQName (Isa.Name n)                    = UnQual (string2HsName n)
-
-adaptIsaUnit :: GlobalE -> AdaptionTable -> ConversionUnit -> ConversionUnit
-adaptIsaUnit globalEnv adaptionTable (IsaUnit thycmds isaGlobalEnv)
-    = let translator = makeTranslator globalEnv adaptionTable
-      in (flip IsaUnit isaGlobalEnv) 
+adaptIsaUnit :: Env.GlobalE -> AdaptionTable -> ConversionUnit -> ConversionUnit
+adaptIsaUnit globalEnv adaptionTable (IsaUnit thycmds adaptedGlobalEnv)
+    = let translator = makeTranslator adaptedGlobalEnv adaptionTable
+      in (flip IsaUnit adaptedGlobalEnv) 
           $ map (\(Isa.TheoryCmd thy cmds) 
                      -> Isa.TheoryCmd thy (map (adapt (translator thy)) cmds))
                 thycmds
@@ -156,3 +107,4 @@ extractNames (Isa.Var n)                   = [n]
 extractNames (Isa.App t1 t2)               = extractNames t1 ++ extractNames t2
 extractNames (Isa.RecConstr name patterns) = [name] ++ map fst patterns
 extractNames etc = []
+

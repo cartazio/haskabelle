@@ -75,6 +75,7 @@ data Type = TyVar VarName
           | TyCon ConName [Type]
           | TyFun Type Type
           | TyTuple [Type]
+          | TyNone
   deriving (Show, Eq, Data, Typeable)
 
 data ConSpec = Constructor ConName [Type]

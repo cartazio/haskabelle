@@ -23,7 +23,7 @@ import Importer.ConversionUnit
 import Importer.DeclDependencyGraph
 
 import Importer.Mapping (initialGlobalEnv, adaptionTable)
-import Importer.Adapt (convertAndAdapt_GlobalEnv, adaptIsaUnit)
+import Importer.Adapt (adaptGlobalEnv, adaptIsaUnit)
 
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
@@ -35,13 +35,12 @@ import qualified Data.Map as Map
 convertHskUnit :: ConversionUnit -> ConversionUnit
 convertHskUnit (HskUnit hsmodules _emptyEnv)
     = let hsmodules'     = map preprocessHsModule hsmodules
-          globalenv_hsk  = Env.makeGlobalEnv_Hsk hsmodules'
+          globalenv_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
           globalenv_hsk' = Env.mergeGlobalEnvs globalenv_hsk initialGlobalEnv
           hskmodules     = map (toHskModule globalenv_hsk') hsmodules'
-          (isathys, _)   = runConversion globalenv_hsk'
-                             $ mapM convert hskmodules 
+          (isathys, _)   = runConversion globalenv_hsk' $ mapM convert hskmodules 
       in adaptIsaUnit globalenv_hsk' adaptionTable 
-           $ IsaUnit isathys (convertAndAdapt_GlobalEnv globalenv_hsk' adaptionTable)
+           $ IsaUnit isathys (adaptGlobalEnv globalenv_hsk' adaptionTable)
     where toHskModule globalEnv (HsModule loc modul _exports _imports decls)
               = let declDepGraph = makeDeclDepGraph decls 
                 in HskModule loc modul 
@@ -226,25 +225,18 @@ instance Convert HsDecl Isa.Cmd where
                                         junk
 
     convert' (HsInfixDecl _loc assoc prio ops)
-        = do globalEnv <- queryContext globalEnv
-             modul     <- queryContext currentModule
-             assert (all check [ Env.lookup modul (toHsQName op) globalEnv | op <- ops ]) 
+        = do (assocs, prios) <- mapAndUnzipM (lookupOp . toHsQOp) ops 
+             assert (all (== assoc) assocs && all (== prio) prios) 
                $ return (Isa.Block [])
-        where check (Just (Env.HskInfixOp _ a p)) = a == assoc && p == prio
-              check _ = False
-              toHsQName (HsVarOp n) = UnQual n
-              toHsQName (HsConOp n) = UnQual n
+        where toHsQOp (HsVarOp n) = HsQVarOp (UnQual n)
+              toHsQOp (HsConOp n) = HsQConOp (UnQual n)
 
     convert' (HsTypeSig _loc names typ)
         = do globalEnv <- queryContext globalEnv
              modul     <- queryContext currentModule
-             assert (all check [ Env.lookup modul (UnQual n) globalEnv | n <- names ]) 
+             types     <- liftM catMaybes $ mapM (lookupType . UnQual) names
+             assert (all (== typ) types) 
                $ return (Isa.Block [])
-        where check (Just (Env.HskVariable (Env.HskLexInfo { Env.typeOf = Just t })))     = t == typ
-              check (Just (Env.HskFunction (Env.HskLexInfo { Env.typeOf = Just t })))     = t == typ
-              check (Just (Env.HskInfixOp  (Env.HskLexInfo { Env.typeOf = Just t }) _ _)) = t == typ
-              check (Just (Env.HskTypeAnnotation t)) = t == typ
-              check _ = False
                          
     -- Remember that at this stage there are _no_ local declarations in the Hsx
     -- AST anymore, as we made those global during the preprocessing stage.
@@ -261,13 +253,16 @@ instance Convert HsDecl Isa.Cmd where
     convert' (HsFunBind matchs)
         = do let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs)
              assert (all (== head names) (tail names)) (return ())
-             assert (all isEmpty wbinds) (return ())     -- all decls are global at this point.
-             fsig       <- lookupSig (UnQual (names!!0)) -- as all names are equal, pick first one.     
+             assert (all isEmpty wbinds) (return ())      -- all decls are global at this point.
+             ftype      <- lookupType (UnQual (names!!0)) -- as all names are equal, pick first one.
+             name'      <- convert' (names!!0)
+             fsig'      <- (case ftype of Nothing -> return Isa.TyNone
+                                          Just t  -> convert' t) >>= (return . Isa.TypeSig name')
              fname'     <- convert (names!!0)           
              patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
              bodies'    <- mapM convert bodies
              thy        <- queryContext theory
-             return $ Isa.FunCmd [fname'] [fsig] (zip3 (cycle [fname']) patterns' bodies')
+             return $ Isa.FunCmd [fname'] [fsig'] (zip3 (cycle [fname']) patterns' bodies')
        where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of HsBDecls [] -> True; _ -> False
@@ -278,8 +273,11 @@ instance Convert HsDecl Isa.Cmd where
                 -> do name' <- convert name
                       pat'  <- convert pat
                       rhs'  <- convert rhs
-                      sig   <- lookupSig (UnQual name)
-                      return $ Isa.DefinitionCmd name' sig (pat', rhs')
+                      ftype <- lookupType (UnQual name)
+                      sig'  <- (case ftype of 
+                                  Nothing -> return Isa.TyNone
+                                  Just t  -> convert' t) >>= (return . Isa.TypeSig name') 
+                      return $ Isa.DefinitionCmd name' sig' (pat', rhs')
             _   -> die "Complex pattern binding on toplevel is not supported by Isar/HOL."
     
 
@@ -575,30 +573,38 @@ fixOperatorFixities nonNestedInfixApp = return nonNestedInfixApp
 normalizeAssociativity (HsAssocNone) = HsAssocLeft -- as specified in Haskell98.
 normalizeAssociativity etc = etc
 
-lookupOp :: HsQOp -> ContextM (HsAssoc, Int)
-lookupOp qop
+
+lookupIdentifier :: HsQName -> ContextM (Maybe Env.Identifier)
+lookupIdentifier qname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
-         case Env.lookup modul (qop2name qop) globalEnv of
-           Just (Env.HskInfixOp _ assoc prio) -> return (assoc, prio)
-           Nothing -> do warn (Msg.missing_infix_decl qop globalEnv)
+         return (Env.lookup (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
+
+lookupOp :: HsQOp -> ContextM (HsAssoc, Int)
+lookupOp qop
+    = do identifier <- lookupIdentifier (qop2name qop)
+         case identifier of
+           Just (Env.InfixOp _ envassoc prio) -> return (Env.toHsk envassoc, prio)
+           Nothing -> do globalEnv <- queryContext globalEnv;
+                         warn (Msg.missing_infix_decl qop globalEnv)
                          return (HsAssocLeft, 9) -- default values in Haskell98
     where qop2name (HsQVarOp n) = n
           qop2name (HsQConOp n) = n
 
-lookupSig :: HsQName -> ContextM Isa.TypeSig
-lookupSig fname
-    = do globalEnv <- queryContext globalEnv
-         modul     <- queryContext currentModule
-         case (Env.lookup modul fname globalEnv) of
-           Just (Env.HskVariable (Env.HskLexInfo { Env.typeOf = Just typ })) 
-               -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HskFunction (Env.HskLexInfo { Env.typeOf = Just typ })) 
-               -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HskInfixOp  (Env.HskLexInfo { Env.typeOf = Just typ }) _ _) 
-               -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           Just (Env.HskTypeAnnotation typ)      
-               -> liftM2 Isa.TypeSig (convert' fname) (convert' typ)
-           _ -> die (Msg.missing_fun_sig fname globalEnv)
+lookupType :: HsQName -> ContextM (Maybe HsType)
+lookupType fname
+    = do identifier <- lookupIdentifier fname
+         case identifier of
+           Just (Env.Variable (Env.LexInfo { Env.typeOf = Just typ })) 
+               -> return $ Just (Env.toHsk typ)
+           Just (Env.Function (Env.LexInfo { Env.typeOf = Just typ })) 
+               -> return $ Just (Env.toHsk typ)
+           Just (Env.InfixOp  (Env.LexInfo { Env.typeOf = Just typ }) _ _) 
+               -> return $ Just (Env.toHsk typ)
+           Just (Env.TypeAnnotation _ typ) 
+               -> return $ Just (Env.toHsk typ)
+           _ -> do globalEnv <- queryContext globalEnv;
+                   warn (Msg.missing_fun_sig fname globalEnv)
+                   return Nothing
 
 

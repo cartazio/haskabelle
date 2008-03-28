@@ -6,6 +6,8 @@ Pretty printing of abstract Isar/HOL theory.
 
 module Importer.Printer where
 
+import Maybe
+
 import Importer.Utilities.Misc
 import qualified Importer.IsaSyntax as Isa
 
@@ -219,11 +221,14 @@ instance Printer Isa.Cmd where
           vcat (zipWith (<+>) (space : repeat (char '|'))
                               (map ppEquation equations))
           where ppHeader (fn, sig)
-                    = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
+                    | isEmptySig sig 
+                        = pprint' fn
+                    | otherwise
+                        = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
                 ppEquation (fname, pattern, term) 
                     = do do thy <- queryPP currentTheory 
                             env <- queryPP globalEnv
-                            let lookup = (\n -> Env.lookup_isa thy n env)
+                            let lookup = (\n -> lookupIdentifier thy n env)
                             maybeWithinHOL $
                               pprint' fname <+> 
                               hsep (map pprint' pattern) <+> 
@@ -252,6 +257,7 @@ instance Printer Isa.Name where
     pprint' (Isa.QName thy str) = text str -- FIXME
 
 instance Printer Isa.Type where
+    pprint' (Isa.TyNone)      = text ""
     pprint' (Isa.TyVar vname) = apostroph <> pprint' vname
 
     pprint' (Isa.TyCon cname []) = pprint' cname 
@@ -269,8 +275,12 @@ instance Printer Isa.Type where
         = maybeWithinHOL $
             hsep (punctuate (space<>asterisk) (map pprint' types))
 
+
 instance Printer Isa.TypeSig where
     pprint' (Isa.TypeSig _name typ) = pprint' typ
+
+isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
+isEmptySig _ = False
 
 instance Printer Isa.Literal where
     pprint' (Isa.Int i)      = integer i
@@ -284,7 +294,7 @@ instance Printer Isa.Term where
     pprint' app @ (Isa.App t1 t2)   
         = do thy <- queryPP currentTheory 
              env <- queryPP globalEnv
-             let lookup = (\n -> Env.lookup_isa thy n env)
+             let lookup = (\n -> lookupIdentifier thy n env)
              case categorizeApp app lookup of
                ListApp  l      -> pprintAsList l
                TupleApp l      -> pprintAsTuple l
@@ -345,7 +355,7 @@ data AppFlavor = ListApp [Isa.Term]
 --
 -- Cf. http://www.haskell.org/ghc/docs/latest/html/users_guide/syntax-extns.html#pattern-guards
 --
-categorizeApp :: Isa.Term -> (Isa.Name -> Maybe Env.IsaIdentifier) -> AppFlavor
+categorizeApp :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> AppFlavor
 categorizeApp app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
     | Isa.isCons opN,    Just list <- flattenListApp app  = ListApp list
     | Isa.isPairCon opN, Just list <- flattenTupleApp app = TupleApp list
@@ -370,7 +380,7 @@ flattenTupleApp app = let list = unfoldr1 split app in
     split _ = Nothing
 
 
-isCompound :: Isa.Term -> (Isa.Name -> Maybe Env.IsaIdentifier) -> Bool
+isCompound :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
 isCompound (Isa.App (Isa.App (Isa.Var c) _) _) _  -- FIXME: temporary to avoid the extra parens
     | Isa.isPairCon c = False                     --  in `((x,y)) # z'; should be handled by
 isCompound t lookupFn                             --  checking for infix priorities.
@@ -391,8 +401,12 @@ isCompoundType t = case t of
                      Isa.TyCon _ [] -> False
                      _              -> True
                      
-isInfixOp :: Isa.Name -> (Isa.Name -> Maybe Env.IsaIdentifier) -> Bool                 
+isInfixOp :: Isa.Name -> (Isa.Name -> Maybe Env.Identifier) -> Bool                 
 isInfixOp name lookupFn
     = case lookupFn name of
-        Just (Env.IsaInfixOp _ _ _) -> True
+        Just id -> Env.isInfixOp id
         _ -> False
+
+lookupIdentifier :: Isa.Theory -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
+lookupIdentifier thy n globalEnv
+    = Env.lookup (Env.fromIsa thy) (Env.fromIsa n) globalEnv
