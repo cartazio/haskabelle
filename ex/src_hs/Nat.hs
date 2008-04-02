@@ -1,32 +1,68 @@
-module Nat where
+module Nat where {
 
-data Nat = Zero | Succ Nat deriving Show
 
-plus :: Nat -> Nat -> Nat
-plus Zero n = n
-plus (Succ m) n = Succ (plus m n)
+data Nat = Suc Nat | Zero_nat;
 
-minus :: Nat -> Nat -> Nat
-minus m Zero = m
-minus (Succ m) (Succ n) = minus m n
+eq_nat :: Nat -> Nat -> Bool;
+eq_nat Zero_nat Zero_nat = True;
+eq_nat (Suc m) (Suc n) = eq_nat m n;
+eq_nat Zero_nat (Suc a) = False;
+eq_nat (Suc a) Zero_nat = False;
 
-mult :: Nat -> Nat -> Nat
-mult Zero n = Zero
-mult (Succ m) n = plus n (mult m n)
+less_eq_nat :: Nat -> Nat -> Bool;
+less_eq_nat (Suc m) n = less_nat m n;
+less_eq_nat Zero_nat n = True;
 
-less_eq :: Nat -> Nat -> Bool
-less :: Nat -> Nat -> Bool
+less_nat :: Nat -> Nat -> Bool;
+less_nat m (Suc n) = less_eq_nat m n;
+less_nat n Zero_nat = False;
 
-less_eq Zero n = True
-less_eq (Succ m) n = less m n
-less n Zero = False
-less n (Succ m) = less_eq n m
+dvd :: Nat -> Nat -> Bool;
+dvd a b = eq_nat (mod_nat b a) Zero_nat;
 
-divmod :: Nat -> Nat -> (Nat, Nat)
-divmod Zero n = (Zero, Zero)
-divmod m Zero = (Zero, m)
-divmod m n = if less m n then (Zero, m) else (Succ r, s) where (r, s) = divmod (minus m n) n
+mina :: Nat -> Nat -> Nat;
+mina a b = (if less_eq_nat a b then a else b);
 
--- ~ num :: Num a => Nat -> a
--- ~ num Zero = 0
--- ~ num (Succ n) = num n + 1
+nat_rec :: forall t. t -> (Nat -> t -> t) -> Nat -> t;
+nat_rec f1 f2 (Suc nat) = f2 nat (nat_rec f1 f2 nat);
+nat_rec f1 f2 Zero_nat = f1;
+
+one_nat :: Nat;
+one_nat = Suc Zero_nat;
+
+maxa :: Nat -> Nat -> Nat;
+maxa a b = (if less_eq_nat a b then b else a);
+
+nat_case :: forall t. t -> (Nat -> t) -> Nat -> t;
+nat_case f1 f2 Zero_nat = f1;
+nat_case f1 f2 (Suc nat) = f2 nat;
+
+plus_nat :: Nat -> Nat -> Nat;
+plus_nat (Suc m) n = plus_nat m (Suc n);
+plus_nat Zero_nat n = n;
+
+minus_nat :: Nat -> Nat -> Nat;
+minus_nat (Suc m) (Suc n) = minus_nat m n;
+minus_nat Zero_nat n = Zero_nat;
+minus_nat m Zero_nat = m;
+
+times_nat :: Nat -> Nat -> Nat;
+times_nat (Suc m) n = plus_nat n (times_nat m n);
+times_nat Zero_nat n = Zero_nat;
+
+divmod :: Nat -> Nat -> (Nat, Nat);
+divmod m n =
+  (if eq_nat n Zero_nat || less_nat m n then (Zero_nat, m)
+    else let {
+           a = divmod (minus_nat m n) n;
+           (q, aa) = a;
+         } in (Suc q, aa));
+
+div_nat :: Nat -> Nat -> Nat;
+div_nat m n = fst (divmod m n);
+
+mod_nat :: Nat -> Nat -> Nat;
+mod_nat m n = snd (divmod m n);
+
+
+}
