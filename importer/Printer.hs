@@ -1,5 +1,5 @@
 {-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Munich
+    Author:     Tobias C. Rittweiler, TU Muenchen
 
 Pretty printing of abstract Isar/HOL theory.
 -}

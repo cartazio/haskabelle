@@ -1,5 +1,5 @@
 {-  ID:         $Id$
-    Author:     Tobias C. Rittweiler and Florian Haftmann, TU Munich
+    Author:     Tobias C. Rittweiler and Florian Haftmann, TU Muenchen
 
 Generic functions.
 -}

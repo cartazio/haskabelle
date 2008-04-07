@@ -2,6 +2,7 @@ Arbeitsplan Haskell-Importer:
 * lauffähiges, konsistentes Repository                  Mitte April     Tobias
 * ausführlicheres README mit Installationsanweisungen
     und Benutzung                                       Ende April      Tobias
+* Modulkommentare für alle Files                        Ende April      Tobias
 * Adaptionsfile erstellen                               Ende April      Florian
 * Beispiele zusammentragen                              Ende April      Florian
 * Dokumentation der Architekur und Grundlagen

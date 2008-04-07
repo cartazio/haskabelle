@@ -1,3 +1,6 @@
+{-  ID:         $Id: Isa.hs 431 2007-08-14 09:07:17Z haftmann $
+    Author:     Tobias C. Rittweiler, TU Muenchen
+-}
 
 module Importer.Adapt (adaptGlobalEnv, adaptIsaUnit) where
 
