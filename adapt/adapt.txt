@@ -1,0 +1,20 @@
+(*  ID:         $Id: Importer.hs 632 2008-02-27 06:02:00Z rittweil $
+    Author:     Florian Haftmann, TU Muenchen
+*)
+
+types
+  "Prelude.Bool"    "bool"
+
+consts
+  "Prelude.True"    "True"
+  "Prelude.False"   "False"
+
+  "Prelude.+"       "HOL.plus"
+  "Prelude.-"       "HOL.minus"
+  "Prelude.<="      "HOL.less_eq"
+  "Prelude.<"       "HOL.less"
+
+  "Prelude.:"       "List.Cons"
+  "Prelude.head"    "List.hd"
+  "Prelude.tail"    "List.tl"
+  "Prelude.++"      "List.append"

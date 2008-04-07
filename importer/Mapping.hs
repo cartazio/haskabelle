@@ -1,3 +1,8 @@
+{-  ID:         $Id: Importer.hs 632 2008-02-27 06:02:00Z rittweil $
+    Author:     Tobias C. Rittweiler, TU Munich
+
+Toplevel interface to importer.
+-}
 
 module Importer.Mapping (initialGlobalEnv, AdaptionTable(..), adaptionTable) where
 
