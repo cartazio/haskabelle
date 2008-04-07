@@ -15,7 +15,7 @@ struct
 fun run src_loc dst_loc =
   let
     val _ = writeln ("Reading from " ^ src_loc);
-    val _ = writeln ("Writing to" ^ dst_loc);
+    val _ = writeln ("Writing to " ^ dst_loc);
   in () end;
 
 end;
