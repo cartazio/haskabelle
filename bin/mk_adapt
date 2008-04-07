@@ -5,3 +5,17 @@
 #
 # Call to adaption table builder from the shell.
 
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+EXECPATH="$(dirname "$0")/.."
+
+[ -z "$EXECPATH" ] && fail "$0 must be called with absolute path"
+
+cd "$EXECPATH"
+
+[ -z "$ISABELLE" ] && ISABELLE="$(isatool getenv -b ISABELLE)"
+
