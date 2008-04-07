@@ -1,2 +1,7 @@
 #!/bin/bash
+#
+# $Id: isatool,v 1.22 2005/05/17 07:58:47 wenzelm Exp $
+# Author: Florian Haftmann, TU Muenchen
+#
+# Call to adaption table builder from the shell.
 

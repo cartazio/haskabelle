@@ -9,3 +9,5 @@ Arbeitsplan Haskell-Importer:
     (im Repository)                                     Mitte Mai       Tobias
 * Behandlung von Typklassen                             Ende Mai        Tobias
 * Behandlung von Literalen (Numerale, Strings)          Ende Juni       Tobias
+
+$Id: NEWS,v 1.1023 2008-04-02 13:58:32 haftmann Exp $
