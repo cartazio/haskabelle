@@ -33,23 +33,24 @@ data AdaptionEntry = Haskell String OpKind String
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
 
 rawAdaptionTable 
-    = [(Haskell  "Prelude.:" (InfixOp RightAssoc  5) "a -> [a] -> [a]",
-        Isabelle "Prelude.#" (InfixOp RightAssoc  5) "a -> [a] -> [a]"),
+    = [
+       -- (Haskell  "Prelude.:" (InfixOp RightAssoc  5) "a -> [a] -> [a]",
+       --  Isabelle "Prelude.#" (InfixOp RightAssoc  5) "a -> [a] -> [a]"),
 
-       (Haskell  "Prelude.+"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
-        Isabelle "Main.+"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
-       (Haskell  "Prelude.-"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
-        Isabelle "Main.-"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
+       -- (Haskell  "Prelude.+"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
+       --  Isabelle "Main.+"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
+       -- (Haskell  "Prelude.-"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
+       --  Isabelle "Main.-"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
 
-       (Haskell  "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool",
-        Isabelle "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool"),
+       -- (Haskell  "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool",
+       --  Isabelle "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool"),
 
-       (Haskell  "Prelude.head" Function "[a] -> a",
-        Isabelle "Prelude.hd"   Function "[a] -> a"),
-       (Haskell  "Prelude.tail" Function "[a] -> a",
-        Isabelle "Prelude.tl"   Function "[a] -> a"),
-       (Haskell  "Prelude.++" (InfixOp RightAssoc 5) "[a] -> [a] -> [a]",
-        Isabelle "List.@"     (InfixOp RightAssoc 5) "[a] -> [a] -> [a]"),
+       -- (Haskell  "Prelude.head" Function "[a] -> a",
+       --  Isabelle "Prelude.hd"   Function "[a] -> a"),
+       -- (Haskell  "Prelude.tail" Function "[a] -> a",
+       --  Isabelle "Prelude.tl"   Function "[a] -> a"),
+       -- (Haskell  "Prelude.++" (InfixOp RightAssoc 5) "[a] -> [a] -> [a]",
+       --  Isabelle "List.@"     (InfixOp RightAssoc 5) "[a] -> [a] -> [a]"),
 
        (Haskell  "Prelude.Bool"  Type "Bool",
         Isabelle "Prelude.bool"  Type "bool"),
@@ -67,8 +68,9 @@ adaptionTable
 
 initialGlobalEnv :: Env.GlobalE
 initialGlobalEnv 
-    = Env.makeGlobalEnv exportAll (hskIdentifiers adaptionTable)
-    where exportAll = const True
+    = Env.makeGlobalEnv importNothing exportAll (hskIdentifiers adaptionTable)
+    where importNothing = const []
+          exportAll     = const True
           hskIdentifiers (AdaptionTable mapping) = map fst mapping
 
 -- mk_initialGlobalE :: [(Module, HskIdentifier)] -> GlobalE
@@ -123,8 +125,8 @@ makeIdentifier Function m identifier t
     = Env.Function $ Env.makeLexInfo m identifier t
 makeIdentifier (InfixOp assoc prio) m identifier t
     = Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
-makeIdentifier Type m identifier t
-    = Env.Type (Env.makeLexInfo m identifier t) []
+makeIdentifier Type m identifierID t
+    = Env.Type (Env.makeLexInfo m identifierID t) [identifierID]
 
 transformAssoc :: Assoc -> Env.EnvAssoc
 transformAssoc RightAssoc = Env.EnvAssocRight

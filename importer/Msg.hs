@@ -60,3 +60,6 @@ identifier_collision_in_lookup curModule qname foundIdentifiers
 
 ambiguous_decl_definitions decls
     = "Ambiguous definitions between\n" ++ concatMap (linify . prettyShow' "decl") decls
+
+duplicate_import ms
+    = "Duplicate in imported modules: " ++ show ms

@@ -43,7 +43,7 @@ concatMapM f xs = liftM concat (mapM f xs)
 map2 :: (a -> b -> c) -> [a] -> [b] -> [c]
 map2 = zipWith
 
-lookupBy                :: (a -> a -> Bool) -> a -> [(a, b)] -> Maybe b
+lookupBy                :: (a -> b -> Bool) -> a -> [(b, c)] -> Maybe c
 lookupBy eq key []      =  Nothing
 lookupBy eq key ((x,y):xys)
     | key `eq` x        =  Just y
@@ -61,7 +61,8 @@ hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
 
 
 prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
-                             (Hsx.ParseOk (Hsx.HsModule _ _ _ _ decls)) = Hsx.parseModule str
+                             (Hsx.ParseOk (Hsx.HsModule _ _ _ _ decls)) 
+                                 = Hsx.parseModule str
                          in concatMap Hsx.prettyPrint decls
 
 prettyShow obj = prettyShow' "foo" obj

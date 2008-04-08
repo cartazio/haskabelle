@@ -6,9 +6,11 @@ module Importer.LexEnv where
 
 import Maybe
 import List (groupBy, sortBy)
-import Data.Generics.PlateData (universeBi, contextsBi)
 
+import Data.Generics.PlateData (universeBi, contextsBi)
+import Control.Monad.State
 import qualified Data.Map as Map
+
 import Language.Haskell.Hsx
 
 import qualified Importer.Msg as Msg
@@ -24,10 +26,6 @@ import Importer.Utilities.Misc
 type ModuleID = String
 type IdentifierID = String
 
-data EnvName = EnvQualName ModuleID IdentifierID
-             | EnvUnqualName IdentifierID
-  deriving (Eq, Show)
-
 data EnvType = EnvTyVar EnvName
              | EnvTyCon EnvName [EnvType]
              | EnvTyFun EnvType EnvType
@@ -36,6 +34,23 @@ data EnvType = EnvTyVar EnvName
 
 data EnvAssoc = EnvAssocRight | EnvAssocLeft | EnvAssocNone
   deriving (Eq, Show)
+
+data EnvName = EnvQualName ModuleID IdentifierID
+             | EnvUnqualName IdentifierID
+  deriving (Eq, Show)
+
+isQualified :: EnvName -> Bool
+isQualified (EnvQualName _ _) = True
+isQualified (EnvUnqualName _) = False
+
+qualifyEnvName :: ModuleID -> EnvName -> EnvName
+qualifyEnvName mID qn@(EnvQualName _ _) = qn
+qualifyEnvName mID (EnvUnqualName n)    = EnvQualName mID n
+
+unqualifyEnvName :: ModuleID -> EnvName -> EnvName
+unqualifyEnvName mID (EnvQualName mID' id) = assert (mID == mID') $ EnvUnqualName id
+unqualifyEnvName mID n@(EnvUnqualName _)   = n
+
 
 data LexInfo = LexInfo { 
                         nameOf   :: IdentifierID,
@@ -200,6 +215,24 @@ instance Hsk2Env HsType EnvType where
               tyvar':tyvars' = map toHsk tyvars
           in foldl HsTyApp (HsTyApp tycon' tyvar') tyvars'
 
+instance Hsk2Env HsExportSpec EnvExport where
+    fromHsk (HsEVar qname)        = EnvExportVar   (fromHsk qname)
+    fromHsk (HsEAbs qname)        = EnvExportAbstr (fromHsk qname)
+    fromHsk (HsEThingAll qname)   = EnvExportAll   (fromHsk qname)
+    fromHsk (HsEModuleContents m) = EnvExportMod   (fromHsk m)
+    fromHsk etc = error ("Not supported yet: " ++ show etc)
+
+instance Hsk2Env HsImportDecl EnvImport where
+    fromHsk (HsImportDecl { importModule=m,
+                            importQualified=qual,
+                            importAs=nick,
+                            importSpecs=Nothing })
+        = EnvImport (fromHsk m) qual 
+                    (if isNothing nick then Nothing 
+                                       else Just (fromHsk (fromJust nick)))
+    fromHsk etc = error ("Not supported yet: " ++ show etc)
+
+
 
 class Isa2Env a b where
     fromIsa :: (Show a, Isa2Env a b) => a -> b
@@ -299,96 +332,94 @@ mergeIdentifiers ident1 ident2
 mergeLexEnvs (LexEnv map1) (LexEnv map2)
     = LexEnv
         $ Map.unionWithKey
-              (\n identifier1 identifier2
-                   -> let id1 = if Map.member n map1 then identifier1 else identifier1
-                          id2 = if Map.member n map1 then identifier2 else identifier2
-                      in -- id1 is identifier that belongs to `map1'.
-                        case mergeIdentifiers id1 id2 of
-                          Nothing     -> id2  -- favorize second argument.
-                          Just result -> result)
+              (\n id1 id2
+                   -> case mergeIdentifiers id1 id2 of
+                        Nothing     -> id2  -- favorize second argument.
+                        Just result -> result)
               map1 map2
 
-mapLexEnv :: (Identifier -> Maybe Identifier) -> LexE -> LexE
+mapLexEnv :: (IdentifierID -> Maybe Identifier) -> LexE -> LexE
 mapLexEnv update (LexEnv lexmap)
-    = LexEnv (Map.mapMaybe update lexmap)
+    -- If names of Identifiers are supposed to be changed by `update',
+    -- we have to make sure that the respective keys in Map get
+    -- changed, too.
+    = let (keyupdates, lexmap')
+              = Map.mapAccumWithKey (\acc identifierID identifier 
+                                         -> case (update . nameOf . lexInfoOf) identifier of
+                                              Nothing -> (acc, identifier)
+                                              Just newid 
+                                                  -> if nameOf (lexInfoOf newid) /= identifierID
+                                                     -- gets fixed up later
+                                                     then ((identifierID, newid):acc, identifier)
+                                                     else (acc, newid))
+                                     [] lexmap
+          (keysToBeRemoved, newIdentifiers) = unzip keyupdates
+      in LexEnv $ Map.union (Map.filterWithKey (\k _ -> k `notElem` keysToBeRemoved) lexmap')
+                            (Map.fromList (map (\id -> (nameOf (lexInfoOf id), id)) newIdentifiers))
 
 --
 -- ModuleEnv 
 --
 
-data ModuleE = ModuleEnv ModuleID [HsImportDecl] [HsExportSpec] LexE
+data ModuleE = ModuleEnv ModuleID [EnvImport] [EnvExport] LexE
   deriving (Show)
-
 
 emptyModuleEnv = ModuleEnv "Main" [] [] emptyLexEnv
 
-defaultImports = [HsImportDecl { importLoc       = srcloc,
-                                 importModule    = Module "Prelude",
-                                 importQualified = False,
-                                 importAs        = Nothing,
-                                 importSpecs     = Nothing
-                               }
-                 ]
-    where srcloc = SrcLoc { srcFilename = "Importer/LexEnv.hs",
-                            srcLine = 135, srcColumn = 0 }
 
-makeModuleEnv :: (Identifier -> Bool) -> [Identifier] -> ModuleE
-makeModuleEnv shall_export_p identifiers
+data EnvImport = EnvImport ModuleID Bool (Maybe ModuleID)
+  deriving (Show, Eq)
+
+defaultImports = [EnvImport "Prelude" False Nothing]
+
+isQualifiedImport :: EnvImport -> Bool
+isQualifiedImport (EnvImport _ isQual _) = isQual
+
+data EnvExport = EnvExportVar   EnvName
+               | EnvExportAbstr EnvName
+               | EnvExportAll   EnvName
+               | EnvExportMod   ModuleID
+  deriving (Show, Eq)
+                 
+
+makeModuleEnv :: [EnvImport] -> (Identifier -> Bool) -> [Identifier] -> ModuleE
+makeModuleEnv imports shall_export_p identifiers
     = let m = moduleOf (lexInfoOf (head identifiers))
       in assert (all (== m) $ map (moduleOf . lexInfoOf) (tail identifiers))
-           $ ModuleEnv m [] (exportAll (filter shall_export_p identifiers))
-                            (makeLexEnv identifiers)
-    where exportAll :: [Identifier] -> [HsExportSpec]
-          exportAll identifiers = map (HsEVar . toHsk . identifier2name) identifiers
+           $ ModuleEnv m imports
+                         (exportAll (filter shall_export_p identifiers))
+                         (makeLexEnv identifiers)
+    where 
+      exportAll :: [Identifier] -> [EnvExport]
+      exportAll identifiers    = concatMap export identifiers
+      export id@(Type _ _)     = [EnvExportAll (identifier2name id)] 
+      export id                = [EnvExportVar (identifier2name id)]
 
-mapModuleEnv :: (Identifier -> Maybe Identifier) -> ModuleE -> ModuleE
-mapModuleEnv update (ModuleEnv mId imps exps lexenv)
-    = ModuleEnv mId imps exps (mapLexEnv update lexenv)
+mapModuleEnv :: (EnvName -> Maybe Identifier) -> ModuleE -> ModuleE
+mapModuleEnv update (ModuleEnv mID imps exps lexenv)
+    = ModuleEnv mID imps (map updateExport exps) (mapLexEnv update' lexenv)
+    where
+      update' :: IdentifierID -> Maybe Identifier
+      update' id = update (EnvQualName mID id)
+      updateExport (EnvExportVar n)   = reconstruct EnvExportVar n 
+                                          $ update (qualifyEnvName mID n)
+      updateExport (EnvExportAbstr n) = reconstruct EnvExportAbstr n 
+                                          $ update (qualifyEnvName mID n)
+      updateExport (EnvExportAll n)   = reconstruct EnvExportAbstr n 
+                                          $ update (qualifyEnvName mID n)
+      updateExport e@(EnvExportMod _) = e
+      reconstruct con oldN Nothing    = con oldN
+      reconstruct con oldN (Just id)  = con (EnvQualName mID (nameOf (lexInfoOf id)))
+
+
 
 makeModuleEnv_fromHsModule :: HsModule -> ModuleE
 makeModuleEnv_fromHsModule (HsModule loc modul exports imports topdecls)
     = let lexenv   = makeLexEnv (concatMap (computeIdentifierMappings modul) topdecls)
-          imports' = checkImports imports ++ defaultImports
-          exports' = if isNothing exports then [HsEModuleContents modul] 
-                                          else checkExports (fromJust exports) imports
+          imports' = map fromHsk imports ++ defaultImports
+          exports' = if isNothing exports then [EnvExportMod (fromHsk modul)] 
+                                          else map fromHsk (fromJust exports)
       in ModuleEnv (fromHsk modul) imports' exports' lexenv
-    where 
-      checkImports imports 
-          = checkForDuplicateImport (map checkImport imports)
-
-      checkImport (HsImportDecl { importSpecs = Just _ }) 
-          = error "Not supported yet: Explicit import specifications."
-      checkImport etc = etc
-
-      checkForDuplicateImport imports 
-          = if hasDuplicates (modulesFromImports imports)
-            then error ("Duplicates found in import list: " ++ show imports)
-            else imports
-
-      checkExports :: [HsExportSpec] -> [HsImportDecl] -> [HsExportSpec]
-      checkExports exports imports 
-          = do export <- checkForDuplicateExport (map checkExport exports)
-               let [(qname, restoreExport)] = contextsBi export :: [(HsQName, HsQName -> HsExportSpec)]
-               case qname of 
-                 UnQual _ -> return (restoreExport qname)
-                 Qual m _ 
-                   | isImportedModule_aux (fromHsk m) imports  
-                       -> return (restoreExport qname)
-                   | otherwise 
-                       -> error ("Module of `" ++ show qname ++ "'"
-                                 ++ " is not in import list, but in export list.")
-
-      checkExport e@(HsEVar _)            = e
-      checkExport e@(HsEAbs _)            = e
-      checkExport e@(HsEThingAll _)       = e
-      checkExport e@(HsEModuleContents _) = e
-      checkExport etc                     = error ("Not supported yet: " ++ show etc)
-
-      checkForDuplicateExport :: [HsExportSpec] -> [HsExportSpec]
-      checkForDuplicateExport exports 
-          = if hasDuplicates (universeBi exports :: [HsName]) -- strip off qualifiers
-            then error ("Duplicates found in export list: " ++ show exports)
-            else exports
 
 computeIdentifierMappings :: Module -> HsDecl -> [Identifier]
 computeIdentifierMappings modul decl 
@@ -418,29 +449,27 @@ mergeModuleEnvs (ModuleEnv m1 is1 es1 lex1) (ModuleEnv m2 is2 es2 lex2)
 
 -- returns module name as can be found in source code, i.e.
 -- returns qualified nicknames if any.
-modulesFromImports :: [HsImportDecl] -> [Module]
-modulesFromImports imports
-    = concatMap (\(imp@(HsImportDecl { importModule=m, 
-                                       importQualified=isQualified, 
-                                       importAs=nickname }))
+importedModules :: [EnvImport] -> [ModuleID]
+importedModules imports
+    = concatMap (\(imp@(EnvImport m isQualified nickname ))
                      -> case (isQualified, isJust nickname) of
                           -- Notice: Module names can _always_ be explicitly qualified.
                           (False, False) -> [m] 
                           (True,  False) -> [m]
                           (True,  True)  -> [m, fromJust nickname]
                           (False, True)  
-                              -> error ("<modulesFromImports> Internal Error: " ++
+                              -> error ("<importedModules> Internal Error: " ++
                                         "bogus import:" ++ show imp))
           imports
 
-isImportedModule_aux :: ModuleID -> [HsImportDecl] -> Bool
+isImportedModule_aux :: ModuleID -> [EnvImport] -> Bool
 isImportedModule_aux moduleID imports
-    = let ms = map fromHsk (modulesFromImports imports)
-      in case filter (== moduleID) ms of
-           []     -> False
-           [name] -> True
-           etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
+    = case filter (== moduleID) (importedModules imports) of
+        []     -> False
+        [name] -> True
+        etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
 
+isImportedModule :: ModuleID -> ModuleE -> Bool
 isImportedModule moduleID (ModuleEnv _ imports _ _)
     = isImportedModule_aux moduleID imports
 
@@ -455,12 +484,12 @@ data GlobalE = GlobalEnv (Map.Map ModuleID ModuleE)
 
 emptyGlobalEnv = GlobalEnv (Map.empty)
 
-makeGlobalEnv :: (Identifier -> Bool) -> [Identifier] -> GlobalE
-makeGlobalEnv shall_export_p identifiers
+makeGlobalEnv :: (ModuleID -> [EnvImport]) -> (Identifier -> Bool) -> [Identifier] -> GlobalE
+makeGlobalEnv compute_imports shall_export_p identifiers
      = GlobalEnv
          $ Map.fromListWith failDups
-             (do (moduleId, ids) <- groupIdentifiers identifiers
-                 return (moduleId, makeModuleEnv shall_export_p ids))
+             (do (moduleID, ids) <- groupIdentifiers identifiers
+                 return (moduleID, makeModuleEnv (compute_imports moduleID) shall_export_p ids))
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
 groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]
@@ -499,9 +528,10 @@ mergeGlobalEnvs (GlobalEnv map1) (GlobalEnv map2)
                          mergeModuleEnvs env1 env2)
               map1 map2
           
-mapGlobalEnv :: (Identifier -> Maybe Identifier) -> GlobalE -> GlobalE
+mapGlobalEnv :: (EnvName -> Maybe Identifier) -> GlobalE -> GlobalE
 mapGlobalEnv update (GlobalEnv modulemap)
-    = GlobalEnv $ Map.map (\moduleEnv -> mapModuleEnv update moduleEnv) modulemap        
+    = GlobalEnv $ Map.map (\moduleEnv -> mapModuleEnv update' moduleEnv) modulemap
+    where update' n = assert (isQualified n) $ update n
 
 -- computeImportedModules :: Module -> GlobalE -> [Module]
 -- computeImportedModules modul globalEnv
@@ -512,18 +542,20 @@ computeExportedNames :: ModuleID -> GlobalE -> [IdentifierID]
 computeExportedNames moduleID globalEnv
     = do let ModuleEnv moduleID _ exports (LexEnv lexmap)
                  = findModuleEnv_OrLose moduleID globalEnv
-         export <- exports
-         case export of         -- List Monad concats implicitly for us.
-           HsEVar qn -> [fromHsk qn]
-           HsEAbs qn -> [fromHsk qn]
-           HsEThingAll qn 
-             -> case Importer.LexEnv.lookup moduleID (fromHsk qn) globalEnv of
+         export <- exports   -- List Monad concats implicitly for us.
+         case export of         
+           EnvExportVar   qn -> [idOf (unqualifyEnvName moduleID qn)]
+           EnvExportAbstr qn -> [idOf (unqualifyEnvName moduleID qn)]
+           EnvExportAll qn 
+             -> case Importer.LexEnv.lookup moduleID qn globalEnv of
                   Just (Type _ constructorNs) 
                       -> constructorNs
                   etc -> error ("Internal error (computeExportedNames): " ++ show etc)
-           HsEModuleContents m
-             | fromHsk m == moduleID -> Map.keys lexmap -- export everything
-             | otherwise             -> computeExportedNames (fromHsk m) globalEnv
+           EnvExportMod m
+             | m == moduleID -> Map.keys lexmap -- export everything
+             | otherwise     -> computeExportedNames m globalEnv
+    where idOf :: EnvName -> IdentifierID
+          idOf (EnvUnqualName id) = id
 
 isExported :: Identifier -> ModuleID -> GlobalE -> Bool
 isExported identifier moduleID globalEnv
@@ -566,10 +598,13 @@ isExported identifier moduleID globalEnv
 -- lookup "Foo" "Imp1.beta"     => Nothing
 
 lookup :: ModuleID -> EnvName -> GlobalE -> Maybe Identifier
-lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- ambiguous occurence `lookup'
+lookup currentModule qname globalEnv 
+    = trace ("[lookup] " ++ prettyShow' "globalEnv" globalEnv) $
+      lookup' currentModule qname globalEnv -- ambiguous occurence `lookup'
     where                                                                    -- between LexEnv and Prelude
       lookup' currentModule qname globalEnv                            
-          = do currentModuleEnv <- findModuleEnv currentModule globalEnv
+          = trace ("lookup' " ++ show currentModule ++ " (" ++ show qname ++ ")") $
+            do currentModuleEnv <- findModuleEnv currentModule globalEnv
                case qname of
                  EnvQualName m n 
                      | m == currentModule  
@@ -583,12 +618,15 @@ lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- 
                      -> let (ModuleEnv _ imports _ (LexEnv lexmap)) 
                                        = currentModuleEnv
                             local_try  = Map.lookup n lexmap
-                            tries      = map (\(HsImportDecl { importModule = m }) 
-                                                  -> lookup' currentModule 
-                                                             (EnvQualName (fromHsk m) n) 
-                                                             globalEnv) 
-                                          $ filter (not . importQualified) imports
-                        in case catMaybes (local_try : tries) of
+                            tries      = map (\(EnvImport m _ _) 
+                                                  -> let !r = lookup' currentModule 
+                                                                      (EnvQualName m n) 
+                                                                      globalEnv
+                                                     in trace (prettyShow' "r" r) r) 
+                                          $ filter (not . isQualifiedImport) imports
+                        in 
+--                          trace ("--> " ++ show (local_try : tries)) $
+                          case catMaybes (local_try : tries) of
                              []   -> Nothing
                              [x]  -> Just x
                              x:xs -> error (Msg.identifier_collision_in_lookup 
@@ -605,3 +643,35 @@ lookup currentModule qname globalEnv = lookup' currentModule qname globalEnv -- 
 --           lookup' theory name@(Isa.Name _) (IsaGlobalEnv globalmap)
 --               = do (IsaTheoryEnv _ (IsaLexEnv lexmap)) <- Map.lookup theory globalmap
 --                    Map.lookup name lexmap
+
+
+-- checkGlobalEConsistency
+
+--       check_duplicates :: Eq a => ([a] -> String) -> [a] -> [a]
+--       check_duplicates failure_str xs 
+--           | hasDuplicates xs = error (failure_str xs)
+--           | otherwise = xs 
+
+--              (check_duplicates Msg.duplicate_import (importedModules imports'))
+--              (check_duplicates Msg.export (importedModules exports')) 
+
+--     where 
+
+--       checkExports :: [HsExportSpec] -> [HsImportDecl] -> [HsExportSpec]
+--       checkExports exports imports 
+--           = do export <- checkForDuplicateExport exports
+--                let [(qname, restoreExport)] = contextsBi export :: [(HsQName, HsQName -> HsExportSpec)]
+--                case qname of 
+--                  UnQual _ -> return (restoreExport qname)
+--                  Qual m _ 
+--                    | isImportedModule_aux (fromHsk m) imports  
+--                        -> return (restoreExport qname)
+--                    | otherwise 
+--                        -> error ("Module of `" ++ show qname ++ "'"
+--                                  ++ " is not in import list, but in export list.")
+
+--       checkForDuplicateExport :: [HsExportSpec] -> [HsExportSpec]
+--       checkForDuplicateExport exports 
+--           = if hasDuplicates (universeBi exports :: [HsName]) -- strip off qualifiers
+--             then error ("Duplicates found in export list: " ++ show exports)
+--             else exports
