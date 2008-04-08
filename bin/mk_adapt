@@ -13,7 +13,7 @@ function fail()
 
 EXECPATH="$(dirname "$0")/.."
 
-[ -z "$EXECPATH" ] && fail "$0 must be called with absolute path"
+[ -z "$EXECPATH" ] && fail "$0 must be called with explicit path"
 
 cd "$EXECPATH"
 
@@ -22,6 +22,6 @@ cd "$EXECPATH"
 SRC="$EXECPATH/adapt/adapt.txt"
 DST="$EXECPATH/Importer/AdaptTable.hs"
 CONV="$EXECPATH/adapt/mk_adapt.ML"
-CMD="use \"$CONV\"; MkAdapt.run \"$SRC\" \"$DST\";"
+CMD="use \"$CONV\"; MkAdapt.run (theory \"Main\") \"$SRC\" \"$DST\";"
 
 "$ISABELLE" -q -e "$CMD" HOL || exit 1

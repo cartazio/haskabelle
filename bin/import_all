@@ -13,7 +13,7 @@ function fail()
 
 EXECPATH="$(dirname "$0")/.."
 
-[ -z "$EXECPATH" ] && fail "$0 must be called with absolute path"
+[ -z "$EXECPATH" ] && fail "$0 must be called with explicit path"
 
 cd "$EXECPATH"
 
