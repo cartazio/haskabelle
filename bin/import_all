@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# $Id: isatool,v 1.22 2005/05/17 07:58:47 wenzelm Exp $
+# $Id$
 # Author: Florian Haftmann, TU Muenchen
 #
 # Roundtrip for all Haskell files in the examples directory.

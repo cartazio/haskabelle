@@ -1,4 +1,4 @@
-(*  ID:         $Id: Importer.hs 632 2008-02-27 06:02:00Z rittweil $
+(*  ID:         $Id$
     Author:     Florian Haftmann, TU Muenchen
 
 Decorate importer adaption table with current Isabelle syntax.

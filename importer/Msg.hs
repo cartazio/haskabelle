@@ -1,4 +1,4 @@
-{-  ID:         $Id: Printer.hs 421 2007-08-03 19:18:11Z rittweil $
+{-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 
 Messages.
