@@ -19,7 +19,6 @@ import Importer.Mapping (AdaptionTable(..))
 import qualified Importer.IsaSyntax as Isa
 import Language.Haskell.Hsx
 
-
 adaptGlobalEnv :: Env.GlobalE -> AdaptionTable -> Env.GlobalE
 adaptGlobalEnv globalEnv adaptionTable
     = Env.mapGlobalEnv (lookupInAdaptionTable adaptionTable) globalEnv

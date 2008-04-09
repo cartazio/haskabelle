@@ -51,7 +51,7 @@ fun consts thy = Scan.optional (P.$$$ constsN |--
   Scan.repeat1 (P.name -- P.name >> mk_constentry thy)) [];
 
 fun adapt thy = types thy -- consts thy --| P.$$$ endN
-  >> (op @ #> space_implode ",\n" #> enclose "[" "]");
+  >> (op @ #> space_implode ",\n  " #> enclose "[" "]");
 
 fun convert thy pos = Source.of_string
   #> Symbol.source false
@@ -65,37 +65,15 @@ fun run thy src_loc dst_loc =
   let
     val _ = writeln ("Reading from " ^ src_loc);
     val src = File.read (Path.explode src_loc);
+    val dst_path = Path.explode dst_loc;
+    val modl_name = (Path.implode o fst o Path.split_ext o Path.base) dst_path;
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
-      "-- $" ^ "Id" ^ "$", "", convert thy (Position.file src_loc) src];
-    val _ = File.write (Path.explode dst_loc) (cat_lines dsts);
+      "-- $" ^ "Id" ^ "$", "",
+      "module Importer." ^ modl_name ^ " where", "",
+      "import Importer.AdaptTable", "",
+      "rawAdaptionTable = " ^ convert thy (Position.file src_loc) src];
+    val _ = File.write dst_path (cat_lines dsts);
     val _ = writeln ("Written to " ^ dst_loc);
   in () end;
-
-(*
-
-fun read pos src =
-  let val res =
-    src
-    |> Symbol.source false
-    |> T.source NONE (fn () => (header_lexicon, Scan.empty_lexicon)) pos
-    |> T.source_proper
-    |> Source.source T.stopper (Scan.single (Scan.error (P.!!! header))) NONE
-    |> Source.get_single;
-  in
-    (case res of SOME (x, _) => x
-    | NONE => error ("Unexpected end of input" ^ Position.str_of pos))
-  end;
-
-fun load_thy dir name pos text time =
-  let
-    val toks = text_src
-      |> Symbol.source false
-      |> T.source NONE (K (get_lexicons ())) pos
-      |> Source.exhausted;
-    val trs = toks
-      |> toplevel_source false false NONE (K (get_parser ()))
-      |> Source.exhaust;
-  in () end;
-*)
 
 end;
