@@ -18,5 +18,3 @@ consts
   "Prelude.head"    "List.hd"
   "Prelude.tail"    "List.tl"
   "Prelude.++"      "List.append"
-
-end

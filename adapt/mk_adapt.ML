@@ -12,6 +12,14 @@ end;
 structure MkAdapt : MK_ADAPT =
 struct
 
+(* syntax analysis *)
+
+fun mk_syntab thy =
+  let
+    val syn = Sign.syn_of thy;
+  in () end;
+
+
 (* concrete output syntax *)
 
 fun mk_typentry thy (hs, raw_isa) =
@@ -41,25 +49,24 @@ structure P = OuterParse;
 
 val typesN = "types";
 val constsN = "consts";
-val endN = "end";
 
-val adapt_lexicon = Scan.make_lexicon (map Symbol.explode [typesN, constsN, endN]);
+val adapt_lexicon = Scan.make_lexicon (map Symbol.explode [typesN, constsN]);
 
-fun types thy = Scan.optional (P.$$$ typesN |--
-  Scan.repeat1 (P.name -- P.name >> mk_typentry thy)) [];
-fun consts thy = Scan.optional (P.$$$ constsN |--
-  Scan.repeat1 (P.name -- P.name >> mk_constentry thy)) [];
+fun types thy = P.$$$ typesN |--
+  Scan.repeat1 (P.name -- P.name >> mk_typentry thy);
+fun consts thy = P.$$$ constsN |--
+  Scan.repeat1 (P.name -- P.name >> mk_constentry thy);
 
-fun adapt thy = types thy -- consts thy --| P.$$$ endN
-  >> (op @ #> space_implode ",\n  " #> enclose "[" "]");
+fun adapt thy = (types thy @@@ Scan.optional (consts thy) []
+  || consts thy) >> (space_implode ",\n  " #> enclose "[" "]");
 
 fun convert thy pos = Source.of_string
   #> Symbol.source false
   #> T.source NONE (fn () => (adapt_lexicon, Scan.empty_lexicon)) pos
   #> T.source_proper
   #> Source.source T.stopper (Scan.single (Scan.error (P.!!! (adapt thy)))) NONE
-  #> Source.get_single
-  #> (fn SOME (dst, _) => dst | _ => error ("Unexpected end of input" ^ Position.str_of pos))
+  #> Source.exhaust
+  #> (fn [dst] => dst | _ => error ("Extra input " ^ Position.str_of pos))
 
 fun run thy src_loc dst_loc =
   let
