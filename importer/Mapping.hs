@@ -19,46 +19,11 @@ import Importer.Convert.Trivia (convert_trivia)
 
 import qualified Importer.IsaSyntax as Isa
 
+import Importer.AdaptTable
 
-data OpKind = Variable | Function | InfixOp Assoc Int | Type
-  deriving Show
-
-data Assoc = RightAssoc | LeftAssoc | NoneAssoc
-  deriving Show
-
-data AdaptionEntry = Haskell String OpKind String
-                   | Isabelle String OpKind String
-  deriving Show
+import Importer.AdaptMapping
 
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
-
-rawAdaptionTable 
-    = [
-       -- (Haskell  "Prelude.:" (InfixOp RightAssoc  5) "a -> [a] -> [a]",
-       --  Isabelle "Prelude.#" (InfixOp RightAssoc  5) "a -> [a] -> [a]"),
-
-       -- (Haskell  "Prelude.+"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
-       --  Isabelle "Main.+"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
-       -- (Haskell  "Prelude.-"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
-       --  Isabelle "Main.-"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
-
-       -- (Haskell  "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool",
-       --  Isabelle "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool"),
-
-       -- (Haskell  "Prelude.head" Function "[a] -> a",
-       --  Isabelle "Prelude.hd"   Function "[a] -> a"),
-       -- (Haskell  "Prelude.tail" Function "[a] -> a",
-       --  Isabelle "Prelude.tl"   Function "[a] -> a"),
-       -- (Haskell  "Prelude.++" (InfixOp RightAssoc 5) "[a] -> [a] -> [a]",
-       --  Isabelle "List.@"     (InfixOp RightAssoc 5) "[a] -> [a] -> [a]"),
-
-       (Haskell  "Prelude.Bool"  Type "Bool",
-        Isabelle "Prelude.bool"  Type "bool"),
-       (Haskell  "Prelude.True"  Function "Bool",
-        Isabelle "Prelude.True"  Function "bool"),
-       (Haskell  "Prelude.False" Function "Bool",
-        Isabelle "Prelude.False" Function "bool")
-      ]
 
 adaptionTable :: AdaptionTable
 adaptionTable 

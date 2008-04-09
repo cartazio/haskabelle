@@ -4,7 +4,7 @@
 Basic data structures for adpation table.
 -}
 
-module Importer.AdaptTable where
+module Importer.AdaptTable (OpKind(..), Assoc(..), AdaptionEntry(..)) where
 
 import qualified Importer.LexEnv as Env
 
