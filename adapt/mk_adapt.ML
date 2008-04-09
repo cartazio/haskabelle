@@ -41,15 +41,17 @@ structure P = OuterParse;
 
 val typesN = "types";
 val constsN = "consts";
+val endN = "end";
 
-val adapt_lexicon = Scan.make_lexicon (map Symbol.explode [typesN, constsN]);
+val adapt_lexicon = Scan.make_lexicon (map Symbol.explode [typesN, constsN, endN]);
 
 fun types thy = Scan.optional (P.$$$ typesN |--
   Scan.repeat1 (P.name -- P.name >> mk_typentry thy)) [];
 fun consts thy = Scan.optional (P.$$$ constsN |--
   Scan.repeat1 (P.name -- P.name >> mk_constentry thy)) [];
 
-fun adapt thy = types thy -- consts thy >> (op @ #> space_implode ",\n" #> enclose "[" "]");
+fun adapt thy = types thy -- consts thy --| P.$$$ endN
+  >> (op @ #> space_implode ",\n" #> enclose "[" "]");
 
 fun convert thy pos = Source.of_string
   #> Symbol.source false
