@@ -192,6 +192,8 @@ instance Hsk2Env HsType EnvType where
                                         type2' = fromHsk type2
                                     in EnvTyFun type1' type2'
 
+    fromHsk (HsTyForall (Just tyvarNs) [] typ) = fromHsk typ
+
     -- Types aren't curried or partially appliable in HOL, so we must pull a nested
     -- chain of type application inside out:
     --
@@ -236,7 +238,6 @@ instance Hsk2Env HsImportDecl EnvImport where
                     (if isNothing nick then Nothing 
                                        else Just (fromHsk (fromJust nick)))
     fromHsk etc = error ("Not supported yet: " ++ show etc)
-
 
 
 class Isa2Env a b where

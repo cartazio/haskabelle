@@ -162,43 +162,49 @@ instance Convert HskDependentDecls Isa.Cmd where
               isFunBind _             = False
               splitFunCmd (Isa.FunCmd [n] [s] eqs) = (n, s, eqs)
 
-
 instance Convert HsModule Isa.Cmd where
     convert' (HsModule _loc modul _exports _imports decls)
         = die "Internal Error: Each HsModule should have been pre-converted to HskModule."
 
-instance Convert Module Isa.Theory where
-    convert' (Module name) = return (Isa.Theory name)
 
+--- Trivially convertable stuff.
+
+instance Convert Module Isa.Theory where
+    convert' m = return (Env.toIsa (Env.fromHsk m :: Env.ModuleID))
 
 instance Convert HsName Isa.Name where
-    convert' (HsIdent  str) = return (Isa.Name str)
-    convert' (HsSymbol str) = return (Isa.Name str)
+    convert' n = return (Env.toIsa (Env.fromHsk n :: Env.EnvName))
 
 instance Convert HsQName Isa.Name where
-    convert' (UnQual name)     = (convert name)
-    convert' (Qual modul name) = do theory <- convert modul
-                                    return (Isa.QName theory 
-                                               $ case name of
-                                                   HsIdent  str -> str
-                                                   HsSymbol str -> str)
-    convert' (Special spcon)   = convert spcon
-
-instance Convert HsSpecialCon Isa.Name where
-    convert' HsListCon      = return Isa.cnameNil
-    convert' HsCons         = return Isa.cnameCons
-    -- HOL only got pairs, and tuples are representated as nested pairs.
-    -- Thus we have no general n-tuple type or data constructor; we fetch
-    -- occurences of those earlier, and transform them into something
-    -- we can handle instead.
-    convert' (HsTupleCon 2) = return Isa.cnamePair
-    convert' junk           = barf "HsSpecialCon -> Isa.Name" junk
+    convert' qn = return (Env.toIsa (Env.fromHsk qn :: Env.EnvName))
 
 instance Convert HsAssoc Isa.Assoc where
-    convert' (HsAssocNone)  = return Isa.AssocNone
-    convert' (HsAssocLeft)  = return Isa.AssocLeft
-    convert' (HsAssocRight) = return Isa.AssocRight
+    convert' a = return (Env.toIsa (Env.fromHsk a :: Env.EnvAssoc))
 
+instance Convert HsType Isa.Type where
+    convert' t = return (Env.toIsa (Env.fromHsk t :: Env.EnvType))
+
+instance Convert HsBangType Isa.Type where
+    convert' t@(HsBangedTy _)   = barf "HsBangType -> Isa.Type" t
+    convert' (HsUnBangedTy typ) = convert typ
+
+instance Convert HsQOp Isa.Term where
+    convert' (HsQVarOp qname) = do qname' <- convert qname; return (Isa.Var qname')
+    convert' (HsQConOp qname) = do qname' <- convert qname; return (Isa.Var qname')
+    -- convert' junk = barf "HsQOp -> Isa.Term" junk
+
+instance Convert HsOp Isa.Name where
+    convert' (HsVarOp qname) = convert qname
+    convert' (HsConOp qname) = convert qname
+    -- convert' junk = barf "HsOp -> Isa.Name" junk
+
+instance Convert HsLiteral Isa.Literal where
+    convert' (HsInt i)      = return (Isa.Int i)
+    convert' (HsString str) = return (Isa.String str)
+    convert' junk           = barf "HsLiteral -> Isa.Literal" junk
+
+
+--- Not so trivially convertable stuff.
 
 instance Convert HsDecl Isa.Cmd where
     convert' (HsTypeDecl _loc tyconN tyvarNs typ)
@@ -288,52 +294,6 @@ instance Convert HsBinds [Isa.Cmd] where
     convert' (HsBDecls decls) = mapM convert decls
     convert' junk = barf "HsBinds -> Isa.Cmd" junk
 
-     
-
-instance Convert HsType Isa.Type where
-    convert' (HsTyVar name)        = (convert name)  >>= (\n -> return (Isa.TyVar n))
-    convert' (HsTyCon qname)       = (cnv qname)     >>= (\n -> return (Isa.TyCon n []))
-                                     -- Type constructors may be differently named than
-                                     -- their respective data constructors.
-                                     where cnv (Special HsListCon) = return Isa.tnameList
-                                           cnv etc  = convert etc
-
-    convert' (HsTyFun type1 type2) = do type1' <- convert type1
-                                        type2' <- convert type2
-                                        return (Isa.TyFun type1' type2')
-
-    -- Types aren't curried or partially appliable in HOL, so we must pull a nested
-    -- chain of type application inside out:
-    --
-    --  T a b ==> HsTyApp (HsTyApp (HsTyCon T) (HsTyVar a)) (HsTyVar b)
-    --       
-    --        ==> Isa.TyCon T [(Isa.TyVar a), (Isa.TyVar b)]   
-    --
-    convert' tyapp@(HsTyApp _ _) 
-        = do let tycon:tyvars = unfoldl1 split tyapp
-             tycon'  <- convert tycon
-             tyvars' <- mapM convert tyvars
-             return $ case tycon' of Isa.TyCon n [] -> Isa.TyCon n tyvars'
-          where split (HsTyApp tyapp x) = Just (x, tyapp)
-                split (HsTyCon _)       = Nothing         -- Note that this HsTyCon will become
-                split junk                                --  the head of the returned list.
-                    = error ("HsType -> Isa.Type (split HsTyApp): " ++ (show junk))
-
-    convert' (HsTyTuple Boxed types)
-        = do types' <- mapM convert types
-             return $ Isa.TyTuple types'
-
-    -- convert' (HsTyTuple Boxed types)
-    --     = do types' <- mapM convert types
-    --          return $ foldr1 Isa.mkPairType types'
-
-    convert' junk = barf "HsType -> Isa.Type" junk
-
-instance Convert HsBangType Isa.Type where
-    convert' t@(HsBangedTy _)   = barf "HsBangType -> Isa.Type" t
-    convert' (HsUnBangedTy typ) = convert typ
-
-
 
 -- As we convert to Isa.Term anyway, we can translate each HsPat
 -- type to a HsExp first, and then convert that in order to
@@ -369,35 +329,17 @@ instance Convert HsRhs Isa.Term where
     -- convert (HsGuardedRhss rhss) ; FIXME
     convert' junk = barf "HsRhs -> Isa.Term" junk
 
-
 instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
     convert' (HsFieldUpdate qname exp)
         = do qname' <- convert qname
              exp'   <- convert exp
              return (qname', exp')
 
-
 instance Convert HsAlt (Isa.Term, Isa.Term) where
     convert' (HsAlt _loc pat (HsUnGuardedAlt exp) _wherebinds)
         = do pat' <- convert pat; exp' <- convert exp; return (pat', exp')
     convert' junk 
         = barf "HsAlt -> (Isa.Term, Isa.Term)" junk
-
-instance Convert HsQOp Isa.Term where
-    convert' (HsQVarOp qname) = do qname' <- convert qname; return (Isa.Var qname')
-    convert' (HsQConOp qname) = do qname' <- convert qname; return (Isa.Var qname')
-    -- convert' junk = barf "HsQOp -> Isa.Term" junk
-
-instance Convert HsOp Isa.Name where
-    convert' (HsVarOp qname) = convert qname
-    convert' (HsConOp qname) = convert qname
-    -- convert' junk = barf "HsOp -> Isa.Name" junk
-
-instance Convert HsLiteral Isa.Literal where
-    convert' (HsInt i)      = return (Isa.Int i)
-    convert' (HsString str) = return (Isa.String str)
-    convert' junk           = barf "HsLiteral -> Isa.Literal" junk
-
 
 
 instance Convert HsExp Isa.Term where

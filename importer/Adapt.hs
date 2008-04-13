@@ -40,7 +40,9 @@ adapt_type_in_identifier globalEnv tbl n@(Env.EnvQualName mID _)
          new_type <- transformEnvType tbl (qualifier (Env.moduleOf old_lexinfo)) old_type
          return $ Env.updateIdentifier old_id (old_lexinfo {Env.typeOf = Just new_type})
     where qualifier mID n
-              = Env.identifier2name (Env.lookup_orLose mID n globalEnv) -- Kludge.
+              = case Env.lookup mID n globalEnv of
+                  Nothing -> Env.qualifyEnvName mID n
+                  Just id -> Env.identifier2name id 
 
 transformEnvType :: AdaptionTable -> (Env.EnvName -> Env.EnvName) -> Env.EnvType -> Maybe Env.EnvType
 transformEnvType (AdaptionTable mappings) qualify typ

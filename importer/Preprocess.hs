@@ -122,10 +122,8 @@ delocalize_HsExp hsexp
        in do (subexpressions', decls) <- liftM (\(xs, ys) -> (xs, concat ys))
                                           $ mapAndUnzipM delocalize_HsExp subexpressions
              let finalexps = regenerate subexpressions'
-             -- FIXME: AVL.hs fails here because primitive let expression are left in.
-             assert ((null (universeBi finalexps :: [HsDecl])) -- Safety check, so we haven't missed something.
-                    || (trace (prettyShow' "finalexps" finalexps
-                               ++ prettyShow' "result" (universeBi finalexps :: [HsDecl])) False))
+             -- Safety check, so we haven't missed something.
+             assert (all isHsPatBind (universeBi finalexps :: [HsDecl]))
                $ return (regenerate subexpressions', decls)
 
 delocalize_HsAlt (HsAlt loc pat (HsUnGuardedAlt body) wbinds)
@@ -134,6 +132,8 @@ delocalize_HsAlt (HsAlt loc pat (HsUnGuardedAlt body) wbinds)
            return (HsAlt loc pat (HsUnGuardedAlt body') (HsBDecls []), localdecls)
 
 
+isHsPatBind (HsPatBind _ _ _ _) = True
+isHsPatBind _ = False
 
 -- Partitions HsBinds into (pattern bindings, other bindings).
 splitPatBinds :: HsBinds -> (HsBinds, HsBinds)
