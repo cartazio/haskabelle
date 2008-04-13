@@ -7,7 +7,6 @@ module Importer.LexEnv where
 import Maybe
 import List (groupBy, sortBy)
 
-import Data.Generics.PlateData (universeBi, contextsBi)
 import Control.Monad.State
 import qualified Data.Map as Map
 
@@ -44,8 +43,8 @@ isQualified (EnvQualName _ _) = True
 isQualified (EnvUnqualName _) = False
 
 qualifyEnvName :: ModuleID -> EnvName -> EnvName
-qualifyEnvName mID qn@(EnvQualName _ _) = qn
-qualifyEnvName mID (EnvUnqualName n)    = EnvQualName mID n
+qualifyEnvName mID qn@(EnvQualName mID' _) = qn
+qualifyEnvName mID (EnvUnqualName n)       = EnvQualName mID n
 
 unqualifyEnvName :: ModuleID -> EnvName -> EnvName
 unqualifyEnvName mID (EnvQualName mID' id) = assert (mID == mID') $ EnvUnqualName id
@@ -62,8 +61,8 @@ data LexInfo = LexInfo {
 data Identifier = Variable LexInfo
                 | Function LexInfo
                 | InfixOp  LexInfo EnvAssoc Int
-                | TypeAnnotation LexInfo EnvType
-                | Type LexInfo [IdentifierID] -- Type lexinfo [constructorNs]
+                | TypeAnnotation LexInfo
+                | Type LexInfo [Identifier] -- Type lexinfo [constructors]
   deriving (Eq, Show)
 
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
@@ -71,6 +70,13 @@ makeLexInfo moduleID identifierID t
     = LexInfo { nameOf   = identifierID,
                 typeOf   = Just t,
                 moduleOf = moduleID }
+
+updateIdentifier :: Identifier -> LexInfo -> Identifier
+updateIdentifier (Variable _) lexinfo       = Variable lexinfo
+updateIdentifier (Function _) lexinfo       = Function lexinfo
+updateIdentifier (InfixOp _ a p) lexinfo    = InfixOp lexinfo a p
+updateIdentifier (TypeAnnotation _) lexinfo = TypeAnnotation lexinfo
+updateIdentifier (Type _ conNs) lexinfo     = Type lexinfo conNs
 
 isVariable, isFunction, isInfixOp, isTypeAnnotation :: Identifier -> Bool
 
@@ -83,18 +89,18 @@ isFunction _              = False
 isInfixOp (InfixOp _ _ _) = True
 isInfixOp _               = False
 
-isTypeAnnotation (TypeAnnotation _ _) = True
-isTypeAnnotation _                    = False
+isTypeAnnotation (TypeAnnotation _) = True
+isTypeAnnotation _                  = False
 
 isType (Type _ _) = True
 isType _          = False
 
 
-lexInfoOf (Variable i)         = i
-lexInfoOf (Function i)         = i
-lexInfoOf (InfixOp i _ _)      = i
-lexInfoOf (Type i _)           = i
-lexInfoOf (TypeAnnotation i _) = i
+lexInfoOf (Variable i)       = i
+lexInfoOf (Function i)       = i
+lexInfoOf (InfixOp i _ _)    = i
+lexInfoOf (Type i _)         = i
+lexInfoOf (TypeAnnotation i) = i
 
 identifier2name :: Identifier -> EnvName
 identifier2name identifier
@@ -131,7 +137,6 @@ instance Hsk2Env HsQName IdentifierID where
     
     toHsk junk = error ("toHsk IdentifierID -> HsName: " ++ show junk)
 
-    
 instance Hsk2Env HsName IdentifierID where
     fromHsk (HsIdent s)  = s
     fromHsk (HsSymbol s) = s
@@ -316,14 +321,14 @@ mergeIdentifiers :: Identifier -> Identifier -> Maybe Identifier
 mergeIdentifiers ident1 ident2
     = assert (identifier2name ident1 == identifier2name ident2)
       $ case (ident1, ident2) of
-          (Variable i,       TypeAnnotation _ t) -> Just $ Variable (update i t)
-          (Function i,       TypeAnnotation _ t) -> Just $ Function (update i t)
-          (InfixOp  i a p,   TypeAnnotation _ t) -> Just $ InfixOp  (update i t) a p
-          (TypeAnnotation _ t, Variable i)       -> Just $ Variable (update i t)
-          (TypeAnnotation _ t, Function i)       -> Just $ Function (update i t)
-          (TypeAnnotation _ t, InfixOp  i a p)   -> Just $ InfixOp  (update i t) a p
+          (Variable i,       TypeAnnotation ann) -> Just $ Variable (update i ann)
+          (Function i,       TypeAnnotation ann) -> Just $ Function (update i ann)
+          (InfixOp  i a p,   TypeAnnotation ann) -> Just $ InfixOp  (update i ann) a p
+          (TypeAnnotation ann, Variable i)       -> Just $ Variable (update i ann)
+          (TypeAnnotation ann, Function i)       -> Just $ Function (update i ann)
+          (TypeAnnotation ann, InfixOp  i a p)   -> Just $ InfixOp  (update i ann) a p
           (_,_) -> Nothing
-    where update lexinfo@(LexInfo { typeOf = Nothing }) typ 
+    where update lexinfo@(LexInfo { typeOf = Nothing }) (LexInfo { typeOf = Just typ })
               = lexinfo { typeOf = Just typ }
           update lexinfo typ    -- Cannot merge + internal inconsistency.
               = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
@@ -356,6 +361,7 @@ mapLexEnv update (LexEnv lexmap)
           (keysToBeRemoved, newIdentifiers) = unzip keyupdates
       in LexEnv $ Map.union (Map.filterWithKey (\k _ -> k `notElem` keysToBeRemoved) lexmap')
                             (Map.fromList (map (\id -> (nameOf (lexInfoOf id), id)) newIdentifiers))
+
 
 --
 -- ModuleEnv 
@@ -427,19 +433,24 @@ computeIdentifierMappings modul decl
          let nameID         = fromHsk name
          let moduleID       = fromHsk modul
          let defaultLexInfo = LexInfo { nameOf=nameID, typeOf=Nothing, moduleOf=moduleID}
-         return $ case decl of
-                    HsPatBind _ _ _ _   -> Variable defaultLexInfo
-                    HsFunBind _         -> Function defaultLexInfo
-                    HsInfixDecl _ a p _ -> InfixOp  defaultLexInfo (fromHsk a) p
-                    HsTypeSig _ _ typ   -> TypeAnnotation defaultLexInfo (fromHsk typ)
-                    HsDataDecl _ _ conN tyvarNs condecls _
-                        -> assert (fromHsk conN == nameID)
-                             $ Type (defaultLexInfo { typeOf = Just (mkTyCon nameID tyvarNs) })
-                                    (map (fromHsk . extractConN) condecls)
-                        where mkTyCon nameID tyvarNs = EnvTyCon (fromHsk name) 
-                                                         $ map (EnvTyVar . fromHsk) tyvarNs
-                              extractConN (HsQualConDecl _ _ _ (HsConDecl n _)) = n
-                              extractConN (HsQualConDecl _ _ _ (HsRecDecl n _)) = n
+         case decl of
+           HsPatBind _ _ _ _   -> [Variable defaultLexInfo]
+           HsFunBind _         -> [Function defaultLexInfo]
+           HsInfixDecl _ a p _ -> [InfixOp  defaultLexInfo (fromHsk a) p]
+           HsTypeSig _ _ typ   -> [TypeAnnotation (defaultLexInfo { typeOf = Just (fromHsk typ)})]
+           HsDataDecl _ _ conN tyvarNs condecls _
+               -> assert (fromHsk conN == nameID) $
+                  let tycon = mkTyCon (fromHsk name) tyvarNs
+                      constructors = map (mkDataCon tycon) condecls
+                  in [Type (defaultLexInfo { typeOf = Just tycon }) constructors] ++ constructors
+               where 
+                 mkTyCon name tyvarNs 
+                   = EnvTyCon name $ map (EnvTyVar . fromHsk) tyvarNs
+                 mkDataCon tycon (HsQualConDecl _ _ _ (HsConDecl n args))
+                   = let typ = foldr EnvTyFun tycon (map (\(HsUnBangedTy t) -> fromHsk t) args)
+                     in Function (makeLexInfo moduleID (fromHsk n) typ)
+                 mkDataCon nameID etc
+                   = error ("mkDataCon: " ++ show nameID ++ " " ++ show etc)
       
 
 mergeModuleEnvs (ModuleEnv m1 is1 es1 lex1) (ModuleEnv m2 is2 es2 lex2)
@@ -540,16 +551,17 @@ mapGlobalEnv update (GlobalEnv modulemap)
 
 computeExportedNames :: ModuleID -> GlobalE -> [IdentifierID]
 computeExportedNames moduleID globalEnv
-    = do let ModuleEnv moduleID _ exports (LexEnv lexmap)
+    = do let ModuleEnv moduleID' _ exports (LexEnv lexmap)
                  = findModuleEnv_OrLose moduleID globalEnv
+         assert (moduleID == moduleID') $ return ()
          export <- exports   -- List Monad concats implicitly for us.
          case export of         
            EnvExportVar   qn -> [idOf (unqualifyEnvName moduleID qn)]
            EnvExportAbstr qn -> [idOf (unqualifyEnvName moduleID qn)]
            EnvExportAll qn 
              -> case Importer.LexEnv.lookup moduleID qn globalEnv of
-                  Just (Type _ constructorNs) 
-                      -> constructorNs
+                  Just t@(Type _ constructors) 
+                      -> map (nameOf . lexInfoOf) (t:constructors)
                   etc -> error ("Internal error (computeExportedNames): " ++ show etc)
            EnvExportMod m
              | m == moduleID -> Map.keys lexmap -- export everything
@@ -599,12 +611,10 @@ isExported identifier moduleID globalEnv
 
 lookup :: ModuleID -> EnvName -> GlobalE -> Maybe Identifier
 lookup currentModule qname globalEnv 
-    = trace ("[lookup] " ++ prettyShow' "globalEnv" globalEnv) $
-      lookup' currentModule qname globalEnv -- ambiguous occurence `lookup'
-    where                                                                    -- between LexEnv and Prelude
+    = lookup' currentModule qname globalEnv -- ambiguous occurence `lookup'
+    where                                   -- between LexEnv and Prelude
       lookup' currentModule qname globalEnv                            
-          = trace ("lookup' " ++ show currentModule ++ " (" ++ show qname ++ ")") $
-            do currentModuleEnv <- findModuleEnv currentModule globalEnv
+          = do currentModuleEnv <- findModuleEnv currentModule globalEnv
                case qname of
                  EnvQualName m n 
                      | m == currentModule  
@@ -619,31 +629,21 @@ lookup currentModule qname globalEnv
                                        = currentModuleEnv
                             local_try  = Map.lookup n lexmap
                             tries      = map (\(EnvImport m _ _) 
-                                                  -> let !r = lookup' currentModule 
-                                                                      (EnvQualName m n) 
-                                                                      globalEnv
-                                                     in trace (prettyShow' "r" r) r) 
+                                                  -> lookup' currentModule 
+                                                             (EnvQualName m n) 
+                                                             globalEnv)
                                           $ filter (not . isQualifiedImport) imports
-                        in 
---                          trace ("--> " ++ show (local_try : tries)) $
-                          case catMaybes (local_try : tries) of
+                        in case catMaybes (local_try : tries) of
                              []   -> Nothing
                              [x]  -> Just x
                              x:xs -> error (Msg.identifier_collision_in_lookup 
                                                currentModule qname (x:xs))
 
--- lookup_isa :: Isa.Theory -> Isa.Name -> GlobalE -> Maybe IsaIdentifier
--- lookup_isa theory name globalEnv
---     = case lookup' theory name globalEnv of
---         Nothing  -> lookup' (Isa.Theory "Prelude") name globalEnv
---         Just foo -> Just foo
---     where lookup' theory (Isa.QName thy string) globalEnv
---               = if theory == thy then lookup' theory (Isa.Name string) globalEnv
---                                  else Nothing
---           lookup' theory name@(Isa.Name _) (IsaGlobalEnv globalmap)
---               = do (IsaTheoryEnv _ (IsaLexEnv lexmap)) <- Map.lookup theory globalmap
---                    Map.lookup name lexmap
-
+lookup_orLose :: ModuleID -> EnvName -> GlobalE -> Identifier
+lookup_orLose currentModule qname globalEnv
+    = case Importer.LexEnv.lookup currentModule qname globalEnv of
+        Just id -> id
+        Nothing -> error (Msg.failed_lookup currentModule qname globalEnv)
 
 -- checkGlobalEConsistency
 

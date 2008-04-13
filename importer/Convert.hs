@@ -40,7 +40,7 @@ convertHskUnit (HskUnit hsmodules _emptyEnv)
           hskmodules     = map (toHskModule globalenv_hsk') hsmodules'
           (isathys, _)   = runConversion globalenv_hsk' $ mapM convert hskmodules 
       in adaptIsaUnit globalenv_hsk' adaptionTable 
-           $ IsaUnit isathys (adaptGlobalEnv globalenv_hsk' adaptionTable)
+          $ IsaUnit isathys (adaptGlobalEnv globalenv_hsk' adaptionTable)
     where toHskModule globalEnv (HsModule loc modul _exports _imports decls)
               = let declDepGraph = makeDeclDepGraph decls 
                 in HskModule loc modul 
@@ -330,7 +330,7 @@ instance Convert HsType Isa.Type where
     convert' junk = barf "HsType -> Isa.Type" junk
 
 instance Convert HsBangType Isa.Type where
-    convert' (HsBangedTy typ)   = convert typ
+    convert' t@(HsBangedTy _)   = barf "HsBangType -> Isa.Type" t
     convert' (HsUnBangedTy typ) = convert typ
 
 
@@ -601,7 +601,7 @@ lookupType fname
                -> return $ Just (Env.toHsk typ)
            Just (Env.InfixOp  (Env.LexInfo { Env.typeOf = Just typ }) _ _) 
                -> return $ Just (Env.toHsk typ)
-           Just (Env.TypeAnnotation _ typ) 
+           Just (Env.TypeAnnotation (Env.LexInfo { Env.typeOf = Just typ })) 
                -> return $ Just (Env.toHsk typ)
            _ -> do globalEnv <- queryContext globalEnv;
                    warn (Msg.missing_fun_sig fname globalEnv)

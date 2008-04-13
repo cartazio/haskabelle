@@ -182,7 +182,7 @@ instance AlphaConvertable HsExp where
             HsRecUpdate exp updates
                 -> HsRecUpdate (renameFreeVars renams exp) updates
             exp -> assert (isTriviallyDescendable exp)
-                     $ descendBi (renameFreeVars renams :: HsExp -> HsExp) exp
+                     $ descend (renameFreeVars renams :: HsExp -> HsExp) exp
 
 isTriviallyDescendable hsexp 
     = case hsexp of

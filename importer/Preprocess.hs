@@ -23,6 +23,7 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
     = HsModule loc modul exports imports topdecls'
       where topdecls' = runGensym 0 (runDelocalizer (concatMapM delocalize_HsDecl topdecls))
 
+
 -- Delocalization of HsDecls:
 --
 --  Since Isabelle/HOL does not really support local function
@@ -121,13 +122,17 @@ delocalize_HsExp hsexp
        in do (subexpressions', decls) <- liftM (\(xs, ys) -> (xs, concat ys))
                                           $ mapAndUnzipM delocalize_HsExp subexpressions
              let finalexps = regenerate subexpressions'
-             assert (null (universeBi finalexps :: [HsDecl])) -- Safety check, so we haven't missed something.
+             -- FIXME: AVL.hs fails here because primitive let expression are left in.
+             assert ((null (universeBi finalexps :: [HsDecl])) -- Safety check, so we haven't missed something.
+                    || (trace (prettyShow' "finalexps" finalexps
+                               ++ prettyShow' "result" (universeBi finalexps :: [HsDecl])) False))
                $ return (regenerate subexpressions', decls)
 
 delocalize_HsAlt (HsAlt loc pat (HsUnGuardedAlt body) wbinds)
     = withBindings (extractBindingNs pat)
       $ do (body', localdecls) <- delocalize_HsExp (letify wbinds body)
            return (HsAlt loc pat (HsUnGuardedAlt body') (HsBDecls []), localdecls)
+
 
 
 -- Partitions HsBinds into (pattern bindings, other bindings).

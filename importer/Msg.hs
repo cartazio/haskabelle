@@ -42,6 +42,9 @@ failed_import importloc m errormsg
       ++ "While trying to import " ++ quote (module2FilePath m)
       ++ ", the following error occured:\n" ++ errormsg
 
+duplicate_import ms
+    = "Duplicate in imported modules: " ++ show ms
+
 failed_parsing loc msg
     = srcloc2string loc ++ ": " ++ msg
 
@@ -58,8 +61,11 @@ identifier_collision_in_lookup curModule qname foundIdentifiers
       ++ "while trying to look it up in " ++ quote curModule ++ ":\n\n" 
       ++ concatMap (linify . prettyShow' (show qname)) foundIdentifiers
 
+failed_lookup curModule envname globalEnv
+    = "No entry for " ++ quote envname ++ " found in global environment " ++ "\n"
+      ++ "while trying to look it up in " ++ quote curModule ++ ".\n"
+      ++ printEnv globalEnv
+
 ambiguous_decl_definitions decls
     = "Ambiguous definitions between\n" ++ concatMap (linify . prettyShow' "decl") decls
 
-duplicate_import ms
-    = "Duplicate in imported modules: " ++ show ms

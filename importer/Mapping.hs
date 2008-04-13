@@ -19,17 +19,53 @@ import Importer.Convert.Trivia (convert_trivia)
 
 import qualified Importer.IsaSyntax as Isa
 
-import Importer.AdaptTable
 
-import Importer.AdaptMapping
+data OpKind = Variable | Function | InfixOp Assoc Int 
+            | Data [Constructor]
+  deriving Show
+
+data Assoc = RightAssoc | LeftAssoc | NoneAssoc
+  deriving Show
+
+data Constructor = Constructor String String
+  deriving Show
+
+data AdaptionEntry = Haskell String String OpKind
+                   | Isabelle String String OpKind
+  deriving Show
 
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
+  deriving Show
+
+rawAdaptionTable 
+    = [
+       (Haskell  "Prelude.:" "a -> [a] -> [a]" (InfixOp RightAssoc  5),
+        Isabelle "Prelude.#" "a -> [a] -> [a]" (InfixOp RightAssoc  5)),
+
+       (Haskell  "Prelude.+"  "Int -> Int -> Int" (InfixOp LeftAssoc  7),
+        Isabelle "Main.+"     "Int -> Int -> Int" (InfixOp LeftAssoc  7)),
+       (Haskell  "Prelude.-"  "Int -> Int -> Int" (InfixOp LeftAssoc  7),
+        Isabelle "Main.-"     "Int -> Int -> Int" (InfixOp LeftAssoc  7)),
+
+       (Haskell  "Prelude.<=" "Int -> Int -> Bool" (InfixOp LeftAssoc  4),
+        Isabelle "Prelude.<=" "Int -> Int -> Bool" (InfixOp LeftAssoc  4)),
+
+       (Haskell  "Prelude.head" "[a] -> a" Function,
+        Isabelle "Prelude.hd"   "[a] -> a" Function),
+       (Haskell  "Prelude.tail" "[a] -> a" Function,
+        Isabelle "Prelude.tl"   "[a] -> a" Function),
+       (Haskell  "Prelude.++"   "[a] -> [a] -> [a]" (InfixOp RightAssoc 5),
+        Isabelle "List.@"       "[a] -> [a] -> [a]" (InfixOp RightAssoc 5)),
+
+       (Haskell  "Prelude.Bool"  "Bool" (Data [Constructor "True" "Bool", Constructor "False" "Bool"]),
+        Isabelle "Prelude.bool"  "bool" (Data [Constructor "True" "bool", Constructor "False" "bool"]))
+      ]
 
 adaptionTable :: AdaptionTable
 adaptionTable 
     = AdaptionTable 
-        $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
-              rawAdaptionTable
+        $ do (hEntry, iEntry) <- rawAdaptionTable 
+             zip (parseEntry hEntry) (parseEntry iEntry)
 
 initialGlobalEnv :: Env.GlobalE
 initialGlobalEnv 
@@ -38,37 +74,15 @@ initialGlobalEnv
           exportAll     = const True
           hskIdentifiers (AdaptionTable mapping) = map fst mapping
 
--- mk_initialGlobalE :: [(Module, HskIdentifier)] -> GlobalE
--- mk_initialGlobalE hskentries
---     = HskGlobalEnv $ Map.fromList (map (\(m, hsks) -> (m, mk_initialModuleEnv (m, hsks)))
---                                        (unzipAdaptionEntries hskentries))
---     where unzipAdaptionEntries :: [(Module, HskIdentifier)] -> [(Module, [HskIdentifier])]
---           unzipAdaptionEntries entries
---               = map (\(m:_, hsks) -> (m, hsks)) 
---                 $ map unzip 
---                   $ groupBy (\(m1,_) (m2,_) -> m1 == m2) 
---                     $ sortBy (\(m1,_) (m2,_) -> m1 `compare` m2) entries
 
--- mk_initialModuleEnv :: (Module, [HskIdentifier]) -> ModuleE
--- mk_initialModuleEnv (m, hskidents)
---     = HskModuleEnv m [] (mk_exports_list hskidents) (mk_initialLexEnv hskidents)
---     where mk_exports_list idents = map (HsEVar . identifier2name) idents
+parseEntry :: AdaptionEntry -> [Env.Identifier]
 
--- mk_initialLexEnv :: [HskIdentifier] -> LexE
--- mk_initialLexEnv hskidents
---     = HskLexEnv $ Map.fromListWith failDups (zip (map identifier2name hskidents) hskidents)
---     where failDups a b
---               = error ("Duplicate entries in the Adaption Table: " 
---                        ++ prettyShow' "a" a ++ "\n" ++ prettyShow' "b" b)
-
-
-parseEntry :: AdaptionEntry -> Env.Identifier
-parseEntry (Haskell raw_identifier op raw_type)
+parseEntry (Haskell raw_identifier raw_type op)
      = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
-       in  (makeIdentifier op moduleID identifierID (parseRawType raw_type))
-parseEntry (Isabelle raw_identifier op raw_type)
+       in  (makeIdentifiers op moduleID identifierID (parseRawType raw_type))
+parseEntry (Isabelle raw_identifier raw_type op)
      = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
-       in  (makeIdentifier op moduleID identifierID (parseRawType raw_type))
+       in  (makeIdentifiers op moduleID identifierID (parseRawType raw_type))
 
 parseRawIdentifier :: String -> (String, String)
 parseRawIdentifier string
@@ -83,15 +97,20 @@ parseRawType string
               = parseFileContents ("foo :: " ++ string)
       in Env.fromHsk hstyp
 
-makeIdentifier :: OpKind -> Env.ModuleID -> Env.IdentifierID -> Env.EnvType -> Env.Identifier
-makeIdentifier Variable m identifier t
-    = Env.Variable $ Env.makeLexInfo m identifier t
-makeIdentifier Function m identifier t
-    = Env.Function $ Env.makeLexInfo m identifier t
-makeIdentifier (InfixOp assoc prio) m identifier t
-    = Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
-makeIdentifier Type m identifierID t
-    = Env.Type (Env.makeLexInfo m identifierID t) [identifierID]
+
+makeIdentifiers :: OpKind -> Env.ModuleID -> Env.IdentifierID -> Env.EnvType -> [Env.Identifier]
+makeIdentifiers Variable m identifier t
+    = [Env.Variable $ Env.makeLexInfo m identifier t]
+makeIdentifiers Function m identifier t
+    = [Env.Function $ Env.makeLexInfo m identifier t]
+makeIdentifiers (InfixOp assoc prio) m identifier t
+    = [Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio]
+makeIdentifiers (Data cs) m identifierID t
+    = let constructors = map (makeConstructor m) cs 
+      in [Env.Type (Env.makeLexInfo m identifierID t) constructors] ++ constructors
+
+makeConstructor m (Constructor identifier raw_type)
+    = (\[x] -> x) $ makeIdentifiers Function m identifier (parseRawType raw_type)
 
 transformAssoc :: Assoc -> Env.EnvAssoc
 transformAssoc RightAssoc = Env.EnvAssocRight
