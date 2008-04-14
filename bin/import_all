@@ -8,7 +8,7 @@
 function fail()
 {
   echo "$1" >&2
-  exit 2
+  #exit 2
 }
 
 EXECPATH="$(dirname "$0")/.."

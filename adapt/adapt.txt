@@ -4,17 +4,22 @@
 
 types
   "Prelude.Bool"    "bool"
+  "Prelude.List"    "list"
+  "Prelude.Maybe"   "option"
 
 consts
   "Prelude.True"    "True"
   "Prelude.False"   "False"
 
-  "Prelude.+"       "HOL.plus"
-  "Prelude.-"       "HOL.minus"
-  "Prelude.<="      "HOL.less_eq"
-  "Prelude.<"       "HOL.less"
+  "Prelude.&&"      "op &"
+  "Prelude.||"      "op |"
 
+  "Prelude.[]"      "List.Nil"
   "Prelude.:"       "List.Cons"
+
   "Prelude.head"    "List.hd"
   "Prelude.tail"    "List.tl"
   "Prelude.++"      "List.append"
+
+  "Prelude.Nothing" "None"
+  "Prelude.Just"    "Some"
