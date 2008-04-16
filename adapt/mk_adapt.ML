@@ -12,14 +12,6 @@ end;
 structure MkAdapt : MK_ADAPT =
 struct
 
-(* syntax analysis *)
-
-fun mk_syntab thy =
-  let
-    val syn = Sign.syn_of thy;
-  in () end;
-
-
 (* concrete output syntax *)
 
 fun mk_typentry thy (hs, raw_isa) =
@@ -32,13 +24,19 @@ fun mk_typentry thy (hs, raw_isa) =
 fun mk_constentry thy (hs, raw_isa) =
   let
     val isa = Sign.intern_const thy raw_isa;
-    val syn = ();
-    fun string_of_syn () = "Function";
-    val syn' = string_of_syn syn;
+    val syn = Syntax.guess_infix (Sign.syn_of thy) (Sign.const_syntax_name thy isa);
+    fun string_of_syn NONE = (isa, "Function")
+      | string_of_syn (SOME (InfixName (s, j))) =
+          (s, enclose "(" ")" ("InfixOp NoneAssoc " ^ string_of_int j))
+      | string_of_syn (SOME (InfixlName (s, j))) = 
+          (s, enclose "(" ")" ("InfixOp LeftAssoc " ^ string_of_int j))
+      | string_of_syn (SOME (InfixrName (s, j))) = 
+          (s, enclose "(" ")" ("InfixOp RightAssoc " ^ string_of_int j))
+    val (sym, syn') = string_of_syn syn;
     val typ = Logic.unvarifyT (Sign.the_const_type thy isa);
     val typ' = Sign.string_of_typ thy typ;
     val s = "(Haskell " ^ quote hs ^ " " ^ syn' ^ " " ^ quote typ' ^ ", Isabelle "
-      ^ quote isa ^ " " ^ syn' ^ " " ^ quote typ' ^ ")";
+      ^ quote sym ^ " " ^ syn' ^ " " ^ quote typ' ^ ")";
   in s end;
 
 
@@ -78,7 +76,7 @@ fun run thy src_loc dst_loc =
       "-- $" ^ "Id" ^ "$", "",
       "module Importer." ^ modl_name ^ " where", "",
       "import Importer.AdaptTable", "",
-      "rawAdaptionTable = " ^ convert thy (Position.file src_loc) src];
+      "rawAdaptionTable = " ^ convert thy (Position.file src_loc) src, ""];
     val _ = File.write dst_path (cat_lines dsts);
     val _ = writeln ("Written to " ^ dst_loc);
   in () end;

@@ -19,24 +19,6 @@ import Importer.Convert.Trivia (convert_trivia)
 
 import qualified Importer.IsaSyntax as Isa
 
-
-data OpKind = Variable | Function | InfixOp Assoc Int 
-            | Data [Constructor]
-  deriving Show
-
-data Assoc = RightAssoc | LeftAssoc | NoneAssoc
-  deriving Show
-
-data Constructor = Constructor String String
-  deriving Show
-
-data AdaptionEntry = Haskell String String OpKind
-                   | Isabelle String String OpKind
-  deriving Show
-
-data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
-  deriving Show
-
 rawAdaptionTable 
     = [
        (Haskell  "Prelude.:" "a -> [a] -> [a]" (InfixOp RightAssoc  5),
