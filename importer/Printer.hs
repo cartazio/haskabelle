@@ -176,7 +176,8 @@ indent = 3
 class Printer a where
     pprint' :: a -> DocM P.Doc
     pprint  :: a -> Env.GlobalE -> P.Doc
-    pprint obj env = let DocM sf          = pprint' obj
+    pprint obj env = trace (prettyShow' "printerEnv" env) $
+                     let DocM sf          = pprint' obj
                          (result, _state) = sf (emptyPPState { globalEnv = env })
                          doc              = result
                      in doc
@@ -195,10 +196,11 @@ instance Printer Isa.Cmd where
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $
-          text "datatype" <+> pprint' tyspec --FIXME tyspec in this case has to be treated differently
+          text "datatype" <+> pprint' tyspec 
           <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
-                                  (map pp dataspecs))
-          where pp (Isa.Constructor con types) = hsep $ pprint' con : map pprint' types
+                                  (map ppconstr dataspecs))
+          where ppconstr (Isa.Constructor con types) 
+                    = hsep $ pprint' con : map pprint' types
 
     pprint' (Isa.RecordCmd tyspec conspecs)
         = blankline $
@@ -249,7 +251,7 @@ instance Printer Isa.TypeSpec where
         = pprint' tycon
     pprint' (Isa.TypeSpec tyvars tycon)
         = let tyvars' = parens . hsep . punctuate comma . accentuate apostroph $ map pprint' tyvars
-          in maybeWithinHOL $ tyvars' <+> pprint' tycon
+          in tyvars' <+> pprint' tycon
 
 instance Printer Isa.Name where
     pprint' (Isa.Name str) = text str
