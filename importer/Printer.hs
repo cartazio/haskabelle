@@ -176,8 +176,7 @@ indent = 3
 class Printer a where
     pprint' :: a -> DocM P.Doc
     pprint  :: a -> Env.GlobalE -> P.Doc
-    pprint obj env = trace (prettyShow' "printerEnv" env) $
-                     let DocM sf          = pprint' obj
+    pprint obj env = let DocM sf          = pprint' obj
                          (result, _state) = sf (emptyPPState { globalEnv = env })
                          doc              = result
                      in doc
@@ -187,12 +186,12 @@ instance Printer Isa.Cmd where
     pprint' (Isa.Comment string) = empty -- blankline $ comment string
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
     pprint' (Isa.TheoryCmd thy cmds)
-        = 
-          text "theory" <+> pprint' thy $+$
-          text "imports Main"           $+$
-          text "begin"                  $+$
-          (vcat $ map pprint' cmds)     $+$
-          text "\nend"
+        = withCurrentTheory thy $
+            text "theory" <+> pprint' thy $+$
+            text "imports Main"           $+$
+            text "begin"                  $+$
+            (vcat $ map pprint' cmds)     $+$
+            text "\nend"
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $
@@ -357,12 +356,13 @@ data AppFlavor = ListApp [Isa.Term]
 --
 -- Cf. http://www.haskell.org/ghc/docs/latest/html/users_guide/syntax-extns.html#pattern-guards
 --
+
 categorizeApp :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> AppFlavor
 categorizeApp app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
     | Isa.isCons opN,    Just list <- flattenListApp app  = ListApp list
     | Isa.isPairCon opN, Just list <- flattenTupleApp app = TupleApp list
     | isInfixOp opN lookupFn                              = InfixApp t1 (Isa.Var opN) t2
-categorizeApp _ _                                         = MiscApp
+categorizeApp _ _                                        = MiscApp
 
 flattenListApp :: Isa.Term -> Maybe [Isa.Term]
 flattenListApp app = let list = unfoldr1 split app in 

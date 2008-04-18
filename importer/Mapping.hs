@@ -10,44 +10,85 @@ import qualified Data.Map as Map
 
 import Language.Haskell.Hsx
 
-import Importer.Utilities.Misc (wordsBy, prettyShow')
+import Importer.Utilities.Misc (wordsBy, prettyShow', trace)
 import Importer.Utilities.Hsk (string2HsName)
 
 import qualified Importer.LexEnv as Env
 
-import Importer.Convert.Trivia (convert_trivia)
-
 import qualified Importer.IsaSyntax as Isa
+
+data OpKind = Variable | Function | InfixOp Assoc Int 
+            | Type
+  deriving Show
+
+data Assoc = RightAssoc | LeftAssoc | NoneAssoc
+  deriving Show
+
+data AdaptionEntry = Haskell String OpKind String
+                   | Isabelle String OpKind String
+  deriving Show
+
+data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
+  deriving Show
 
 rawAdaptionTable 
     = [
-       (Haskell  "Prelude.:" "a -> [a] -> [a]" (InfixOp RightAssoc  5),
-        Isabelle "Prelude.#" "a -> [a] -> [a]" (InfixOp RightAssoc  5)),
+       (Haskell  "Prelude.:" (InfixOp RightAssoc  5) "a -> [a] -> [a]",
+        Isabelle "Prelude.#" (InfixOp RightAssoc  5) "a -> [a] -> [a]"),
 
-       (Haskell  "Prelude.+"  "Int -> Int -> Int" (InfixOp LeftAssoc  7),
-        Isabelle "Main.+"     "Int -> Int -> Int" (InfixOp LeftAssoc  7)),
-       (Haskell  "Prelude.-"  "Int -> Int -> Int" (InfixOp LeftAssoc  7),
-        Isabelle "Main.-"     "Int -> Int -> Int" (InfixOp LeftAssoc  7)),
+       (Haskell  "Prelude.+"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
+        Isabelle "Main.+"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
+       (Haskell  "Prelude.-"  (InfixOp LeftAssoc  7) "Int -> Int -> Int",
+        Isabelle "Main.-"     (InfixOp LeftAssoc  7) "Int -> Int -> Int"),
 
-       (Haskell  "Prelude.<=" "Int -> Int -> Bool" (InfixOp LeftAssoc  4),
-        Isabelle "Prelude.<=" "Int -> Int -> Bool" (InfixOp LeftAssoc  4)),
+       (Haskell  "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool",
+        Isabelle "Prelude.<=" (InfixOp LeftAssoc  4) "Int -> Int -> Bool"),
 
-       (Haskell  "Prelude.head" "[a] -> a" Function,
-        Isabelle "Prelude.hd"   "[a] -> a" Function),
-       (Haskell  "Prelude.tail" "[a] -> a" Function,
-        Isabelle "Prelude.tl"   "[a] -> a" Function),
-       (Haskell  "Prelude.++"   "[a] -> [a] -> [a]" (InfixOp RightAssoc 5),
-        Isabelle "List.@"       "[a] -> [a] -> [a]" (InfixOp RightAssoc 5)),
+--        (Haskell "Prelude.List"   Type "Prelude.List", 
+--         Isabelle "List.list"     Type "List.list"),
+--        (Haskell "Prelude.[]"     Function "List a", 
+--         Isabelle "List.list.Nil" Function "List a"),
+--       (Haskell "Prelude.:" (InfixOp RightAssoc 65) "'a -> 'a list -> 'a list", Isabelle "#" (InfixOp RightAssoc 65) "'a -> 'a list -> 'a list"),
+       (Haskell  "Prelude.head" Function "[a] -> a",
+        Isabelle "List.hd"   Function "[a] -> a"),
+       (Haskell  "Prelude.tail" Function "[a] -> a",
+        Isabelle "List.tl"   Function "[a] -> a"),
+       (Haskell  "Prelude.++"   (InfixOp RightAssoc 5) "[a] -> [a] -> [a]",
+        Isabelle "List.@"       (InfixOp RightAssoc 65) "[a] -> [a] -> [a]"),
 
-       (Haskell  "Prelude.Bool"  "Bool" (Data [Constructor "True" "Bool", Constructor "False" "Bool"]),
-        Isabelle "Prelude.bool"  "bool" (Data [Constructor "True" "bool", Constructor "False" "bool"]))
+--        (Haskell "Prelude.Maybe"         Type "Prelude.Maybe", 
+--         Isabelle "Datatype.option"      Type "Datatype.option"),
+--        (Haskell "Prelude.Nothing"       Function "Maybe a", 
+--         Isabelle "Datatype.option.None" Function "Maybe a"),
+--        (Haskell "Prelude.Just"          Function "a -> Maybe a", 
+--         Isabelle "Datatype.option.Some" Function "a -> Maybe a"),
+
+       (Haskell  "Prelude.Bool"  Type "Bool",
+        Isabelle "Prelude.bool"  Type "Bool"),
+       (Haskell  "Prelude.True"  Function "Bool",
+        Isabelle "Prelude.True"  Function "Bool"),
+       (Haskell  "Prelude.False" Function "Bool",
+        Isabelle "Prelude.False" Function "Bool"),
+       (Haskell "Prelude.&&" (InfixOp RightAssoc 3) "Bool -> Bool -> Bool", 
+        Isabelle "&" (InfixOp RightAssoc 35) "Bool -> Bool -> Bool"),
+       (Haskell "Prelude.||" (InfixOp RightAssoc 2) "Bool -> Bool -> Bool", 
+        Isabelle "|" (InfixOp RightAssoc 30) "Bool -> Bool -> Bool")
       ]
+
+-- rawAdaptionTable = [(Haskell "Prelude.Bool" Type "Prelude.Bool", Isabelle "bool" Type "bool"),
+
+--   (Haskell "Prelude.True" Function "bool", Isabelle "True" Function "bool"),
+--   (Haskell "Prelude.False" Function "bool", Isabelle "False" Function "bool"),
+
+
+-- ]
+
 
 adaptionTable :: AdaptionTable
 adaptionTable 
     = AdaptionTable 
-        $ do (hEntry, iEntry) <- rawAdaptionTable 
-             zip (parseEntry hEntry) (parseEntry iEntry)
+        $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
+              rawAdaptionTable 
 
 initialGlobalEnv :: Env.GlobalE
 initialGlobalEnv 
@@ -57,14 +98,14 @@ initialGlobalEnv
           hskIdentifiers (AdaptionTable mapping) = map fst mapping
 
 
-parseEntry :: AdaptionEntry -> [Env.Identifier]
+parseEntry :: AdaptionEntry -> Env.Identifier
 
-parseEntry (Haskell raw_identifier raw_type op)
+parseEntry (Haskell raw_identifier op raw_type)
      = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
-       in  (makeIdentifiers op moduleID identifierID (parseRawType raw_type))
-parseEntry (Isabelle raw_identifier raw_type op)
+       in makeIdentifier op moduleID identifierID (parseRawType raw_type)
+parseEntry (Isabelle raw_identifier op raw_type)
      = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
-       in  (makeIdentifiers op moduleID identifierID (parseRawType raw_type))
+       in makeIdentifier op moduleID identifierID (parseRawType raw_type)
 
 parseRawIdentifier :: String -> (String, String)
 parseRawIdentifier string
@@ -74,25 +115,23 @@ parseRawIdentifier string
       in (modul, identifier)
 
 parseRawType :: String -> Env.EnvType
-parseRawType string
-    = let (ParseOk (HsModule _ _ _ _ [HsTypeSig _ _ hstyp])) 
-              = parseFileContents ("foo :: " ++ string)
-      in Env.fromHsk hstyp
+parseRawType _ = Env.EnvTyNone
+-- parseRawType string
+--     = -- trace ("string = " ++ show string) $
+--       let (ParseOk (HsModule _ _ _ _ [HsTypeSig _ _ hstyp])) 
+--               = parseFileContents ("foo :: " ++ string)
+--       in Env.fromHsk hstyp
 
 
-makeIdentifiers :: OpKind -> Env.ModuleID -> Env.IdentifierID -> Env.EnvType -> [Env.Identifier]
-makeIdentifiers Variable m identifier t
-    = [Env.Variable $ Env.makeLexInfo m identifier t]
-makeIdentifiers Function m identifier t
-    = [Env.Function $ Env.makeLexInfo m identifier t]
-makeIdentifiers (InfixOp assoc prio) m identifier t
-    = [Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio]
-makeIdentifiers (Data cs) m identifierID t
-    = let constructors = map (makeConstructor m) cs 
-      in [Env.Type (Env.makeLexInfo m identifierID t) constructors] ++ constructors
-
-makeConstructor m (Constructor identifier raw_type)
-    = (\[x] -> x) $ makeIdentifiers Function m identifier (parseRawType raw_type)
+makeIdentifier :: OpKind -> Env.ModuleID -> Env.IdentifierID -> Env.EnvType -> Env.Identifier
+makeIdentifier Variable m identifier t
+    = Env.Variable $ Env.makeLexInfo m identifier t
+makeIdentifier Function m identifier t
+    = Env.Function $ Env.makeLexInfo m identifier t
+makeIdentifier (InfixOp assoc prio) m identifier t
+    = Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
+makeIdentifier Type m identifier t
+    = Env.Type (Env.makeLexInfo m identifier t) []
 
 transformAssoc :: Assoc -> Env.EnvAssoc
 transformAssoc RightAssoc = Env.EnvAssocRight

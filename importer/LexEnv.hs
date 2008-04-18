@@ -29,6 +29,7 @@ data EnvType = EnvTyVar EnvName
              | EnvTyCon EnvName [EnvType]
              | EnvTyFun EnvType EnvType
              | EnvTyTuple [EnvType]
+             | EnvTyNone
   deriving (Eq, Show)
 
 data EnvAssoc = EnvAssocRight | EnvAssocLeft | EnvAssocNone
@@ -53,7 +54,7 @@ unqualifyEnvName mID n@(EnvUnqualName _)   = n
 
 data LexInfo = LexInfo { 
                         nameOf   :: IdentifierID,
-                        typeOf   :: Maybe EnvType,
+                        typeOf   :: EnvType,
                         moduleOf :: ModuleID
                        }
   deriving (Eq, Show)
@@ -68,7 +69,7 @@ data Identifier = Variable LexInfo
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
 makeLexInfo moduleID identifierID t
     = LexInfo { nameOf   = identifierID,
-                typeOf   = Just t,
+                typeOf   = t,
                 moduleOf = moduleID }
 
 updateIdentifier :: Identifier -> LexInfo -> Identifier
@@ -211,7 +212,7 @@ instance Hsk2Env HsType EnvType where
                 split junk                                --  the head of the returned list.
                     = error ("HsType -> EnvType (split HsTyApp): " ++ (show junk))
 
-    fromHsk junk = error ("HsType -> EnvType: Fall Through: " ++ show junk)
+    fromHsk junk = error ("HsType -> EnvType: Fall Through: " ++ prettyShow' "thing" junk)
 
     toHsk (EnvTyVar n)       = HsTyVar (toHsk n)
     toHsk (EnvTyTuple types) = HsTyTuple Boxed (map toHsk types)
@@ -266,11 +267,13 @@ instance Isa2Env Isa.Assoc EnvAssoc where
     toIsa EnvAssocNone     = Isa.AssocNone
 
 instance Isa2Env Isa.Type EnvType where
+    fromIsa (Isa.TyNone)          = EnvTyNone
     fromIsa (Isa.TyVar n)         = EnvTyVar (fromIsa n)
     fromIsa (Isa.TyTuple types)   = EnvTyTuple (map fromIsa types)
     fromIsa (Isa.TyFun t1 t2)     = EnvTyFun (fromIsa t1) (fromIsa t2)
     fromIsa (Isa.TyCon qn tyvars) = EnvTyCon (fromIsa qn) (map fromIsa tyvars)
-
+    
+    toIsa (EnvTyNone)             = Isa.TyNone
     toIsa (EnvTyVar n)            = Isa.TyVar (toIsa n)
     toIsa (EnvTyTuple types)      = Isa.TyTuple (map toIsa types)
     toIsa (EnvTyFun t1 t2)        = Isa.TyFun (toIsa t1) (toIsa t2)
@@ -329,8 +332,8 @@ mergeIdentifiers ident1 ident2
           (TypeAnnotation ann, Function i)       -> Just $ Function (update i ann)
           (TypeAnnotation ann, InfixOp  i a p)   -> Just $ InfixOp  (update i ann) a p
           (_,_) -> Nothing
-    where update lexinfo@(LexInfo { typeOf = Nothing }) (LexInfo { typeOf = Just typ })
-              = lexinfo { typeOf = Just typ }
+    where update lexinfo@(LexInfo { typeOf = EnvTyNone }) (LexInfo { typeOf = typ })
+              = lexinfo { typeOf = typ }
           update lexinfo typ    -- Cannot merge + internal inconsistency.
               = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
                        ++ " and `" ++ show typ ++ "'.")
@@ -433,17 +436,17 @@ computeIdentifierMappings modul decl
     = do name <- fromJust (namesFromHsDecl decl)
          let nameID         = fromHsk name
          let moduleID       = fromHsk modul
-         let defaultLexInfo = LexInfo { nameOf=nameID, typeOf=Nothing, moduleOf=moduleID}
+         let defaultLexInfo = LexInfo { nameOf=nameID, typeOf=EnvTyNone, moduleOf=moduleID}
          case decl of
            HsPatBind _ _ _ _   -> [Variable defaultLexInfo]
            HsFunBind _         -> [Function defaultLexInfo]
            HsInfixDecl _ a p _ -> [InfixOp  defaultLexInfo (fromHsk a) p]
-           HsTypeSig _ _ typ   -> [TypeAnnotation (defaultLexInfo { typeOf = Just (fromHsk typ)})]
+           HsTypeSig _ _ typ   -> [TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ})]
            HsDataDecl _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
                   let tycon = mkTyCon (fromHsk name) tyvarNs
                       constructors = map (mkDataCon tycon) condecls
-                  in [Type (defaultLexInfo { typeOf = Just tycon }) constructors] ++ constructors
+                  in [Type (defaultLexInfo { typeOf = tycon }) constructors] ++ constructors
                where 
                  mkTyCon name tyvarNs 
                    = EnvTyCon name $ map (EnvTyVar . fromHsk) tyvarNs
@@ -646,7 +649,7 @@ lookup_orLose currentModule qname globalEnv
         Just id -> id
         Nothing -> error (Msg.failed_lookup currentModule qname globalEnv)
 
--- checkGlobalEConsistency
+-- check_GlobalEnv_Consistency
 
 --       check_duplicates :: Eq a => ([a] -> String) -> [a] -> [a]
 --       check_duplicates failure_str xs 

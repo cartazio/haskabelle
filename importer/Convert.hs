@@ -37,10 +37,14 @@ convertHskUnit (HskUnit hsmodules _emptyEnv)
     = let hsmodules'     = map preprocessHsModule hsmodules
           globalenv_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
           globalenv_hsk' = Env.mergeGlobalEnvs globalenv_hsk initialGlobalEnv
+          globalenv_isa  = adaptGlobalEnv globalenv_hsk' adaptionTable
           hskmodules     = map (toHskModule globalenv_hsk') hsmodules'
           (isathys, _)   = runConversion globalenv_hsk' $ mapM convert hskmodules 
-      in adaptIsaUnit globalenv_hsk' adaptionTable 
-          $ IsaUnit isathys (adaptGlobalEnv globalenv_hsk' adaptionTable)
+      in -- trace ("convertHskUnit") $
+         let !r = adaptIsaUnit globalenv_hsk' adaptionTable 
+                  $ IsaUnit isathys globalenv_isa 
+         in -- trace (prettyShow' "adaptedIsaUnits" r) r
+           r
     where toHskModule globalEnv (HsModule loc modul _exports _imports decls)
               = let declDepGraph = makeDeclDepGraph decls 
                 in HskModule loc modul 
@@ -537,16 +541,9 @@ lookupType :: HsQName -> ContextM (Maybe HsType)
 lookupType fname
     = do identifier <- lookupIdentifier fname
          case identifier of
-           Just (Env.Variable (Env.LexInfo { Env.typeOf = Just typ })) 
-               -> return $ Just (Env.toHsk typ)
-           Just (Env.Function (Env.LexInfo { Env.typeOf = Just typ })) 
-               -> return $ Just (Env.toHsk typ)
-           Just (Env.InfixOp  (Env.LexInfo { Env.typeOf = Just typ }) _ _) 
-               -> return $ Just (Env.toHsk typ)
-           Just (Env.TypeAnnotation (Env.LexInfo { Env.typeOf = Just typ })) 
-               -> return $ Just (Env.toHsk typ)
-           _ -> do globalEnv <- queryContext globalEnv;
-                   warn (Msg.missing_fun_sig fname globalEnv)
-                   return Nothing
+           Nothing -> return Nothing
+           Just id -> let typ = Env.typeOf (Env.lexInfoOf id) 
+                      in if (typ == Env.EnvTyNone) then return Nothing
+                                                   else return $ Just (Env.toHsk typ)
 
 

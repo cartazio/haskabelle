@@ -87,7 +87,7 @@ union (Insert a aa) b =
 tree_case ::
   forall t a. t -> (a -> Tree a -> Tree a -> Nat -> t) -> Tree a -> t;
 tree_case f1 f2 Et = f1;
-tree_case f1 f2 (Mkt a tree1 tree2 nat) = f2 a tree1 tree2 nat;
+tree_case f1 f2 (Mkt a tree1 tree2 n) = f2 a tree1 tree2 n;
 
 r_bal :: forall a. (a, (Tree a, Tree a)) -> Tree a;
 r_bal (n, (l, Mkt rn rl rr h)) =
@@ -144,13 +144,13 @@ is_ord (MKT_isub_0 n l r) =
     (ball (set_of r) (less_nat n) && (is_ord l && is_ord r));
 is_ord ET_isub_0 = True;
 
-eq_tree :: forall a. (Eq a) => Tree a -> Tree a -> Bool;
-eq_tree Et Et = True;
-eq_tree (Mkt a tree1 tree2 nat) (Mkt a' tree1' tree2' nat') =
-  a == a' &&
-    (eq_tree tree1 tree1' && (eq_tree tree2 tree2' && eq_nat nat nat'));
-eq_tree Et (Mkt a b c d) = False;
-eq_tree (Mkt a b c d) Et = False;
+-- eq_tree :: forall a. (Eq a) => Tree a -> Tree a -> Bool;
+-- eq_tree Et Et = True;
+-- eq_tree (Mkt a tree1 tree2 nat) (Mkt a' tree1' tree2' nat') =
+--   a == a' &&
+--     (eq_tree tree1 tree1' && (eq_tree tree2 tree2' && eq_nat nat nat'));
+-- eq_tree Et (Mkt a b c d) = False;
+-- eq_tree (Mkt a b c d) Et = False;
 
 tree_rec ::
   forall t a. t -> (a -> Tree a -> Tree a -> Nat -> t -> t -> t) -> Tree a -> t;
@@ -221,15 +221,15 @@ is_in_isub_0 k (MKT_isub_0 n l r) =
     else (if less_nat k n then is_in_isub_0 k l else is_in_isub_0 k r));
 is_in_isub_0 k ET_isub_0 = False;
 
-eq_tree_isub_0 :: forall a. (Eq a) => Tree_isub_0 a -> Tree_isub_0 a -> Bool;
-eq_tree_isub_0 ET_isub_0 ET_isub_0 = True;
-eq_tree_isub_0 (MKT_isub_0 a tree_isub_01 tree_isub_02)
-  (MKT_isub_0 a' tree_isub_01' tree_isub_02') =
-  a == a' &&
-    (eq_tree_isub_0 tree_isub_01 tree_isub_01' &&
-      eq_tree_isub_0 tree_isub_02 tree_isub_02');
-eq_tree_isub_0 ET_isub_0 (MKT_isub_0 a b c) = False;
-eq_tree_isub_0 (MKT_isub_0 a b c) ET_isub_0 = False;
+-- eq_tree_isub_0 :: forall a. (Eq a) => Tree_isub_0 a -> Tree_isub_0 a -> Bool;
+-- eq_tree_isub_0 ET_isub_0 ET_isub_0 = True;
+-- eq_tree_isub_0 (MKT_isub_0 a tree_isub_01 tree_isub_02)
+--   (MKT_isub_0 a' tree_isub_01' tree_isub_02') =
+--   a == a' &&
+--     (eq_tree_isub_0 tree_isub_01 tree_isub_01' &&
+--       eq_tree_isub_0 tree_isub_02 tree_isub_02');
+-- eq_tree_isub_0 ET_isub_0 (MKT_isub_0 a b c) = False;
+-- eq_tree_isub_0 (MKT_isub_0 a b c) ET_isub_0 = False;
 
 tree_isub_0_rec ::
   forall t a.

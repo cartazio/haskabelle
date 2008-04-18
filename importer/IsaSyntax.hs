@@ -25,7 +25,7 @@ data Cmd =
 
     | TheoryCmd Theory [Cmd]
     --
-    -- datatype "('a, 'b) typeconstr" = Constr1 | Constr2 "'a list" 'b
+    -- datatype ('a, 'b) "typeconstr" = Constr1 | Constr2 "'a list" 'b
     --
     | DatatypeCmd TypeSpec [ConSpec]
     --

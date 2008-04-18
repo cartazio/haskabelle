@@ -40,8 +40,8 @@ import Importer.Printer (pprint)
 --
 -- E.g.
 --
---    do (ConvSuccess ast _) <- convertFile "/path/foo.hs"
---       return (pprint ast)
+--    do unit <- convertFile "/path/foo.hs"
+--       return (pprintConversionUnit unit)
 --
 
 convertFile :: FilePath -> IO ConversionUnit
