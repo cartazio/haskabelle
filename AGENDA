@@ -1,4 +1,5 @@
 Arbeitsplan Haskell-Importer:
+
 * lauffähiges, konsistentes Repository                  Mitte April     Tobias
 * ausführlicheres README mit Installationsanweisungen
     und Benutzung                                       Ende April      Tobias
@@ -8,5 +9,18 @@ Arbeitsplan Haskell-Importer:
     (im Repository)                                     Mitte Mai       Tobias
 * Behandlung von Typklassen                             Ende Mai        Tobias
 * Behandlung von Literalen (Numerale, Strings)          Ende Juni       Tobias
+
+
+BUG / TODO Liste:
+
+* Printer gibt hard-wired "imports Main" aus, und
+  nicht die tatsächlichen abhängigen Module.
+
+* Printer gibt let-forms nicht syntaktisch korrekt aus.
+
+* Identifiers in LexEnv sind nicht universal qualifiziert.
+
+* rawAdaptionTable: "Prelude.List" -> "List.list"; aber Module
+  `List' existiert gar nicht.
 
 $Id: NEWS,v 1.1023 2008-04-02 13:58:32 haftmann Exp $
