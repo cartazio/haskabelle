@@ -27,4 +27,4 @@ Importing all examples (to ex/dst_thy):
 
     bin/import_all
 
-$Id: NEWS,v 1.1023 2008-04-02 13:58:32 haftmann Exp $
+$Id$
