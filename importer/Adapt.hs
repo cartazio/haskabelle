@@ -48,10 +48,10 @@ shadow names
 --
 -- Inside `body', do not adapt names `a', `b', and `c'.
 --
-shadowing :: [Env.EnvName] -> AdaptM v -> AdaptM v
+shadowing :: [Isa.Name] -> AdaptM v -> AdaptM v
 shadowing names body
     = do old_tbl <- query adaptionTable
-         shadow names
+         shadow (map Env.fromIsa names)
          r <- body
          set (\state -> state { adaptionTable = old_tbl })
          return r
@@ -67,11 +67,12 @@ shadowing names body
 --
 -- Inside `body', do not adapt `a', `b' and `c'.
 -- 
-nested_binding :: [([Env.EnvName], AdaptM b)] -> ([b] -> AdaptM v) -> AdaptM v
+nested_binding :: [([Isa.Name], AdaptM b)] -> ([b] -> AdaptM v) -> AdaptM v
 nested_binding [] continuation = continuation []
 nested_binding bindings continuation
     = do old_tbl <- query adaptionTable
-         rs      <- foldM (\result (ns,thunk) -> do shadow ns ; t <- thunk
+         rs      <- foldM (\result (ns,thunk) -> let ns' = map Env.fromIsa ns in
+                                                 do shadow ns' ; t <- thunk
                                                     return (result ++ [t])) 
                     [] bindings
          r       <- continuation rs
@@ -112,15 +113,15 @@ adapt_type_in_identifier globalEnv tbl n@(Env.EnvQualName mID _)
     = do let old_id       = Env.lookup_orLose mID n globalEnv
          let old_lexinfo  = Env.lexInfoOf old_id
          let old_type     = Env.typeOf old_lexinfo
-         new_type <- translateType tbl (qualifier (Env.moduleOf old_lexinfo)) old_type
+         new_type <- translateEnvType tbl (qualifier (Env.moduleOf old_lexinfo)) old_type
          return $ Env.updateIdentifier old_id (old_lexinfo {Env.typeOf = new_type})
     where qualifier mID n
               = case Env.lookup mID n globalEnv of
                   Nothing -> Env.qualifyEnvName mID n
                   Just id -> Env.identifier2name id 
 
-translateType :: AdaptionTable -> (Env.EnvName -> Env.EnvName) -> Env.EnvType -> Maybe Env.EnvType
-translateType (AdaptionTable mappings) qualify typ
+translateEnvType :: AdaptionTable -> (Env.EnvName -> Env.EnvName) -> Env.EnvType -> Maybe Env.EnvType
+translateEnvType (AdaptionTable mappings) qualify typ
     = let type_renams  = filter (Env.isType . fst) mappings
           type_renams' = assert (all (Env.isType . snd) type_renams) 
                            $ map (\(t1,t2) -> (Env.identifier2name t1, Env.identifier2name t2)) 
@@ -131,12 +132,9 @@ translateType (AdaptionTable mappings) qualify typ
     where 
       translate :: [(Env.EnvName, Env.EnvName)] -> Env.EnvType -> State Bool Env.EnvType
       translate alist typ
-          = let transl n =
-                    -- trace ("transl " ++ show n ++ "\n"
-                    --       ++ "   ==> " ++ show (lookup (qualify n) alist)) $
-                    case lookup (qualify n) alist of
-                      Nothing -> return n
-                      Just n' -> do put True; return n'
+          = let transl n = case lookup (qualify n) alist of
+                             Nothing -> return n
+                             Just n' -> do put True; return n'
                 in case typ of 
                      Env.EnvTyNone      -> return Env.EnvTyNone
                      Env.EnvTyVar n     -> transl n >>= (return . Env.EnvTyVar)
@@ -149,8 +147,8 @@ translateType (AdaptionTable mappings) qualify typ
                      Env.EnvTyTuple ts  -> do ts' <- mapM (translate alist) ts
                                               return (Env.EnvTyTuple ts')
 
-adaptName :: Env.EnvName -> AdaptM Env.EnvName
-adaptName n 
+adaptEnvName :: Env.EnvName -> AdaptM Env.EnvName
+adaptEnvName n 
     = do Just mID <- query currentModuleID
          tbl      <- query adaptionTable
          oldEnv   <- query oldGlobalEnv
@@ -162,8 +160,8 @@ adaptName n
                       in assert (isJust (Env.lookup mID new_id_name newEnv))
                            $ return new_id_name
 
-adaptType :: Env.EnvType -> AdaptM Env.EnvType
-adaptType t
+adaptEnvType :: Env.EnvType -> AdaptM Env.EnvType
+adaptEnvType t
     = do Just mID <- query currentModuleID
          tbl      <- query adaptionTable
          oldEnv   <- query oldGlobalEnv
@@ -171,7 +169,13 @@ adaptType t
               = case Env.lookup mID n oldEnv of
                   Nothing -> Env.qualifyEnvName mID n
                   Just id -> Env.identifier2name id 
-         return (fromMaybe t (translateType tbl qualify t))
+         return (fromMaybe t (translateEnvType tbl qualify t))
+
+adaptName :: Isa.Name -> AdaptM Isa.Name
+adaptName n = do n' <- adaptEnvName (Env.fromIsa n); return (Env.toIsa n')
+
+adaptType :: Isa.Type -> AdaptM Isa.Type
+adaptType t = do t' <- adaptEnvType (Env.fromIsa t); return (Env.toIsa t')
 
 
 adaptIsaUnit :: Env.GlobalE -> AdaptionTable -> ConversionUnit -> ConversionUnit
@@ -181,7 +185,7 @@ adaptIsaUnit globalEnv adaptionTable (IsaUnit thycmds adaptedGlobalEnv)
       in IsaUnit thycmds' adaptedGlobalEnv
 
 
-not_implemented x = error ("Adaption not implemented yet for" ++ prettyShow' "thing" x) 
+not_implemented x = error ("Adaption not implemented yet for\n  " ++ prettyShow' "thing" x) 
 
 class Adapt a where
     adapt  :: a -> AdaptM a
@@ -205,16 +209,16 @@ instance Adapt Isa.Cmd where
     adapt c@(Isa.Comment _)          = return c
 
     adapt (Isa.DatatypeCmd sig@(Isa.TypeSpec tyvarNs tycoN) constrs)    
-        = shadowing (map Env.fromIsa (tycoN:tyvarNs)) $
+        = shadowing (tycoN:tyvarNs) $
             do constrs' <- mapM adpt constrs
                return (Isa.DatatypeCmd sig constrs')
         where adpt (Isa.Constructor name types)
-                  = do types' <- mapM adaptType (map Env.fromIsa types)
-                       return (Isa.Constructor name (map Env.toIsa types'))
+                  = do types' <- mapM adaptType types
+                       return (Isa.Constructor name types')
                            
     adapt (Isa.FunCmd funNs typesigs defs)
         = do typesigs' <- mapM adapt typesigs
-             shadowing (map Env.fromIsa funNs) $
+             shadowing funNs $
                do defs' <- mapM (\(funN, pats, body)
                                      -> assert (funN `elem` funNs) $
                                         shadowing (concatMap extractNames pats) $
@@ -229,19 +233,17 @@ instance Adapt Isa.Cmd where
 
 instance Adapt Isa.TypeSpec where
     adapt (Isa.TypeSpec tyvarNs tycoN)
-        = do tmp <- adaptType (Env.fromIsa (Isa.TyCon tycoN (map Isa.TyVar tyvarNs)))
-             let (Isa.TyCon tycoN' tyvars') = Env.toIsa tmp
+        = do (Isa.TyCon tycoN' tyvars') <- adaptType (Isa.TyCon tycoN (map Isa.TyVar tyvarNs))
              return $ Isa.TypeSpec (map (\(Isa.TyVar n) -> n) tyvars') tycoN'
 
 instance Adapt Isa.TypeSig where
     adapt (Isa.TypeSig n t)
-        = do t' <- adaptType (Env.fromIsa t)
-             return (Isa.TypeSig n (Env.toIsa t'))
+        = do t' <- adaptType t ; return (Isa.TypeSig n t')
 
 instance Adapt Isa.Term where
     adapt (Isa.Literal lit)     = return (Isa.Literal lit)
-    adapt (Isa.Var n)           = adaptName (Env.fromIsa n) >>= (return . Isa.Var . Env.toIsa)
-    adapt (Isa.Parenthesized t) = adapt t >>= (return . Isa.Parenthesized)
+    adapt (Isa.Var n)           = adaptName n >>= (return . Isa.Var)
+    adapt (Isa.Parenthesized t) = adapt t     >>= (return . Isa.Parenthesized)
     adapt t@(Isa.RecConstr _ _) = not_implemented t
     adapt t@(Isa.RecUpdate _ _) = not_implemented t
 
@@ -252,7 +254,7 @@ instance Adapt Isa.Term where
                                      return (Isa.If c' t' e')
 
     adapt (Isa.Lambda boundNs body)
-        = shadowing (map Env.fromIsa boundNs) $
+        = shadowing boundNs $
             adapt body >>= (return . Isa.Lambda boundNs)
 
     adapt (Isa.Let bindings body)
@@ -270,9 +272,9 @@ instance Adapt Isa.Term where
                                patterns
              return (Isa.Case term' patterns')
 
-extractNames :: Isa.Term -> [Env.EnvName]
-extractNames (Isa.Var n)                   = [Env.fromIsa n]
+extractNames :: Isa.Term -> [Isa.Name]
+extractNames (Isa.Var n)                   = [n]
 extractNames (Isa.App t1 t2)               = extractNames t1 ++ extractNames t2
-extractNames (Isa.RecConstr name patterns) = [Env.fromIsa name] ++ map (Env.fromIsa . fst) patterns
+extractNames (Isa.RecConstr name patterns) = [name] ++ map fst patterns
 extractNames etc = []
 
