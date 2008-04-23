@@ -16,8 +16,6 @@ BUG / TODO Liste:
 * Printer gibt hard-wired "imports Main" aus, und
   nicht die tatsächlichen abhängigen Module.
 
-* Printer gibt let-forms nicht syntaktisch korrekt aus.
-
 * Identifiers in LexEnv sind nicht universal qualifiziert.
 
 * rawAdaptionTable: "Prelude.List" -> "List.list"; aber Module

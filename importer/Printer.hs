@@ -329,8 +329,8 @@ instance Printer Isa.Term where
            where pp (pat, term) = (pprint' pat) <+> text "=>" <+> pprint' term
 
 
-    pprint' (Isa.Let (binding:bindings) body)
-        = vcat ((text "let" <+> ppBinding binding) : (accentuate (text "and ") (map ppBinding bindings)))
+    pprint' (Isa.Let bindings body)
+        = text "let" <+> vcat (punctuate semi (map ppBinding bindings))
                    $$ text "in" <+> pprint' body
           where ppBinding (pat, term)
                     = pprint' pat <+> equals <+> pprint' term
