@@ -5,6 +5,7 @@
 module Importer.Adapt (adaptGlobalEnv, adaptIsaUnit) where
 
 import Maybe (fromJust, fromMaybe, isJust)
+import List (partition)
 
 import Control.Monad.State
 import qualified Data.Map as Map
@@ -36,11 +37,18 @@ set update = do s <- get; put (update s); return ()
 
 shadow :: [Env.EnvName] -> AdaptM ()
 shadow names
-    = set (\state -> let (AdaptionTable mappings) = adaptionTable state in
-                     state { adaptionTable 
+    = set (\state 
+               -> let (AdaptionTable mappings) = adaptionTable state 
+                      -- Functions (especially data constructors, like []) can't
+                      -- be locally bound, so we must not shadow them.
+                      (fun_mappings, rest_mappings)
+                          = partition (\(id,_) -> Env.isInfixOp id || Env.isFunction id ) 
+                              mappings
+                  in state { adaptionTable 
                                  = AdaptionTable $ 
-                                   filter ((`notElem` names) . Env.identifier2name . fst) 
-                                          mappings 
+                                     fun_mappings ++
+                                     filter ((`notElem` names) . Env.identifier2name . fst) 
+                                        rest_mappings
                            })
    
 -- shadowing [a, b, c] $ body
@@ -65,7 +73,7 @@ shadowing names body
 -- LET like binding construct: while computing `computeB', `a' is shadowed,
 -- while computing `computeC', `a' and `b' are shadowed, and so on.
 --
--- Inside `body', do not adapt `a', `b' and `c'.
+-- Inside `body', the identifiers `a', `b' and `c' won't be adapted..
 -- 
 nested_binding :: [([Isa.Name], AdaptM b)] -> ([b] -> AdaptM v) -> AdaptM v
 nested_binding [] continuation = continuation []
@@ -90,13 +98,12 @@ runAdaption oldEnv newEnv tbl state
 
 adaptGlobalEnv :: Env.GlobalE -> AdaptionTable -> Env.GlobalE
 adaptGlobalEnv env tbl
-    = let !r = Env.mapGlobalEnv 
+    = let r = Env.updateGlobalEnv 
                (\n -> case translateName tbl n of 
                         Just new_id -> Just new_id
                         Nothing     -> adapt_type_in_identifier env tbl n)
                env
-      in r -- trace (prettyShow' "adaptedGlobalEnv" r) r
-
+      in r -- trace (prettyShow' "adaptionTable" tbl) r
 
 translateName :: AdaptionTable -> Env.EnvName -> Maybe Env.Identifier
 translateName (AdaptionTable mappings) name
@@ -221,8 +228,9 @@ instance Adapt Isa.Cmd where
              shadowing funNs $
                do defs' <- mapM (\(funN, pats, body)
                                      -> assert (funN `elem` funNs) $
-                                        shadowing (concatMap extractNames pats) $
-                                          do body' <- adapt body ; return (funN, pats, body'))
+                                        do pats' <- mapM adapt pats
+                                           shadowing (concatMap extractNames pats') $
+                                             do body' <- adapt body ; return (funN, pats', body'))
                                 defs
                   return (Isa.FunCmd funNs typesigs' defs')
 
@@ -266,9 +274,10 @@ instance Adapt Isa.Term where
     adapt (Isa.Case term patterns)
         = do term'     <- adapt term
              patterns' <- mapM (\(pat, body) 
-                                    -> shadowing (extractNames pat) $
-                                         do body' <- adapt body
-                                            return (pat, body'))
+                                    -> do pat' <- adapt pat
+                                          shadowing (extractNames pat') $
+                                            do body' <- adapt body
+                                               return (pat, body'))
                                patterns
              return (Isa.Case term' patterns')
 

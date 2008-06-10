@@ -39,7 +39,7 @@ rawAdaptionTable
 
        (Haskell "Prelude.List" Type,                    Isabelle "List.list"     Type),
        (Haskell "Prelude.[]"   Function,                Isabelle "List.list.Nil" Function),
-       (Haskell "Prelude.:"    (InfixOp RightAssoc 65), Isabelle "#"             (InfixOp RightAssoc 65)),
+       (Haskell "Prelude.:"    (InfixOp RightAssoc 65), Isabelle "List.#"        (InfixOp RightAssoc 65)),
        (Haskell "Prelude.head" Function,                Isabelle "List.hd"       Function),
        (Haskell "Prelude.tail" Function,                Isabelle "List.tl"       Function),
        (Haskell "Prelude.++"   (InfixOp RightAssoc 5),  Isabelle "List.@"        (InfixOp RightAssoc 65)),
@@ -51,8 +51,9 @@ rawAdaptionTable
        (Haskell "Prelude.Bool"  Type,                   Isabelle "Prelude.bool"  Type),
        (Haskell "Prelude.True"  Function,               Isabelle "Prelude.True"  Function),
        (Haskell "Prelude.False" Function,               Isabelle "Prelude.False" Function),
-       (Haskell "Prelude.&&"    (InfixOp RightAssoc 3), Isabelle "&"             (InfixOp RightAssoc 35)),
-       (Haskell "Prelude.||"    (InfixOp RightAssoc 2), Isabelle "|"             (InfixOp RightAssoc 30))
+       (Haskell "Prelude.&&"    (InfixOp RightAssoc 3), Isabelle "Prelude.&"     (InfixOp RightAssoc 35)),
+       (Haskell "Prelude.||"    (InfixOp RightAssoc 2), Isabelle "Prelude.|"     (InfixOp RightAssoc 30)),
+       (Haskell "Prelude.not"   Function,               Isabelle "Prelude.~"     (InfixOp RightAssoc 40))
       ]
 
 

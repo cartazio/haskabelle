@@ -13,12 +13,6 @@ Arbeitsplan Haskell-Importer:
 
 BUG / TODO Liste:
 
-* Printer gibt hard-wired "imports Main" aus, und
-  nicht die tatsächlichen abhängigen Module.
-
-* Identifiers in LexEnv sind nicht universal qualifiziert.
-
-* rawAdaptionTable: "Prelude.List" -> "List.list"; aber Module
-  `List' existiert gar nicht.
+* Ende von IsaSyntax löschen
 
 $Id$

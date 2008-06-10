@@ -186,12 +186,15 @@ instance Printer Isa.Cmd where
     pprint' (Isa.Comment string) = empty -- blankline $ comment string
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
     pprint' (Isa.TheoryCmd thy cmds)
-        = withCurrentTheory thy $
-            text "theory" <+> pprint' thy $+$
-            text "imports Main"           $+$
-            text "begin"                  $+$
-            (vcat $ map pprint' cmds)     $+$
-            text "\nend"
+        = do env <- queryPP globalEnv
+             let imps  = lookupImports thy env
+             let imps' = map pprint' imps
+             withCurrentTheory thy $
+               text "theory" <+> pprint' thy                     $+$
+               text "imports " <> fsep  imps'    $+$
+               text "begin"                                      $+$
+               (vcat $ map pprint' cmds)                         $+$
+               text "\nend"
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $
@@ -412,3 +415,8 @@ isInfixOp name lookupFn
 lookupIdentifier :: Isa.Theory -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
 lookupIdentifier thy n globalEnv
     = Env.lookup (Env.fromIsa thy) (Env.fromIsa n) globalEnv
+
+lookupImports :: Isa.Theory -> Env.GlobalE -> [Isa.Theory]
+lookupImports thy globalEnv
+    = map (\(Env.EnvImport name _ _) -> Env.toIsa name)
+        $ Env.lookupImports_OrLose (Env.fromIsa thy) globalEnv

@@ -5,7 +5,7 @@
 module Importer.LexEnv where
 
 import Maybe
-import List (groupBy, sortBy)
+import List (groupBy, sortBy, nub)
 
 import Control.Monad.State
 import qualified Data.Map as Map
@@ -143,11 +143,13 @@ instance Hsk2Env HsName IdentifierID where
     fromHsk (HsSymbol s) = s
     toHsk id             = string2HsName id
 
-data ConKind = DataCon | TypeCon
+data ConKind = DataCon | TypeCon deriving Show
 
 translateSpecialCon :: ConKind -> HsSpecialCon -> HsQName
 translateSpecialCon DataCon HsCons    = Qual (Module "Prelude") (HsSymbol ":")
 translateSpecialCon TypeCon HsListCon = Qual (Module "Prelude") (HsIdent "list")
+translateSpecialCon DataCon HsListCon = Qual (Module "Prelude") (HsIdent "[]")
+translateSpecialCon x y = error ("translateSpecialCon " ++ show x ++ " " ++ show y)
 
 retranslateSpecialCon :: ConKind -> HsQName -> Maybe HsSpecialCon
 retranslateSpecialCon DataCon (Qual (Module "Prelude") (HsSymbol ":"))   = Just HsCons
@@ -461,32 +463,31 @@ mergeModuleEnvs (ModuleEnv m1 is1 es1 lex1) (ModuleEnv m2 is2 es2 lex2)
     = assert (m1 == m2)
         $ ModuleEnv m1 (is1 ++ is2) (es1 ++ es2) (mergeLexEnvs lex1 lex2)
 
-
--- returns module name as can be found in source code, i.e.
--- returns qualified nicknames if any.
-importedModules :: [EnvImport] -> [ModuleID]
-importedModules imports
-    = concatMap (\(imp@(EnvImport m isQualified nickname ))
-                     -> case (isQualified, isJust nickname) of
-                          -- Notice: Module names can _always_ be explicitly qualified.
-                          (False, False) -> [m] 
-                          (True,  False) -> [m]
-                          (True,  True)  -> [m, fromJust nickname]
-                          (False, True)  
-                              -> error ("<importedModules> Internal Error: " ++
-                                        "bogus import:" ++ show imp))
+importedModuleIDs :: ModuleE -> [ModuleID]
+importedModuleIDs (ModuleEnv _ imports _ _)
+    = map (\(imp@(EnvImport m isQualified nickname ))
+               -> case (isQualified, isJust nickname) of
+                    -- Notice: Module names can _always_ be explicitly qualified.
+                    (False, False) -> m 
+                    (True,  False) -> m
+                    (True,  True)  -> m
+                    (False, True)  
+                        -> error ("<importedModules> Internal Error: bogus import:" ++ show imp))
           imports
 
-isImportedModule_aux :: ModuleID -> [EnvImport] -> Bool
-isImportedModule_aux moduleID imports
-    = case filter (== moduleID) (importedModules imports) of
+-- isImportedModule_aux :: ModuleID -> [EnvImport] -> Bool
+-- isImportedModule_aux moduleID imports
+--     = case filter (== moduleID) (importedModules imports) of
+--         []     -> False
+--         [name] -> True
+--         etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
+
+isImportedModule :: ModuleID -> ModuleE -> Bool
+isImportedModule moduleID moduleEnv
+    = case filter (== moduleID) (importedModuleIDs moduleEnv) of
         []     -> False
         [name] -> True
         etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
-
-isImportedModule :: ModuleID -> ModuleE -> Bool
-isImportedModule moduleID (ModuleEnv _ imports _ _)
-    = isImportedModule_aux moduleID imports
 
 
 
@@ -577,6 +578,18 @@ isExported :: Identifier -> ModuleID -> GlobalE -> Bool
 isExported identifier moduleID globalEnv
     = nameOf (lexInfoOf identifier) `elem` (computeExportedNames moduleID globalEnv)
 
+resolveModuleID :: ModuleID -> ModuleE -> ModuleID
+resolveModuleID moduleID (ModuleEnv _ imps _ _)
+    = fromMaybe moduleID (lookfor moduleID imps)
+    where 
+      lookfor _ [] = Nothing
+      lookfor mID (EnvImport mID' _ nick:imports)
+              = case nick of
+                  Just nickID | mID == nickID -> Just mID'
+                  _ -> lookfor mID imports
+         
+         
+
 -- module Imp1 (alpha) where 
 --   alpha = 1
 --   beta  = 2
@@ -623,7 +636,7 @@ lookup currentModule qname globalEnv
                  EnvQualName m n 
                      | m == currentModule  
                          -> lookup' m (EnvUnqualName n) globalEnv
-                     | isImportedModule m currentModuleEnv
+                     | isImportedModule (resolveModuleID m currentModuleEnv) currentModuleEnv
                          -> do identifier <- lookup' m (EnvUnqualName n) globalEnv
                                if isExported identifier m globalEnv then Just identifier
                                                                     else Nothing
@@ -648,6 +661,11 @@ lookup_orLose currentModule qname globalEnv
     = case Importer.LexEnv.lookup currentModule qname globalEnv of
         Just id -> id
         Nothing -> error (Msg.failed_lookup currentModule qname globalEnv)
+
+lookupImports_OrLose :: ModuleID -> GlobalE -> [EnvImport]
+lookupImports_OrLose moduleID globalEnv
+    = let (ModuleEnv _ imps _ _) = findModuleEnv_OrLose moduleID globalEnv 
+      in imps
 
 -- check_GlobalEnv_Consistency
 
@@ -679,3 +697,51 @@ lookup_orLose currentModule qname globalEnv
 --           = if hasDuplicates (universeBi exports :: [HsName]) -- strip off qualifiers
 --             then error ("Duplicates found in export list: " ++ show exports)
 --             else exports
+
+
+-- updateGlobalEnv :: (EnvName -> Maybe Identifier) -> GlobalE -> GlobalE
+identifiers :: GlobalE -> [Identifier]
+identifiers (GlobalEnv modulemap)
+    = concatMap (\(ModuleEnv _ _ _ (LexEnv lexmap)) -> Map.elems lexmap) 
+          $ Map.elems modulemap
+
+
+updateGlobalEnv update globalEnv
+    = let update' n       = assert (isQualified n) $ update n 
+          old_identifiers = identifiers globalEnv
+          new_identifiers = map (update' . identifier2name) old_identifiers
+          id_updates      = [ (old, fromMaybe old new) 
+                                  | (old, new) <- zip old_identifiers new_identifiers ]
+          mod_updates     = [ (moduleOf (lexInfoOf old), moduleOf (lexInfoOf new))
+                                  | (old, new) <- id_updates ]
+      in -- trace (prettyShow' "id_updates" id_updates) $
+         makeGlobalEnv (make_import_fn mod_updates) (make_export_fn mod_updates id_updates)
+           $  map snd id_updates
+    where 
+      find_old_ModuleE mod_updates mID
+          = case findModuleEnv mID globalEnv of
+                      Just env -> env
+                      Nothing  -> let Just old_mID = Prelude.lookup mID [ (y,x) | (x,y) <- mod_updates ]
+                                  in fromJust $ findModuleEnv old_mID globalEnv 
+
+      make_import_fn mod_updates
+          = \mID -> let env@(ModuleEnv _ imps _ _) = find_old_ModuleE mod_updates mID
+                        old_imported_mIDs = importedModuleIDs env
+                    in nub $ do (old_mID, old_import) <- zip old_imported_mIDs imps
+                                let relevant_mod_updates = filter (\(old,new) -> old == old_mID) mod_updates
+                                case map snd relevant_mod_updates of
+                                  []       -> return $ old_import
+                                  new_mIDs -> map (updateImport old_import) new_mIDs ++ [old_import]
+
+            where updateImport (EnvImport old_mID qual nick) new_mID
+                      = EnvImport new_mID qual nick
+
+      make_export_fn mod_updates id_updates
+          = \id -> let old_mID = find_old_mID (moduleOf (lexInfoOf id))
+                       old_id  = find_old_id id
+                   in isExported old_id old_mID globalEnv
+            where 
+              find_old_mID mID = let (ModuleEnv old_mID _ _ _) 
+                                         = find_old_ModuleE mod_updates mID
+                                 in old_mID
+              find_old_id id   = fromJust $ Prelude.lookup id [ (y,x) | (x,y) <- id_updates ]

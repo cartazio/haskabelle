@@ -40,7 +40,7 @@ convertHskUnit (HskUnit hsmodules _emptyEnv)
           globalenv_isa  = adaptGlobalEnv globalenv_hsk' adaptionTable
           hskmodules     = map (toHskModule globalenv_hsk') hsmodules'
           (isathys, _)   = runConversion globalenv_hsk' $ mapM convert hskmodules 
-      in -- trace ("convertHskUnit") $
+      in -- trace (prettyShow' "globalenv_isa" globalenv_isa) $ -- trace ("convertHskUnit") $
          let !r = adaptIsaUnit globalenv_hsk' adaptionTable 
                   $ IsaUnit isathys globalenv_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
@@ -353,10 +353,12 @@ instance Convert HsExp Isa.Term where
     convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
     convert' (HsWildCard)      = return (Isa.Var (Isa.Name "_"))
 
-    convert' (HsList [])       = return (Isa.Var Isa.cnameNil)
+    convert' (HsList [])       = do list_datacon_name <- convert (Special HsListCon)
+                                    return (Isa.Var list_datacon_name)
     convert' (HsList exps)
-        = do exps' <- mapM convert exps
-             return $ foldr Isa.mkcons Isa.mknil exps' 
+        = convert $ foldr cons nil exps
+          where cons x y = HsApp (HsApp (HsCon (Special HsCons)) x) y
+                nil = HsList []
 
     convert' (HsTuple exps)
         = do exps' <- mapM convert exps
@@ -373,7 +375,10 @@ instance Convert HsExp Isa.Term where
              exp1' <- convert exp1 
              op'   <- convert op
              exp2' <- convert exp2
-             return (Isa.mkInfixApp exp1' op' exp2')
+             return (mkInfixApp exp1' op' exp2')
+        where 
+          mkInfixApp t1 op t2 = Isa.App (Isa.App op t1) t2
+
 
     convert' (HsRecConstr qname updates)
         = do qname'   <- convert qname

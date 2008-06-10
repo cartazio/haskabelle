@@ -113,8 +113,6 @@ mknil       = Var cnameNil
 mkcons x y  = App (App (Var cnameCons) x) y
 mkpair x y  = App (App (Var cnamePair) x) y
 
-mkInfixApp t1 op t2
-    = App (App op t1) t2
 
 isPairCon x = x == cnamePair
 isCons    x = x == cnameCons
