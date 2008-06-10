@@ -277,7 +277,7 @@ instance Adapt Isa.Term where
                                     -> do pat' <- adapt pat
                                           shadowing (extractNames pat') $
                                             do body' <- adapt body
-                                               return (pat, body'))
+                                               return (pat', body'))
                                patterns
              return (Isa.Case term' patterns')
 

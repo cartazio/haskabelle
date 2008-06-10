@@ -1,3 +1,4 @@
+
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
@@ -17,7 +18,7 @@ import qualified Importer.LexEnv as Env
 
 import qualified Importer.IsaSyntax as Isa
 
-data OpKind = Variable | Function | InfixOp Assoc Int | Type
+data OpKind = Variable | Function | Op Int | InfixOp Assoc Int | Type
   deriving Show
 
 data Assoc = RightAssoc | LeftAssoc | NoneAssoc
@@ -53,7 +54,8 @@ rawAdaptionTable
        (Haskell "Prelude.False" Function,               Isabelle "Prelude.False" Function),
        (Haskell "Prelude.&&"    (InfixOp RightAssoc 3), Isabelle "Prelude.&"     (InfixOp RightAssoc 35)),
        (Haskell "Prelude.||"    (InfixOp RightAssoc 2), Isabelle "Prelude.|"     (InfixOp RightAssoc 30)),
-       (Haskell "Prelude.not"   Function,               Isabelle "Prelude.~"     (InfixOp RightAssoc 40))
+       (Haskell "Prelude.not"   Function,               Isabelle "Prelude.~"     (Op 40)),
+       (Haskell "Prelude.id"    Function,               Isabelle "Fun.id"        Function)
       ]
 
 
@@ -92,6 +94,8 @@ makeIdentifier Variable m identifier t
     = Env.Variable $ Env.makeLexInfo m identifier t
 makeIdentifier Function m identifier t
     = Env.Function $ Env.makeLexInfo m identifier t
+makeIdentifier (Op prio) m identifier t
+    = Env.Op (Env.makeLexInfo m identifier t) prio
 makeIdentifier (InfixOp assoc prio) m identifier t
     = Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
 makeIdentifier Type m identifier t

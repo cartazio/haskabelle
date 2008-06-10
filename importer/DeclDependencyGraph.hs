@@ -16,24 +16,32 @@ import Language.Haskell.Hsx
 import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
 
+import qualified Importer.LexEnv as Env
 import qualified Importer.Msg as Msg
 
 
+-- We have to canonicalize the names in our graph, as there may appear
+-- "some_fun", and "Foo.some_fun", and they may be reffering to the
+-- same. We use our GlobalEnv for this purpose.
 data HskDeclDepGraph = HskDeclDepGraph (Graph, 
-                                        Vertex -> (HsDecl, HsQName, [HsQName]), 
-                                        HsQName -> Maybe Vertex)
+                                        Vertex -> (HsDecl, Env.EnvName, [Env.EnvName]), 
+                                        Env.EnvName -> Maybe Vertex)
 
-makeDeclDepGraph :: [HsDecl] -> HskDeclDepGraph
-makeDeclDepGraph decls = HskDeclDepGraph declDepGraph
+makeDeclDepGraph :: Env.GlobalE -> Module -> [HsDecl] -> HskDeclDepGraph
+makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
     where declDepGraph = graphFromEdges
                            $ handleDuplicateEdges
-                               $ concatMap makeEdgesFromHsDecl decls
+                               $ concatMap (makeEdgesFromHsDecl globalEnv modul) decls
 
-makeEdgesFromHsDecl :: HsDecl -> [(HsDecl, HsQName, [HsQName])]
-makeEdgesFromHsDecl decl
-    = [ (decl, name, extractFreeVarNs decl) | name <- fromJust $ namesFromHsDecl decl ]
+makeEdgesFromHsDecl :: Env.GlobalE -> Module -> HsDecl -> [(HsDecl, Env.EnvName, [Env.EnvName])]
+makeEdgesFromHsDecl globalEnv modul decl
+    = let canonicalize hsqname = Env.resolve globalEnv (Env.fromHsk modul) (Env.fromHsk hsqname)
+      in do defname <- fromJust $ namesFromHsDecl decl
+            let used_names = extractFreeVarNs decl
+            return (decl, canonicalize defname, map canonicalize used_names)
+             
 
-handleDuplicateEdges :: [(HsDecl, HsQName, [HsQName])] -> [(HsDecl, HsQName, [HsQName])]
+handleDuplicateEdges :: [(HsDecl, Env.EnvName, [Env.EnvName])] -> [(HsDecl, Env.EnvName, [Env.EnvName])]
 handleDuplicateEdges edges
     = concatMap handleGroup (groupBy (\(_,x,_) (_,y,_) -> x == y) edges)
     where handleGroup edges

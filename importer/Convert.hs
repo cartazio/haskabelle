@@ -46,8 +46,9 @@ convertHskUnit (HskUnit hsmodules _emptyEnv)
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
            r
     where toHskModule globalEnv (HsModule loc modul _exports _imports decls)
-              = let declDepGraph = makeDeclDepGraph decls 
-                in HskModule loc modul 
+              = let declDepGraph = makeDeclDepGraph globalEnv modul decls 
+                in -- trace (prettyShow' "declDepGraph" (flattenDeclDepGraph declDepGraph)) $
+                   HskModule loc modul 
                      $ map HskDependentDecls (flattenDeclDepGraph declDepGraph)
 
 
@@ -235,7 +236,7 @@ instance Convert HsDecl Isa.Cmd where
                                         junk
 
     convert' (HsInfixDecl _loc assoc prio ops)
-        = do (assocs, prios) <- mapAndUnzipM (lookupOp . toHsQOp) ops 
+        = do (assocs, prios) <- mapAndUnzipM (lookupInfixOp . toHsQOp) ops 
              assert (all (== assoc) assocs && all (== prio) prios) 
                $ return (Isa.Block [])
         where toHsQOp (HsVarOp n) = HsQVarOp (UnQual n)
@@ -505,8 +506,8 @@ fixOperatorFixities app@(HsInfixApp (HsInfixApp e1 op1 e2) op2 e3)
     -- We assume that `(t1, op1, t2)' is correct already
     -- and from above, we also know that `t3' cannot possibly
     -- interfere, so we just have to find the proper place of `op2'.
-    = do (assoc1', prio1)  <- lookupOp op1
-         (assoc2', prio2)  <- lookupOp op2
+    = do (assoc1', prio1)  <- lookupInfixOp op1
+         (assoc2', prio2)  <- lookupInfixOp op2
          let assoc1 = normalizeAssociativity assoc1'
          let assoc2 = normalizeAssociativity assoc2'
          case prio1 `compare` prio2 of
@@ -531,8 +532,8 @@ lookupIdentifier qname
          modul     <- queryContext currentModule
          return (Env.lookup (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
 
-lookupOp :: HsQOp -> ContextM (HsAssoc, Int)
-lookupOp qop
+lookupInfixOp :: HsQOp -> ContextM (HsAssoc, Int)
+lookupInfixOp qop
     = do identifier <- lookupIdentifier (qop2name qop)
          case identifier of
            Just (Env.InfixOp _ envassoc prio) -> return (Env.toHsk envassoc, prio)

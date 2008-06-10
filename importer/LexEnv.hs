@@ -5,7 +5,7 @@
 module Importer.LexEnv where
 
 import Maybe
-import List (groupBy, sortBy, nub)
+import List (nub)
 
 import Control.Monad.State
 import qualified Data.Map as Map
@@ -30,14 +30,14 @@ data EnvType = EnvTyVar EnvName
              | EnvTyFun EnvType EnvType
              | EnvTyTuple [EnvType]
              | EnvTyNone
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 data EnvAssoc = EnvAssocRight | EnvAssocLeft | EnvAssocNone
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 data EnvName = EnvQualName ModuleID IdentifierID
              | EnvUnqualName IdentifierID
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 isQualified :: EnvName -> Bool
 isQualified (EnvQualName _ _) = True
@@ -57,14 +57,15 @@ data LexInfo = LexInfo {
                         typeOf   :: EnvType,
                         moduleOf :: ModuleID
                        }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 data Identifier = Variable LexInfo
                 | Function LexInfo
+                | Op LexInfo Int
                 | InfixOp  LexInfo EnvAssoc Int
                 | TypeAnnotation LexInfo
                 | Type LexInfo [Identifier] -- Type lexinfo [constructors]
-  deriving (Eq, Show)
+  deriving (Eq, Ord,Show)
 
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
 makeLexInfo moduleID identifierID t
@@ -75,17 +76,21 @@ makeLexInfo moduleID identifierID t
 updateIdentifier :: Identifier -> LexInfo -> Identifier
 updateIdentifier (Variable _) lexinfo       = Variable lexinfo
 updateIdentifier (Function _) lexinfo       = Function lexinfo
+updateIdentifier (Op _ p) lexinfo           = Op lexinfo p
 updateIdentifier (InfixOp _ a p) lexinfo    = InfixOp lexinfo a p
 updateIdentifier (TypeAnnotation _) lexinfo = TypeAnnotation lexinfo
 updateIdentifier (Type _ conNs) lexinfo     = Type lexinfo conNs
 
-isVariable, isFunction, isInfixOp, isTypeAnnotation :: Identifier -> Bool
+isVariable, isFunction, isOp, isInfixOp, isTypeAnnotation :: Identifier -> Bool
 
 isVariable (Variable _)   = True
 isVariable _              = False
 
 isFunction (Function _)   = True
 isFunction _              = False
+
+isOp (Op _ _)             = True
+isOp _                    = False
 
 isInfixOp (InfixOp _ _ _) = True
 isInfixOp _               = False
@@ -99,6 +104,7 @@ isType _          = False
 
 lexInfoOf (Variable i)       = i
 lexInfoOf (Function i)       = i
+lexInfoOf (Op i _)           = i
 lexInfoOf (InfixOp i _ _)    = i
 lexInfoOf (Type i _)         = i
 lexInfoOf (TypeAnnotation i) = i
@@ -110,17 +116,6 @@ identifier2name identifier
           modul    = moduleOf lexinfo
       in if (modul == "") then EnvUnqualName name
                           else EnvQualName modul name
-
--- makeUnqualified :: HskIdentifier -> HskIdentifier
--- makeUnqualified hsxidentifier
---     = case identifier2name hsxidentifier of
---         UnQual n -> hsxidentifier
---         Qual _ n -> case hsxidentifier of
---                       HskVariable lexinfo     -> HskVariable (lexinfo { identifier = UnQual n })
---                       HskFunction lexinfo     -> HskFunction (lexinfo { identifier = UnQual n })
---                       HskInfixOp  lexinfo a p -> HskInfixOp  (lexinfo { identifier = UnQual n }) a p
---                       HskType     lexinfo cs  -> HskType     (lexinfo { identifier = UnQual n }) cs
-
 
 class Hsk2Env a b where
     fromHsk :: (Show a, Hsk2Env a b) => a -> b
@@ -282,27 +277,6 @@ instance Isa2Env Isa.Type EnvType where
     toIsa (EnvTyCon qn tyvars)    = Isa.TyCon (toIsa qn) (map toIsa tyvars)
 
 
--- data IsaLexInfo = IsaLexInfo { 
---                               _identifier :: Isa.Name,
---                               _typeOf     :: Isa.Type,
---                               _theoryOf   :: Isa.Theory
---                              }
---   deriving (Eq, Show)
-
--- data IsaIdentifier = IsaVariable IsaLexInfo
---                    | IsaFunction IsaLexInfo
---                    | IsaInfixOp  IsaLexInfo Isa.Assoc Int
---                    | IsaType     IsaLexInfo
---   deriving (Eq, Show)
-
--- isaIdentifier2name id  = _identifier (extractLexInfo_isa id)
-
--- extractLexInfo_isa (IsaVariable i)    = i
--- extractLexInfo_isa (IsaFunction i)    = i
--- extractLexInfo_isa (IsaInfixOp i _ _) = i
--- extractLexInfo_isa (IsaType i)        = i
-
-
 --
 -- LexEnv
 --
@@ -329,9 +303,11 @@ mergeIdentifiers ident1 ident2
       $ case (ident1, ident2) of
           (Variable i,       TypeAnnotation ann) -> Just $ Variable (update i ann)
           (Function i,       TypeAnnotation ann) -> Just $ Function (update i ann)
+          (Op       i p,     TypeAnnotation ann) -> Just $ Op       (update i ann) p
           (InfixOp  i a p,   TypeAnnotation ann) -> Just $ InfixOp  (update i ann) a p
           (TypeAnnotation ann, Variable i)       -> Just $ Variable (update i ann)
           (TypeAnnotation ann, Function i)       -> Just $ Function (update i ann)
+          (TypeAnnotation ann, Op       i p)     -> Just $ Op       (update i ann) p
           (TypeAnnotation ann, InfixOp  i a p)   -> Just $ InfixOp  (update i ann) a p
           (_,_) -> Nothing
     where update lexinfo@(LexInfo { typeOf = EnvTyNone }) (LexInfo { typeOf = typ })
@@ -510,12 +486,7 @@ makeGlobalEnv compute_imports shall_export_p identifiers
 
 groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]
 groupIdentifiers identifiers
-    = map (\(m:_, ids) -> (m, ids)) 
-      $ map unzip 
-         $ groupBy (\(m1,_) (m2,_) -> m1 == m2) 
-             $ sortBy (\(m1,_) (m2,_) -> m1 `compare` m2) entries
-    where entries :: [(ModuleID, Identifier)]
-          entries = map (\id -> (moduleOf (lexInfoOf id), id)) identifiers
+    = groupAlist [ (moduleOf (lexInfoOf id), id) | id <- identifiers ]
 
 makeGlobalEnv_fromHsModules :: [HsModule] -> GlobalE
 makeGlobalEnv_fromHsModules ms 
@@ -667,6 +638,10 @@ lookupImports_OrLose moduleID globalEnv
     = let (ModuleEnv _ imps _ _) = findModuleEnv_OrLose moduleID globalEnv 
       in imps
 
+resolve :: GlobalE -> ModuleID -> EnvName -> EnvName
+resolve globalEnv mID name
+    = identifier2name (lookup_orLose mID name globalEnv)
+
 -- check_GlobalEnv_Consistency
 
 --       check_duplicates :: Eq a => ([a] -> String) -> [a] -> [a]
@@ -699,17 +674,52 @@ lookupImports_OrLose moduleID globalEnv
 --             else exports
 
 
--- updateGlobalEnv :: (EnvName -> Maybe Identifier) -> GlobalE -> GlobalE
-identifiers :: GlobalE -> [Identifier]
-identifiers (GlobalEnv modulemap)
+
+allIdentifiers :: GlobalE -> [Identifier]
+allIdentifiers (GlobalEnv modulemap)
     = concatMap (\(ModuleEnv _ _ _ (LexEnv lexmap)) -> Map.elems lexmap) 
           $ Map.elems modulemap
 
+-- updateGlobalEnv :: (EnvName -> Maybe Identifier) -> GlobalE -> GlobalE
+-- updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
+--     = let id_alist    = [ (fromMaybe id (update (identifier2name id)), id) | id <- allIdentifiers globalEnv]
+--           mod_alist   = [ (moduleOf (lexInfoOf new), moduleOf (lexInfoOf old)) | (new, old) <- id_alist ]
+--           id_tbl      = Map.fromListWith failDups id_alist   -- Map from new_id  to old_id
+--           mod_tbl     = Map.fromListWith failDups mod_alist  -- Map from new_mID to old_mID
+--           rev_mod_tbl = Map.fromListWith failDups            -- Map from old_mID to [new_mID]
+--                           (groupAlist [ (o,n) | (n,o) <- mod_alist ]) 
+
+--           -- The new ModuleE gets the same imports as the old ModuleE, but we 
+--           -- have to account for the possible updates of the old imported modules
+--           -- themselves. E.g. if `Foo' imported `Prelude', and `Prelude` was split
+--           -- into `List', and `Datatype`, then 'Foo' now has to import 'Prelude',
+--           -- 'List', and 'Datatype'.
+--           recompute_imports new_mID
+--               = let old_mID         = fromJust (Map.lookup new_mID mod_tbl)
+--                     old_mEnv        = findModuleEnv_OrLose old_mID globalEnv
+--                     old_imports     = (let (ModuleEnv _ imps _ _) = old_mEnv in imps)
+--                     old_import_mIDs = importedModuleIDs old_mEnv
+--                 in
+--                   do (old_imported_mID, old_import) <- zip old_import_mIDs old_imports
+--                      case fromJust (Map.lookup old_imported_mID rev_mod_tbl) of
+--                        []       -> return old_import
+--                        mIDs     -> old_import : map (\mID -> EnvImport mID False Nothing) mIDs
+                                  
+--           recompute_exports new_id
+--               = let old_id  = fromJust (Map.lookup new_id id_tbl)
+--                     old_mID = (let oldm = moduleOf (lexInfoOf old_id)
+--                                    newm = moduleOf (lexInfoOf new_id)
+--                                in assert (oldm == fromJust (Map.lookup newm mod_tbl)) oldm)
+--                 in isExported old_id old_mID globalEnv
+--        in 
+--          makeGlobalEnv recompute_imports recompute_exports (map fst id_alist)
+
+--     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
+
 
 updateGlobalEnv update globalEnv
-    = let update' n       = assert (isQualified n) $ update n 
-          old_identifiers = identifiers globalEnv
-          new_identifiers = map (update' . identifier2name) old_identifiers
+    = let old_identifiers = allIdentifiers globalEnv
+          new_identifiers = map (update . identifier2name) old_identifiers
           id_updates      = [ (old, fromMaybe old new) 
                                   | (old, new) <- zip old_identifiers new_identifiers ]
           mod_updates     = [ (moduleOf (lexInfoOf old), moduleOf (lexInfoOf new))

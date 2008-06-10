@@ -305,7 +305,8 @@ instance Printer Isa.Term where
                InfixApp x op y -> let x' = parensIf (isCompound x lookup) $ pprint' x
                                       y' = parensIf (isCompound y lookup) $ pprint' y
                                   in  x' <+> pprint' op <+> y'
-               MiscApp         -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
+               FunApp          -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
+               UnaryOpApp      -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
 
     pprint' (Isa.If t1 t2 t3)
         = fsep [text "if"   <+> pprint' t1,
@@ -351,7 +352,8 @@ pprintAsTuple = parens . hsep . punctuate comma . map pprint'
 data AppFlavor = ListApp [Isa.Term] 
                | TupleApp [Isa.Term] 
                | InfixApp Isa.Term Isa.Term Isa.Term 
-               | MiscApp
+               | UnaryOpApp
+               | FunApp
   deriving (Show)
 
 -- This makes use of pattern guards which are not Haskell98, but quite
@@ -365,7 +367,10 @@ categorizeApp app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
     | Isa.isCons opN,    Just list <- flattenListApp app  = ListApp list
     | Isa.isPairCon opN, Just list <- flattenTupleApp app = TupleApp list
     | isInfixOp opN lookupFn                              = InfixApp t1 (Isa.Var opN) t2
-categorizeApp _ _                                        = MiscApp
+categorizeApp (Isa.App (Isa.Var opN) _) lookupFn
+    | isUnaryOp opN lookupFn                              = UnaryOpApp
+    | otherwise                                           = FunApp
+categorizeApp _ _ = FunApp
 
 flattenListApp :: Isa.Term -> Maybe [Isa.Term]
 flattenListApp app = let list = unfoldr1 split app in 
@@ -386,9 +391,7 @@ flattenTupleApp app = let list = unfoldr1 split app in
 
 
 isCompound :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
-isCompound (Isa.App (Isa.App (Isa.Var c) _) _) _  -- FIXME: temporary to avoid the extra parens
-    | Isa.isPairCon c = False                     --  in `((x,y)) # z'; should be handled by
-isCompound t lookupFn                             --  checking for infix priorities.
+isCompound t lookupFn
     = case t of
         Isa.Var _            -> False
         Isa.Literal _        -> False
@@ -396,7 +399,8 @@ isCompound t lookupFn                             --  checking for infix priorit
         Isa.App _ _          -> case categorizeApp t lookupFn of
                                   ListApp  _     -> False
                                   TupleApp _     -> False
-                                  MiscApp        -> False
+                                  FunApp         -> False
+                                  UnaryOpApp     -> True
                                   InfixApp _ _ _ -> True
         _ -> True
 
@@ -410,7 +414,13 @@ isInfixOp :: Isa.Name -> (Isa.Name -> Maybe Env.Identifier) -> Bool
 isInfixOp name lookupFn
     = case lookupFn name of
         Just id -> Env.isInfixOp id
-        _ -> False
+        _       -> False
+
+isUnaryOp :: Isa.Name -> (Isa.Name -> Maybe Env.Identifier) -> Bool
+isUnaryOp name lookupFn
+    = case lookupFn name of
+        Just id -> Env.isOp id
+        _       -> False
 
 lookupIdentifier :: Isa.Theory -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
 lookupIdentifier thy n globalEnv
