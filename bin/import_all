@@ -22,7 +22,8 @@ cd "$EXECPATH"
 for SRC in ex/src_hs/*.hs
 do
   DST=ex/dst_thy/
-  ./bin/import_file "$SRC" "$DST" || fail "could not import $SRC"
+  echo "importing $SRC..."
+  ./bin/import_file "$SRC" "$DST" > /dev/zero 2> /dev/zero || fail "could not import $SRC"
 done
 
 cp -vu adapt/Prelude.thy ex/dst_thy/
@@ -32,5 +33,5 @@ do
   THY_NAME="$(basename $THY .thy)"
   DST="../../ex/dst_hs/"
   echo "re-importing $THY_NAME..."
-  "$ISATOOL" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero || fail "could not re_import $THY"
+  "$ISATOOL" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail "could not re-import $THY"
 done
