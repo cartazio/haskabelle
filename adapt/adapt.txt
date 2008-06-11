@@ -8,11 +8,17 @@ types
   "Prelude.Maybe"   "option"
 
 consts
+  "Prelude.id"      "id"
+
   "Prelude.True"    "True"
   "Prelude.False"   "False"
 
+  "Prelude.not"     "Not"
   "Prelude.&&"      "op &"
   "Prelude.||"      "op |"
+
+  "Prelude.fst"     "fst"
+  "Prelude.snd"     "snd"
 
   "Prelude.[]"      "List.Nil"
   "Prelude.:"       "List.Cons"

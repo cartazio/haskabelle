@@ -1,4 +1,3 @@
-
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
@@ -18,46 +17,12 @@ import qualified Importer.LexEnv as Env
 
 import qualified Importer.IsaSyntax as Isa
 
-data OpKind = Variable | Function | Op Int | InfixOp Assoc Int | Type
-  deriving Show
+import Importer.AdaptTable
 
-data Assoc = RightAssoc | LeftAssoc | NoneAssoc
-  deriving Show
-
-data AdaptionEntry = Haskell String OpKind
-                   | Isabelle String OpKind
-  deriving Show
+import Importer.AdaptMapping
 
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
   deriving Show
-
-rawAdaptionTable 
-    = [
-       (Haskell "Prelude.+"  (InfixOp LeftAssoc  7),    Isabelle "Main.+"        (InfixOp LeftAssoc  7)),
-       (Haskell "Prelude.-"  (InfixOp LeftAssoc  7),    Isabelle "Main.-"        (InfixOp LeftAssoc  7)),
-
-       (Haskell "Prelude.<=" (InfixOp LeftAssoc  4),    Isabelle "Prelude.<="    (InfixOp LeftAssoc  4)),
-
-       (Haskell "Prelude.List" Type,                    Isabelle "List.list"     Type),
-       (Haskell "Prelude.[]"   Function,                Isabelle "List.list.Nil" Function),
-       (Haskell "Prelude.:"    (InfixOp RightAssoc 65), Isabelle "List.#"        (InfixOp RightAssoc 65)),
-       (Haskell "Prelude.head" Function,                Isabelle "List.hd"       Function),
-       (Haskell "Prelude.tail" Function,                Isabelle "List.tl"       Function),
-       (Haskell "Prelude.++"   (InfixOp RightAssoc 5),  Isabelle "List.@"        (InfixOp RightAssoc 65)),
-
-       (Haskell "Prelude.Maybe"   Type,                 Isabelle "Datatype.option" Type),
-       (Haskell "Prelude.Nothing" Function,             Isabelle "Datatype.option.None" Function),
-       (Haskell "Prelude.Just"    Function,             Isabelle "Datatype.option.Some" Function),
-
-       (Haskell "Prelude.Bool"  Type,                   Isabelle "Prelude.bool"  Type),
-       (Haskell "Prelude.True"  Function,               Isabelle "Prelude.True"  Function),
-       (Haskell "Prelude.False" Function,               Isabelle "Prelude.False" Function),
-       (Haskell "Prelude.&&"    (InfixOp RightAssoc 3), Isabelle "Prelude.&"     (InfixOp RightAssoc 35)),
-       (Haskell "Prelude.||"    (InfixOp RightAssoc 2), Isabelle "Prelude.|"     (InfixOp RightAssoc 30)),
-       (Haskell "Prelude.not"   Function,               Isabelle "Prelude.~"     (Op 40)),
-       (Haskell "Prelude.id"    Function,               Isabelle "Fun.id"        Function)
-      ]
-
 
 adaptionTable :: AdaptionTable
 adaptionTable 

@@ -7,7 +7,7 @@ Generic functions.
 module Importer.Utilities.Misc (
   assert, trace, concatMapM, map2, hasDuplicates,
   unfoldr, unfoldr1, unfoldl, unfoldl1, lookupBy, wordsBy,
-  prettyShow', prettyShow, prettyHsx,
+  prettyShow', prettyShow, prettyHsx, groupAlist
 ) where
 
 import Control.Exception (assert)
@@ -49,6 +49,9 @@ lookupBy eq key ((x,y):xys)
     | key `eq` x        =  Just y
     | otherwise         =  lookupBy eq key xys
 
+groupAlist :: Eq a => [(a, b)] -> [(a, [b])]
+groupAlist xs = map (\k -> (k, [ l | (k', l) <- xs, k' == k ])) (List.nub (map fst xs))
+
 wordsBy            :: (a -> Bool) -> [a] -> [[a]]
 wordsBy pred l     =  case dropWhile pred l of
                       [] -> []
@@ -68,4 +71,3 @@ prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
 prettyShow obj = prettyShow' "foo" obj
 
 prettyHsx hs = Hsx.prettyPrint hs
-

@@ -12,13 +12,22 @@ end;
 structure MkAdapt : MK_ADAPT =
 struct
 
+(* used constant symbols *)
+
+fun used_constants thy = []
+  |> Symtab.fold (fn (c, (_, NONE)) => cons c | _ => I)
+       ((snd o #constants o Consts.dest o #consts o Sign.rep_sg) thy)
+  |> map (Sign.extern_const thy)
+  |> filter_out NameSpace.is_qualified;
+
+
 (* concrete output syntax *)
 
 fun mk_typentry thy (hs, raw_isa) =
   let
     val isa = Sign.intern_type thy raw_isa;
-    val s = "(Haskell " ^ quote hs ^ " Type " ^ quote hs ^ ", Isabelle "
-      ^ quote isa ^ " Type " ^ quote isa ^ ")";
+    val s = "(Haskell " ^ quote hs ^ " Type, Isabelle "
+      ^ quote isa ^ " Type)";
   in s end;
 
 fun mk_constentry thy (hs, raw_isa) =
@@ -33,10 +42,8 @@ fun mk_constentry thy (hs, raw_isa) =
       | string_of_syn (SOME (InfixrName (s, j))) = 
           (s, enclose "(" ")" ("InfixOp RightAssoc " ^ string_of_int j))
     val (sym, syn') = string_of_syn syn;
-    val typ = Logic.unvarifyT (Sign.the_const_type thy isa);
-    val typ' = Sign.string_of_typ thy typ;
-    val s = "(Haskell " ^ quote hs ^ " " ^ syn' ^ " " ^ quote typ' ^ ", Isabelle "
-      ^ quote sym ^ " " ^ syn' ^ " " ^ quote typ' ^ ")";
+    val s = "(Haskell " ^ quote hs ^ " " ^ syn' ^ ", Isabelle "
+      ^ quote sym ^ " " ^ syn' ^ ")";
   in s end;
 
 
@@ -66,17 +73,27 @@ fun convert thy pos = Source.of_string
   #> Source.exhaust
   #> (fn [dst] => dst | _ => error ("Extra input " ^ Position.str_of pos))
 
+
+(* glueing it together *)
+
 fun run thy src_loc dst_loc =
   let
     val _ = writeln ("Reading from " ^ src_loc);
     val src = File.read (Path.explode src_loc);
     val dst_path = Path.explode dst_loc;
     val modl_name = (Path.implode o fst o Path.split_ext o Path.base) dst_path;
+    val adaptions = convert thy (Position.file src_loc) src;
+    val const_names = Pretty.enum "," "[" "]"
+      (map (Pretty.str o quote) (used_constants thy));
+    val thy_names = Pretty.enum "," "[" "]"
+      (map (Pretty.str o quote) (ThyInfo.get_names ()));
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
       "-- $" ^ "Id" ^ "$", "",
       "module Importer." ^ modl_name ^ " where", "",
       "import Importer.AdaptTable", "",
-      "rawAdaptionTable = " ^ convert thy (Position.file src_loc) src, ""];
+      "rawAdaptionTable = " ^ adaptions, "",
+      "usedConstNames = " ^ Pretty.string_of const_names, "",
+      "usedThyNames = " ^ Pretty.string_of thy_names, ""];
     val _ = File.write dst_path (cat_lines dsts);
     val _ = writeln ("Written to " ^ dst_loc);
   in () end;

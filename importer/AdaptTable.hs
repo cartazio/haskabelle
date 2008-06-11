@@ -8,13 +8,12 @@ module Importer.AdaptTable (OpKind(..), Assoc(..), AdaptionEntry(..)) where
 
 import qualified Importer.LexEnv as Env
 
-data OpKind = Variable | Function | InfixOp Assoc Int 
-            | Data [Constructor]
+data OpKind = Variable | Function | Op Int | InfixOp Assoc Int | Type
   deriving Show
 
 data Assoc = RightAssoc | LeftAssoc | NoneAssoc
   deriving Show
 
-data AdaptionEntry = Haskell String OpKind String
-                   | Isabelle String OpKind String
+data AdaptionEntry = Haskell String OpKind
+                   | Isabelle String OpKind
   deriving Show
