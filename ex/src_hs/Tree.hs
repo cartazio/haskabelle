@@ -1,4 +1,4 @@
-module Simple where
+module Tree where
 
 import Nats
 

@@ -154,17 +154,17 @@ is_ord ET_isub_0 = True;
 
 tree_rec ::
   forall t a. t -> (a -> Tree a -> Tree a -> Nat -> t -> t -> t) -> Tree a -> t;
-tree_rec f1 f2 (Mkt a tree1 tree2 nat) =
+tree_rec f1 f2 (Mkt a tree1 tree2 n) =
   f2 a tree1 tree2 nat (tree_rec f1 f2 tree1) (tree_rec f1 f2 tree2);
 tree_rec f1 f2 Et = f1;
 
 size_tree :: forall a. Tree a -> Nat;
-size_tree (Mkt a tree1 tree2 nat) =
+size_tree (Mkt a tree1 tree2 n) =
   plus_nat (plus_nat (size_tree tree1) (size_tree tree2)) (Suc Zero_nat);
 size_tree Et = Zero_nat;
 
 tree_size :: forall a. (a -> Nat) -> Tree a -> Nat;
-tree_size fa (Mkt a tree1 tree2 nat) =
+tree_size fa (Mkt a tree1 tree2 n) =
   plus_nat
     (plus_nat (plus_nat (fa a) (tree_size fa tree1)) (tree_size fa tree2))
     (Suc Zero_nat);

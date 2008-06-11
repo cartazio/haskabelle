@@ -72,25 +72,11 @@ minus_set (Insert a aa) b =
     c = minus_set aa b;
   } in (if member a b then c else Insert a c);
 
-contents :: Set Nat -> Nat;
-contents (Insert x Empty) = x;
-contents (Insert a aa) = contents (Insert a (minus_set aa (Insert a Empty)));
-
 is_empty :: forall a. Set a -> Bool;
 is_empty Empty = True;
 is_empty (Insert a aa) = False;
 
 less_set :: Set Nat -> Set Nat -> Bool;
 less_set a b = less_eq_set a b && not (less_eq_set b a);
-
-finitea :: forall b. Set b -> Bool;
-finitea (Insert a aa) = finitea aa;
-finitea Empty = True;
-
-card :: Set Nat -> Nat;
-card (Insert a aa) =
-  (if finitea aa then Suc (card (minus_set aa (Insert a Empty)))
-    else card (Insert a aa));
-card Empty = Zero_nat;
 
 }

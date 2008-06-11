@@ -22,7 +22,7 @@ mapa f [] = [];
 
 nat_case :: forall t. t -> (Lists.Nat -> t) -> Lists.Nat -> t;
 nat_case f1 f2 Lists.Zero_nat = f1;
-nat_case f1 f2 (Lists.Suc nat) = f2 nat;
+nat_case f1 f2 (Lists.Suc n) = f2 n;
 
 nth :: forall a. [a] -> Lists.Nat -> a;
 nth (x : xs) n =
@@ -49,9 +49,6 @@ less_eq_nat Lists.Zero_nat n = True;
 less_nat :: Lists.Nat -> Lists.Nat -> Bool;
 less_nat m (Lists.Suc n) = Lists.less_eq_nat m n;
 less_nat n Lists.Zero_nat = False;
-
-upt :: Lists.Nat -> Lists.Nat -> [Lists.Nat];
-upt i j = (if Lists.less_nat i j then i : Lists.upt (Lists.Suc i) j else []);
 
 list_case :: forall t a. t -> (a -> [a] -> t) -> [a] -> t;
 list_case f1 f2 [] = f1;
