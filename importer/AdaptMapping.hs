@@ -1126,9 +1126,9 @@ usedConstNames = ["sko_Lattices_Xcomplete_lattice_locale_Xcomplete_lattice_class
 
 usedThyNames = ["Pure", "HOL", "Code_Setup", "Orderings", "Set", "Fun", "Lattices",
   "OrderedGroup", "Ring_and_Field", "Typedef", "Sum_Type", "Inductive",
-  "Product_Type", "Record", "Relation", "Nat", "Power", "Divides",
-  "Predicate", "Transitive_Closure", "Finite_Set", "Equiv_Relations",
-  "Wellfounded", "Int", "SetInterval", "FunDef", "IntDiv", "NatBin",
-  "Groebner_Basis", "Arith_Tools", "Presburger", "Recdef", "Hilbert_Choice",
-  "Datatype", "Extraction", "Relation_Power", "Refute", "SAT", "ATP_Linkup",
-  "List", "Map", "Main"]
+  "Nat", "Power", "Product_Type", "Relation", "Divides", "Record",
+  "Predicate", "Transitive_Closure", "Finite_Set", "Wellfounded",
+  "Hilbert_Choice", "FunDef", "Recdef", "Datatype", "Extraction",
+  "Equiv_Relations", "Int", "SetInterval", "IntDiv", "NatBin",
+  "Groebner_Basis", "Arith_Tools", "Presburger", "Relation_Power", "Refute",
+  "SAT", "ATP_Linkup", "List", "Map", "Main", "Prelude"]

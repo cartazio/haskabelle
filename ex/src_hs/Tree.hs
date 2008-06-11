@@ -1,6 +1,6 @@
 module Simple where
 
-import Nat
+import Nats
 
 data Tree a = Tip a | Branch (Tree a) (Tree a)
 

@@ -188,7 +188,7 @@ instance Printer Isa.Cmd where
     pprint' (Isa.TheoryCmd thy cmds)
         = do env <- queryPP globalEnv
              let imps  = lookupImports thy env
-             let imps' = map pprint' imps
+             let imps' = {-map pprint' imps-}[return (P.text "Prelude")]
              withCurrentTheory thy $
                text "theory" <+> pprint' thy                     $+$
                text "imports " <> fsep  imps'    $+$

@@ -1,6 +1,6 @@
 module Radix where
 
-import Nat
+import Nats
 
 radix :: (Nat -> a) -> Nat -> Nat -> [a]
 radix ch _ Zero = [ch Zero]
