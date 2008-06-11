@@ -1,4 +1,4 @@
-module Nat where {
+module Nats where {
 
 
 data Nat = Suc Nat | Zero_nat;
