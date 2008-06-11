@@ -31,5 +31,6 @@ for THY in *.thy
 do
   THY_NAME="$(basename $THY .thy)"
   DST="../../ex/dst_hs/"
-  "$ISATOOL" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" || fail "could not re_import $THY"
+  echo "re-importing $THY_NAME..."
+  "$ISATOOL" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero || fail "could not re_import $THY"
 done

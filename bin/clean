@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# $Id$
+# $Id: import_file 655 2008-04-09 07:50:42Z haftmann $
 # Author: Florian Haftmann, TU Muenchen
 #
 # Call to importer from the shell.
@@ -12,14 +12,8 @@ function fail()
 }
 
 EXECPATH="$(dirname "$0")/.."
-SRC="$1"
-DST="$2"
 
 [ -z "$EXECPATH" ] && fail "$0 must be called with explicit path"
-[ -z "$SRC" ] && fail "no source file given"
-[ -z "$DST" ] && fail "no target dir given"
 
 cd "$EXECPATH"
-
-echo "importing $SRC into $DST..."
-ghc -fglasgow-exts -e "importFiles [\"$SRC\"] \"$DST\"" Importer.hs || exit $?
+rm -v ex/dst_thy/* ex/dst_hs/*

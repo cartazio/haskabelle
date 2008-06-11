@@ -122,9 +122,9 @@ writeIsaUnit (IsaUnit thys env)
 
 writeTheory thy@(TheoryCmd (Theory thyname) _) env 
     = do let content = render (pprint thy env)
-         let dstName = map (\c -> if c == '.' then '_' else c) thyname
-         writeFile (dstName++".thy") content
-  
+         let dstName = content `seq` map (\c -> if c == '.' then '_' else c) thyname ++ ".thy"
+         writeFile dstName content
+
 main :: IO ()
 main = do
   progname <- getProgName
