@@ -22,8 +22,8 @@ import Importer.Preprocess
 import Importer.ConversionUnit
 import Importer.DeclDependencyGraph
 
-import Importer.Mapping (initialGlobalEnv, adaptionTable)
-import Importer.Adapt (adaptGlobalEnv, adaptIsaUnit)
+import Importer.Adapt.Mapping (initialGlobalEnv, adaptionTable)
+import Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit)
 
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg

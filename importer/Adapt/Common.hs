@@ -4,9 +4,7 @@
 Basic data structures for adaption table.
 -}
 
-module Importer.AdaptTable (OpKind(..), Assoc(..), AdaptionEntry(..)) where
-
-import qualified Importer.LexEnv as Env
+module Importer.Adapt.Common (OpKind(..), Assoc(..), AdaptionEntry(..)) where
 
 data OpKind = Variable | Function | Op Int | InfixOp Assoc Int | Type
   deriving Show

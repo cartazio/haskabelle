@@ -16,8 +16,6 @@ import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 
-import Importer.Mapping (initialGlobalEnv)
-
 import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
 

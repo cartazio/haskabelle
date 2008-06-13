@@ -1,26 +1,42 @@
 -- THIS IS A GENERATED FILE - DO NOT EDIT!
 -- $Id$
 
-module Importer.AdaptMapping where
+module Importer.Adapt.Raw where
 
-import Importer.AdaptTable
+import Importer.Adapt.Common
 
-rawAdaptionTable = [(Haskell "Prelude.Bool" Type, Isabelle "bool" Type),
+import Language.Haskell.Hsx
+
+primitive_tycon_table, primitive_datacon_table :: [(HsSpecialCon, HsQName)]
+
+primitive_tycon_table 
+    = [(HsListCon,    Qual (Module "Prelude") (HsIdent "[]")),
+       (HsTupleCon 2, Qual (Module "Prelude") (HsSymbol ","))
+      ]
+
+primitive_datacon_table 
+    = [(HsCons,       Qual (Module "Prelude") (HsSymbol ":")),
+       (HsListCon,    Qual (Module "Prelude") (HsIdent "[]")),
+       (HsTupleCon 2, Qual (Module "Prelude") (HsSymbol ","))
+      ]
+
+
+raw_adaption_table = [(Haskell "Prelude.Bool" Type, Isabelle "Main.bool" Type),
   (Haskell "Prelude.List" Type, Isabelle "List.list" Type),
   (Haskell "Prelude.Maybe" Type, Isabelle "Datatype.option" Type),
   (Haskell "Prelude.id" Function, Isabelle "Fun.id" Function),
-  (Haskell "Prelude.True" Function, Isabelle "True" Function),
-  (Haskell "Prelude.False" Function, Isabelle "False" Function),
-  (Haskell "Prelude.not" Function, Isabelle "Not" Function),
-  (Haskell "Prelude.&&" (InfixOp RightAssoc 35), Isabelle "&" (InfixOp RightAssoc 35)),
-  (Haskell "Prelude.||" (InfixOp RightAssoc 30), Isabelle "|" (InfixOp RightAssoc 30)),
-  (Haskell "Prelude.fst" Function, Isabelle "fst" Function),
-  (Haskell "Prelude.snd" Function, Isabelle "snd" Function),
+  (Haskell "Prelude.True" Function, Isabelle "Main.True" Function),
+  (Haskell "Prelude.False" Function, Isabelle "Main.False" Function),
+  (Haskell "Prelude.not" Function, Isabelle "Main.Not" Function),
+  (Haskell "Prelude.&&" (InfixOp RightAssoc 35), Isabelle "Main.&" (InfixOp RightAssoc 35)),
+  (Haskell "Prelude.||" (InfixOp RightAssoc 30), Isabelle "Main.|" (InfixOp RightAssoc 30)),
+  (Haskell "Prelude.fst" Function, Isabelle "Main.fst" Function),
+  (Haskell "Prelude.snd" Function, Isabelle "Main.snd" Function),
   (Haskell "Prelude.[]" Function, Isabelle "List.list.Nil" Function),
-  (Haskell "Prelude.:" (InfixOp RightAssoc 65), Isabelle "#" (InfixOp RightAssoc 65)),
+  (Haskell "Prelude.:" (InfixOp RightAssoc 65), Isabelle "List.#" (InfixOp RightAssoc 65)),
   (Haskell "Prelude.head" Function, Isabelle "List.hd" Function),
   (Haskell "Prelude.tail" Function, Isabelle "List.tl" Function),
-  (Haskell "Prelude.++" (InfixOp RightAssoc 65), Isabelle "@" (InfixOp RightAssoc 65)),
+  (Haskell "Prelude.++" (InfixOp RightAssoc 65), Isabelle "List.@" (InfixOp RightAssoc 65)),
   (Haskell "Prelude.Nothing" Function, Isabelle "Datatype.option.None" Function),
   (Haskell "Prelude.Just" Function, Isabelle "Datatype.option.Some" Function)]
 

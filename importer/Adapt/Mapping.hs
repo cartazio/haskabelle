@@ -2,7 +2,9 @@
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
 
-module Importer.Mapping (initialGlobalEnv, AdaptionTable(..), adaptionTable) where
+module Importer.Adapt.Mapping 
+    (initialGlobalEnv, AdaptionTable(..), adaptionTable) 
+where
 
 import List (intersperse, groupBy, sortBy)
 
@@ -17,9 +19,9 @@ import qualified Importer.LexEnv as Env
 
 import qualified Importer.IsaSyntax as Isa
 
-import Importer.AdaptTable
+import Importer.Adapt.Common
 
-import Importer.AdaptMapping (raw_adaption_table)
+import Importer.Adapt.Raw (raw_adaption_table)
 
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
   deriving Show

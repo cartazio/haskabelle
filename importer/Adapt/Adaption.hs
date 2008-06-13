@@ -2,7 +2,7 @@
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
 
-module Importer.Adapt (adaptGlobalEnv, adaptIsaUnit) where
+module Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit) where
 
 import Maybe (fromJust, fromMaybe, isJust)
 import List (partition)
@@ -15,7 +15,7 @@ import qualified Importer.LexEnv as Env
 import Importer.ConversionUnit
 import Importer.Utilities.Misc
 
-import Importer.Mapping (AdaptionTable(..))
+import Importer.Adapt.Mapping (AdaptionTable(..))
 
 import qualified Importer.IsaSyntax as Isa
 import Language.Haskell.Hsx
