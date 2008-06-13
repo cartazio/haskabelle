@@ -35,7 +35,9 @@ makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
 
 makeEdgesFromHsDecl :: Env.GlobalE -> Module -> HsDecl -> [(HsDecl, Env.EnvName, [Env.EnvName])]
 makeEdgesFromHsDecl globalEnv modul decl
-    = let canonicalize hsqname = Env.resolve globalEnv (Env.fromHsk modul) (Env.fromHsk hsqname)
+    = let canonicalize hsqname = (let mID  = Env.fromHsk modul
+                                      envN = Env.fromHsk hsqname
+                                  in Env.resolveEnvName globalEnv mID envN)
       in do defname <- fromJust $ namesFromHsDecl decl
             let used_names = extractFreeVarNs decl
             return (decl, canonicalize defname, map canonicalize used_names)

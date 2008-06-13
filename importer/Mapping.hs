@@ -19,7 +19,7 @@ import qualified Importer.IsaSyntax as Isa
 
 import Importer.AdaptTable
 
-import Importer.AdaptMapping
+import Importer.AdaptMapping (raw_adaption_table)
 
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
   deriving Show
@@ -28,7 +28,7 @@ adaptionTable :: AdaptionTable
 adaptionTable 
     = AdaptionTable 
         $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
-              rawAdaptionTable 
+              raw_adaption_table 
 
 initialGlobalEnv :: Env.GlobalE
 initialGlobalEnv 

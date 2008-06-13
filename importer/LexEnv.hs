@@ -18,6 +18,8 @@ import qualified Importer.IsaSyntax as Isa
 import Importer.Utilities.Hsk
 import Importer.Utilities.Misc
 
+import Importer.AdaptMapping (primitive_tycon_table, primitive_datacon_table)
+
 --
 -- Identifier information
 --
@@ -69,9 +71,9 @@ data Identifier = Variable LexInfo
 
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
 makeLexInfo moduleID identifierID t
-    = LexInfo { nameOf   = identifierID,
-                typeOf   = t,
-                moduleOf = moduleID }
+    = assert (moduleID /= "") $ LexInfo { nameOf   = identifierID,
+                                          typeOf   = t,
+                                          moduleOf = moduleID }
 
 updateIdentifier :: Identifier -> LexInfo -> Identifier
 updateIdentifier (Variable _) lexinfo       = Variable lexinfo
@@ -114,8 +116,7 @@ identifier2name identifier
     = let lexinfo  = lexInfoOf identifier
           name     = nameOf lexinfo
           modul    = moduleOf lexinfo
-      in if (modul == "") then EnvUnqualName name
-                          else EnvQualName modul name
+      in assert (modul /= "") $ EnvQualName modul name
 
 class Hsk2Env a b where
     fromHsk :: (Show a, Hsk2Env a b) => a -> b
@@ -141,15 +142,14 @@ instance Hsk2Env HsName IdentifierID where
 data ConKind = DataCon | TypeCon deriving Show
 
 translateSpecialCon :: ConKind -> HsSpecialCon -> HsQName
-translateSpecialCon DataCon HsCons    = Qual (Module "Prelude") (HsSymbol ":")
-translateSpecialCon TypeCon HsListCon = Qual (Module "Prelude") (HsIdent "list")
-translateSpecialCon DataCon HsListCon = Qual (Module "Prelude") (HsIdent "[]")
-translateSpecialCon x y = error ("translateSpecialCon " ++ show x ++ " " ++ show y)
+translateSpecialCon DataCon con = fromJust $ Prelude.lookup con primitive_datacon_table
+translateSpecialCon TypeCon con = fromJust $ Prelude.lookup con primitive_tycon_table
 
 retranslateSpecialCon :: ConKind -> HsQName -> Maybe HsSpecialCon
-retranslateSpecialCon DataCon (Qual (Module "Prelude") (HsSymbol ":"))   = Just HsCons
-retranslateSpecialCon TypeCon (Qual (Module "Prelude") (HsIdent "list")) = Just HsListCon
-retranslateSpecialCon _ _ = Nothing
+retranslateSpecialCon DataCon qname 
+    = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_datacon_table ]
+retranslateSpecialCon TypeCon qname 
+    = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_tycon_table ]
 
 
 instance Hsk2Env HsQName EnvName where
@@ -325,25 +325,6 @@ mergeLexEnvs (LexEnv map1) (LexEnv map2)
                         Just result -> result)
               map1 map2
 
-mapLexEnv :: (IdentifierID -> Maybe Identifier) -> LexE -> LexE
-mapLexEnv update (LexEnv lexmap)
-    -- If names of Identifiers are supposed to be changed by `update',
-    -- we have to make sure that the respective keys in Map get
-    -- changed, too.
-    = let (keyupdates, lexmap')
-              = Map.mapAccumWithKey (\acc identifierID identifier 
-                                         -> case (update . nameOf . lexInfoOf) identifier of
-                                              Nothing -> (acc, identifier)
-                                              Just newid 
-                                                  -> if nameOf (lexInfoOf newid) /= identifierID
-                                                     -- gets fixed up later
-                                                     then ((identifierID, newid):acc, identifier)
-                                                     else (acc, newid))
-                                     [] lexmap
-          (keysToBeRemoved, newIdentifiers) = unzip keyupdates
-      in LexEnv $ Map.union (Map.filterWithKey (\k _ -> k `notElem` keysToBeRemoved) lexmap')
-                            (Map.fromList (map (\id -> (nameOf (lexInfoOf id), id)) newIdentifiers))
-
 
 --
 -- ModuleEnv 
@@ -382,24 +363,6 @@ makeModuleEnv imports shall_export_p identifiers
       exportAll identifiers    = concatMap export identifiers
       export id@(Type _ _)     = [EnvExportAll (identifier2name id)] 
       export id                = [EnvExportVar (identifier2name id)]
-
-mapModuleEnv :: (EnvName -> Maybe Identifier) -> ModuleE -> ModuleE
-mapModuleEnv update (ModuleEnv mID imps exps lexenv)
-    = ModuleEnv mID imps (map updateExport exps) (mapLexEnv update' lexenv)
-    where
-      update' :: IdentifierID -> Maybe Identifier
-      update' id = update (EnvQualName mID id)
-      updateExport (EnvExportVar n)   = reconstruct EnvExportVar n 
-                                          $ update (qualifyEnvName mID n)
-      updateExport (EnvExportAbstr n) = reconstruct EnvExportAbstr n 
-                                          $ update (qualifyEnvName mID n)
-      updateExport (EnvExportAll n)   = reconstruct EnvExportAbstr n 
-                                          $ update (qualifyEnvName mID n)
-      updateExport e@(EnvExportMod _) = e
-      reconstruct con oldN Nothing    = con oldN
-      reconstruct con oldN (Just id)  = con (EnvQualName mID (nameOf (lexInfoOf id)))
-
-
 
 makeModuleEnv_fromHsModule :: HsModule -> ModuleE
 makeModuleEnv_fromHsModule (HsModule loc modul exports imports topdecls)
@@ -496,14 +459,6 @@ makeGlobalEnv_fromHsModules ms
                     | m@(HsModule _ modul _ _ _) <- ms ]
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
-findModuleEnv :: ModuleID -> GlobalE -> Maybe ModuleE
-findModuleEnv mID (GlobalEnv globalmap) = Map.lookup mID globalmap
-
-findModuleEnv_OrLose m globalEnv
-    = case findModuleEnv m globalEnv of
-        Just env -> env
-        Nothing  -> error ("Couldn't find module `" ++ show m ++ "'.")
-
 mergeGlobalEnvs :: GlobalE -> GlobalE -> GlobalE
 mergeGlobalEnvs (GlobalEnv map1) (GlobalEnv map2)
     = GlobalEnv 
@@ -514,17 +469,17 @@ mergeGlobalEnvs (GlobalEnv map1) (GlobalEnv map2)
                       in -- `env1' contains ModuleE that belongs to `map1'.
                          mergeModuleEnvs env1 env2)
               map1 map2
+
+
+findModuleEnv :: ModuleID -> GlobalE -> Maybe ModuleE
+findModuleEnv mID (GlobalEnv globalmap)
+    = Map.lookup mID globalmap
+
+findModuleEnv_OrLose m globalEnv
+    = case findModuleEnv m globalEnv of
+        Just env -> env
+        Nothing  -> error ("Couldn't find module `" ++ show m ++ "'.")
           
-mapGlobalEnv :: (EnvName -> Maybe Identifier) -> GlobalE -> GlobalE
-mapGlobalEnv update (GlobalEnv modulemap)
-    = GlobalEnv $ Map.map (\moduleEnv -> mapModuleEnv update' moduleEnv) modulemap
-    where update' n = assert (isQualified n) $ update n
-
--- computeImportedModules :: Module -> GlobalE -> [Module]
--- computeImportedModules modul globalEnv
---     = let (HskModuleEnv _ imports _ _) = findModuleEnvOrLose modul globalEnv
---       in importedModules imports
-
 computeExportedNames :: ModuleID -> GlobalE -> [IdentifierID]
 computeExportedNames moduleID globalEnv
     = do let ModuleEnv moduleID' _ exports (LexEnv lexmap)
@@ -549,6 +504,8 @@ isExported :: Identifier -> ModuleID -> GlobalE -> Bool
 isExported identifier moduleID globalEnv
     = nameOf (lexInfoOf identifier) `elem` (computeExportedNames moduleID globalEnv)
 
+-- If the given ModuleID is a mere nickname of the ModuleE,
+-- return the actual name.
 resolveModuleID :: ModuleID -> ModuleE -> ModuleID
 resolveModuleID moduleID (ModuleEnv _ imps _ _)
     = fromMaybe moduleID (lookfor moduleID imps)
@@ -627,8 +584,8 @@ lookup currentModule qname globalEnv
                              x:xs -> error (Msg.identifier_collision_in_lookup 
                                                currentModule qname (x:xs))
 
-lookup_orLose :: ModuleID -> EnvName -> GlobalE -> Identifier
-lookup_orLose currentModule qname globalEnv
+lookup_OrLose :: ModuleID -> EnvName -> GlobalE -> Identifier
+lookup_OrLose currentModule qname globalEnv
     = case Importer.LexEnv.lookup currentModule qname globalEnv of
         Just id -> id
         Nothing -> error (Msg.failed_lookup currentModule qname globalEnv)
@@ -638,9 +595,58 @@ lookupImports_OrLose moduleID globalEnv
     = let (ModuleEnv _ imps _ _) = findModuleEnv_OrLose moduleID globalEnv 
       in imps
 
-resolve :: GlobalE -> ModuleID -> EnvName -> EnvName
-resolve globalEnv mID name
-    = identifier2name (lookup_orLose mID name globalEnv)
+-- 
+resolveEnvName :: GlobalE -> ModuleID -> EnvName -> EnvName
+resolveEnvName globalEnv mID name
+    = identifier2name (lookup_OrLose mID name globalEnv)
+
+
+
+allIdentifiers :: GlobalE -> [Identifier]
+allIdentifiers (GlobalEnv modulemap)
+    = concatMap (\(ModuleEnv _ _ _ (LexEnv lexmap)) -> Map.elems lexmap) 
+          $ Map.elems modulemap
+
+updateGlobalEnv :: (EnvName -> Maybe Identifier) -> GlobalE -> GlobalE
+updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
+    = let id_alist    = [ (fromMaybe id (update (identifier2name id)), id) | id <- allIdentifiers globalEnv]
+          mod_alist   = nub [ (moduleOf (lexInfoOf n), moduleOf (lexInfoOf o)) | (n, o) <- id_alist ]
+          id_tbl      = Map.fromListWith (failDups "id_tbl")  id_alist   -- Map from new_id  to old_id
+          mod_tbl     = Map.fromListWith (failDups "mod_tbl") mod_alist  -- Map from new_mID to old_mID
+          rev_mod_tbl = Map.fromListWith (failDups "rev_mod_tbl")        -- Map from old_mID to [new_mID]
+                          (groupAlist [ (o,n) | (n,o) <- mod_alist ]) 
+
+          -- The new ModuleE gets the same imports as the old ModuleE, but we
+          -- have to account for old imports being possibly updated themselves.
+          -- E.g. if `Foo' imported `Prelude', and `Prelude` was split into `List', 
+          -- and `Datatype`, then 'Foo' now has to import 'Prelude', 'List', 
+          -- and 'Datatype'.
+          recompute_imports new_mID
+              = let old_mID         = fromJust (Map.lookup new_mID mod_tbl)
+                    old_mEnv        = findModuleEnv_OrLose old_mID globalEnv
+                    old_imports     = (let (ModuleEnv _ imps _ _) = old_mEnv in imps)
+                    old_import_mIDs = importedModuleIDs old_mEnv
+                in
+                  do (old_imported_mID, old_import) <- zip old_import_mIDs old_imports
+                     case fromJust (Map.lookup old_imported_mID rev_mod_tbl) of
+                       []       -> return old_import
+                       mIDs     -> old_import : map (\mID -> EnvImport mID False Nothing) mIDs
+
+          -- The new ModuleE must export all those identifiers that are the same
+          -- as the exported identifiers in the old ModuleE, and all those that
+          -- resulted from updating any such identifier.
+          recompute_exports new_id
+              = let old_id  = fromJust (Map.lookup new_id id_tbl)
+                    old_mID = (let oldm = moduleOf (lexInfoOf old_id)
+                                   newm = moduleOf (lexInfoOf new_id)
+                               in assert (oldm == fromJust (Map.lookup newm mod_tbl)) oldm)
+                in isExported old_id old_mID globalEnv
+       in 
+         makeGlobalEnv recompute_imports recompute_exports (map fst id_alist)
+
+    where failDups str a b = error ("Found duplicates while computing " 
+                                    ++ str ++ ": " ++ show a ++ ", " ++ show b)
+
 
 -- check_GlobalEnv_Consistency
 
@@ -672,86 +678,3 @@ resolve globalEnv mID name
 --           = if hasDuplicates (universeBi exports :: [HsName]) -- strip off qualifiers
 --             then error ("Duplicates found in export list: " ++ show exports)
 --             else exports
-
-
-
-allIdentifiers :: GlobalE -> [Identifier]
-allIdentifiers (GlobalEnv modulemap)
-    = concatMap (\(ModuleEnv _ _ _ (LexEnv lexmap)) -> Map.elems lexmap) 
-          $ Map.elems modulemap
-
--- updateGlobalEnv :: (EnvName -> Maybe Identifier) -> GlobalE -> GlobalE
--- updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
---     = let id_alist    = [ (fromMaybe id (update (identifier2name id)), id) | id <- allIdentifiers globalEnv]
---           mod_alist   = [ (moduleOf (lexInfoOf new), moduleOf (lexInfoOf old)) | (new, old) <- id_alist ]
---           id_tbl      = Map.fromListWith failDups id_alist   -- Map from new_id  to old_id
---           mod_tbl     = Map.fromListWith failDups mod_alist  -- Map from new_mID to old_mID
---           rev_mod_tbl = Map.fromListWith failDups            -- Map from old_mID to [new_mID]
---                           (groupAlist [ (o,n) | (n,o) <- mod_alist ]) 
-
---           -- The new ModuleE gets the same imports as the old ModuleE, but we 
---           -- have to account for the possible updates of the old imported modules
---           -- themselves. E.g. if `Foo' imported `Prelude', and `Prelude` was split
---           -- into `List', and `Datatype`, then 'Foo' now has to import 'Prelude',
---           -- 'List', and 'Datatype'.
---           recompute_imports new_mID
---               = let old_mID         = fromJust (Map.lookup new_mID mod_tbl)
---                     old_mEnv        = findModuleEnv_OrLose old_mID globalEnv
---                     old_imports     = (let (ModuleEnv _ imps _ _) = old_mEnv in imps)
---                     old_import_mIDs = importedModuleIDs old_mEnv
---                 in
---                   do (old_imported_mID, old_import) <- zip old_import_mIDs old_imports
---                      case fromJust (Map.lookup old_imported_mID rev_mod_tbl) of
---                        []       -> return old_import
---                        mIDs     -> old_import : map (\mID -> EnvImport mID False Nothing) mIDs
-                                  
---           recompute_exports new_id
---               = let old_id  = fromJust (Map.lookup new_id id_tbl)
---                     old_mID = (let oldm = moduleOf (lexInfoOf old_id)
---                                    newm = moduleOf (lexInfoOf new_id)
---                                in assert (oldm == fromJust (Map.lookup newm mod_tbl)) oldm)
---                 in isExported old_id old_mID globalEnv
---        in 
---          makeGlobalEnv recompute_imports recompute_exports (map fst id_alist)
-
---     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
-
-
-updateGlobalEnv update globalEnv
-    = let old_identifiers = allIdentifiers globalEnv
-          new_identifiers = map (update . identifier2name) old_identifiers
-          id_updates      = [ (old, fromMaybe old new) 
-                                  | (old, new) <- zip old_identifiers new_identifiers ]
-          mod_updates     = [ (moduleOf (lexInfoOf old), moduleOf (lexInfoOf new))
-                                  | (old, new) <- id_updates ]
-      in -- trace (prettyShow' "id_updates" id_updates) $
-         makeGlobalEnv (make_import_fn mod_updates) (make_export_fn mod_updates id_updates)
-           $  map snd id_updates
-    where 
-      find_old_ModuleE mod_updates mID
-          = case findModuleEnv mID globalEnv of
-                      Just env -> env
-                      Nothing  -> let Just old_mID = Prelude.lookup mID [ (y,x) | (x,y) <- mod_updates ]
-                                  in fromJust $ findModuleEnv old_mID globalEnv 
-
-      make_import_fn mod_updates
-          = \mID -> let env@(ModuleEnv _ imps _ _) = find_old_ModuleE mod_updates mID
-                        old_imported_mIDs = importedModuleIDs env
-                    in nub $ do (old_mID, old_import) <- zip old_imported_mIDs imps
-                                let relevant_mod_updates = filter (\(old,new) -> old == old_mID) mod_updates
-                                case map snd relevant_mod_updates of
-                                  []       -> return $ old_import
-                                  new_mIDs -> map (updateImport old_import) new_mIDs ++ [old_import]
-
-            where updateImport (EnvImport old_mID qual nick) new_mID
-                      = EnvImport new_mID qual nick
-
-      make_export_fn mod_updates id_updates
-          = \id -> let old_mID = find_old_mID (moduleOf (lexInfoOf id))
-                       old_id  = find_old_id id
-                   in isExported old_id old_mID globalEnv
-            where 
-              find_old_mID mID = let (ModuleEnv old_mID _ _ _) 
-                                         = find_old_ModuleE mod_updates mID
-                                 in old_mID
-              find_old_id id   = fromJust $ Prelude.lookup id [ (y,x) | (x,y) <- id_updates ]

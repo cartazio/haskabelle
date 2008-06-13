@@ -214,9 +214,14 @@ instance Printer Isa.Cmd where
         = case matching of
             (pat, term)
                 -> blankline $
-                   text "definition" <+> pprint' vname <+> text "::" <+> pprint' tysig $$
+                   text "definition" <+> ppHeader vname tysig $$
                    text "where" $$
                    space <+> (maybeWithinHOL $ pprint' pat <+> equals <+> parens (pprint' term))
+        where ppHeader n sig
+                  | isEmptySig sig 
+                      = pprint' n
+                  | otherwise
+                      = pprint' n <+> text "::" <+> maybeWithinHOL (pprint' sig)
 
     pprint' (Isa.FunCmd fnames tysigs equations)
         = blankline $

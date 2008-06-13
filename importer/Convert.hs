@@ -361,14 +361,17 @@ instance Convert HsExp Isa.Term where
           where cons x y = HsApp (HsApp (HsCon (Special HsCons)) x) y
                 nil = HsList []
 
-    convert' (HsTuple exps)
-        = do exps' <- mapM convert exps
-             return $ foldr1 Isa.mkpair exps'
+    convert' (HsTuple exps)    = convert (foldr1 pair exps)
+        where pair x y 
+                  = HsApp (HsApp (HsCon (Special (HsTupleCon 2))) x) y
 
     convert' (HsApp exp1 exp2)
         = do exp1' <- cnv exp1 ; exp2' <- cnv exp2
              return (Isa.App exp1' exp2')
-          where cnv (HsCon (Special (HsTupleCon n))) = makeTupleDataCon n
+          where cnv app@(HsCon (Special (HsTupleCon n))) 
+                    | n < 2  = die ("Internal Error, (HsTupleCon " ++ show n ++ ")")
+                    | n == 2 = convert app         -- pairs can be dealt with the usual way. 
+                    | n > 2  = makeTupleDataCon n
                 cnv etc = convert etc
 
     convert' infixapp@(HsInfixApp _ _ _)
@@ -429,10 +432,14 @@ instance Convert HsExp Isa.Term where
 -- that takes n parameters and constructs the nested pairs within its
 -- body.
 makeTupleDataCon :: Int -> ContextM Isa.Term
-makeTupleDataCon n
-    = do argNs <- mapM (lift . genIsaName) (replicate n (Isa.Name "arg"))
-         args  <- return (map Isa.Var argNs)
-         return $ Isa.Parenthesized (Isa.Lambda argNs (foldr1 Isa.mkpair args))
+makeTupleDataCon n     -- n < 2  cannot happen (cf. Language.Haskell.Hsx.HsTupleCon)
+    = assert (n > 2) $ -- n == 2, i.e. pairs, can and are dealt with by usual conversion.
+      do argNs  <- mapM (lift . genHsQName) (replicate n (UnQual (HsIdent "arg")))
+         args   <- return (map HsVar argNs)
+         argNs' <- mapM convert argNs
+         args'  <- convert (HsTuple args)
+         return $ Isa.Parenthesized (Isa.Lambda argNs' args')
+    where pair x y = HsApp (HsApp (HsCon (Special (HsTupleCon 2))) x) y
 
 -- HOL does not support pattern matching directly within a lambda
 -- expression, so we transform a `HsLambda pat1 pat2 .. patn -> body' to

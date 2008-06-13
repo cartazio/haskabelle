@@ -117,7 +117,7 @@ translateIdentifier tbl id
 
 adapt_type_in_identifier :: Env.GlobalE -> AdaptionTable -> Env.EnvName -> Maybe Env.Identifier
 adapt_type_in_identifier globalEnv tbl n@(Env.EnvQualName mID _)
-    = do let old_id       = Env.lookup_orLose mID n globalEnv
+    = do let old_id       = Env.lookup_OrLose mID n globalEnv
          let old_lexinfo  = Env.lexInfoOf old_id
          let old_type     = Env.typeOf old_lexinfo
          new_type <- translateEnvType tbl (qualifier (Env.moduleOf old_lexinfo)) old_type
