@@ -50,7 +50,8 @@ lookupBy eq key ((x,y):xys)
     | otherwise         =  lookupBy eq key xys
 
 groupAlist :: Eq a => [(a, b)] -> [(a, [b])]
-groupAlist xs = map (\k -> (k, [ l | (k', l) <- xs, k' == k ])) (List.nub (map fst xs))
+groupAlist xs = map (\k -> (k, [ l | (k', l) <- xs, k' == k ]))
+                  $ List.nub (map fst xs)
 
 wordsBy            :: (a -> Bool) -> [a] -> [[a]]
 wordsBy pred l     =  case dropWhile pred l of

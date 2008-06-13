@@ -18,7 +18,7 @@ import qualified Importer.IsaSyntax as Isa
 import Importer.Utilities.Hsk
 import Importer.Utilities.Misc
 
-import Importer.AdaptMapping (primitive_tycon_table, primitive_datacon_table)
+import Importer.Adapt.Raw (primitive_tycon_table, primitive_datacon_table)
 
 --
 -- Identifier information
