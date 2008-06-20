@@ -12,4 +12,12 @@ Arbeitsplan Haskell-Importer:
 
 BUG / TODO Liste:
 
+* Rat.hs, Radix.hs
+
+* isCons etc printer
+
+* newtype decls
+
+* Preprocess; closure detection is buggy
+
 $Id$

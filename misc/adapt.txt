@@ -27,6 +27,7 @@ consts
   "Prelude.tail"    "List.tl"
   "Prelude.map"     "List.map"
   "Prelude.++"      "List.append"
+  "Prelude.reverse" "List.rev"
 
   "Prelude.Nothing" "None"
   "Prelude.Just"    "Some"

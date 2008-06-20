@@ -91,9 +91,9 @@ fun run thy src_loc dst_loc =
       "-- $" ^ "Id" ^ "$", "",
       "module Importer.Adapt." ^ modl_name ^ " where", "",
       "import Importer.Adapt.Common", "",
-      "rawAdaptionTable = " ^ adaptions, "",
-      "usedConstNames = " ^ Pretty.string_of const_names, "",
-      "usedThyNames = " ^ Pretty.string_of thy_names, ""];
+      "raw_adaption_table = " ^ adaptions, "",
+      "used_const_names = " ^ Pretty.string_of const_names, "",
+      "used_thy_names = " ^ Pretty.string_of thy_names, ""];
     val _ = File.write dst_path (cat_lines dsts);
     val _ = writeln ("Written to " ^ dst_loc);
   in () end;
