@@ -89,7 +89,7 @@ type Const = String
 
 data Term = Literal Literal
           | Var VarName
-          | Lambda [VarName] Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
+          | Lambda VarName Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
           | App Term Term
           | If Term Term Term
           | Let [(Pat, Term)] Term
@@ -98,23 +98,3 @@ data Term = Literal Literal
           | RecConstr VarName [(Name, Term)]
           | RecUpdate Term [(Name, Term)]
   deriving (Show, Data, Typeable)
-
--- FIXME place this into some kind of "Haskell system compatibility file"
-tnameBool   = Name "Bool" -- FIXME
-
-tnamePair   = QName (Theory "Prelude") "*"
-cnamePair   = QName (Theory "Prelude") "(,)"
-
-tnameList   = QName (Theory "Prelude") "list"
-cnameNil    = QName (Theory "Prelude") "[]"
-cnameCons   = QName (Theory "Prelude") "#"
-
-mknil       = Var cnameNil
-mkcons x y  = App (App (Var cnameCons) x) y
-mkpair x y  = App (App (Var cnamePair) x) y
-
-
-isPairCon x = x == cnamePair
-isCons    x = x == cnameCons
-isNil     x = x == cnameNil
-

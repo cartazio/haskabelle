@@ -23,7 +23,7 @@ data PPState = PPState { globalEnv     :: Env.GlobalE,
 
 data DocM v = DocM (PPState -> (v, PPState))
 
-emptyPPState = PPState { globalEnv = Env.emptyGlobalEnv, 
+emptyPPState = PPState { globalEnv = Env.initialGlobalEnv, 
                          currentTheory = Isa.Theory "Scratch", 
                          withinHOL = False }
 
@@ -288,9 +288,6 @@ instance Printer Isa.Type where
 instance Printer Isa.TypeSig where
     pprint' (Isa.TypeSig _name typ) = pprint' typ
 
-isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
-isEmptySig _ = False
-
 instance Printer Isa.Literal where
     pprint' (Isa.Int i)      = integer i
     pprint' (Isa.String str) = doubleQuotes $ text str
@@ -318,8 +315,9 @@ instance Printer Isa.Term where
                 text "then" <+> pprint' t2,
                 text "else" <+> pprint' t3]
 
-    pprint' (Isa.Lambda vars body)
-        = fsep [text "%" <+> hsep (map pprint' vars) <+> dot,
+    pprint' lexpr@(Isa.Lambda _ _)
+        = let (argNs, body) = flattenLambdas lexpr in 
+          fsep [text "%" <+> hsep (map pprint' argNs) <+> dot,
                 nest 2 (pprint' body)]
 
     pprint' (Isa.RecConstr recordN updates)
@@ -345,9 +343,16 @@ instance Printer Isa.Term where
                     = pprint' pat <+> equals <+> pprint' term
 
 
+isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
+isEmptySig _ = False
+
+isNil  n    = Env.isNil     (Env.fromIsa n)
+isCons n    = Env.isCons    (Env.fromIsa n)
+isPairCon n = Env.isPairCon (Env.fromIsa n)
+
 pprintAsList :: [Isa.Term] -> DocM P.Doc
 pprintAsList list = let (xs, [Isa.Var nil]) = splitAt (length list - 1) list
-                    in assert (Isa.isNil nil) 
+                    in assert (isNil nil) 
                          $ brackets (hsep (punctuate comma (map pprint' xs)))
 
 pprintAsTuple :: [Isa.Term] -> DocM P.Doc
@@ -369,9 +374,9 @@ data AppFlavor = ListApp [Isa.Term]
 
 categorizeApp :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> AppFlavor
 categorizeApp app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
-    | Isa.isCons opN,    Just list <- flattenListApp app  = ListApp list
-    | Isa.isPairCon opN, Just list <- flattenTupleApp app = TupleApp list
-    | isInfixOp opN lookupFn                              = InfixApp t1 (Isa.Var opN) t2
+    | isCons opN,    Just list <- flattenListApp app  = ListApp list
+    | isPairCon opN, Just list <- flattenTupleApp app = TupleApp list
+    | isInfixOp opN lookupFn                          = InfixApp t1 (Isa.Var opN) t2
 categorizeApp (Isa.App (Isa.Var opN) _) lookupFn
     | isUnaryOp opN lookupFn                              = UnaryOpApp
     | otherwise                                           = FunApp
@@ -380,10 +385,10 @@ categorizeApp _ _ = FunApp
 flattenListApp :: Isa.Term -> Maybe [Isa.Term]
 flattenListApp app = let list = unfoldr1 split app in 
                      case last list of -- proper list?
-                       (Isa.Var c) | Isa.isNil c -> Just list
+                       (Isa.Var c) | isNil c -> Just list
                        _ -> Nothing
   where
-    split (Isa.App (Isa.App (Isa.Var c) x) xs) | Isa.isCons c = Just (x, xs)
+    split (Isa.App (Isa.App (Isa.Var c) x) xs) | isCons c = Just (x, xs)
     split _ = Nothing
 
 flattenTupleApp :: Isa.Term -> Maybe [Isa.Term]
@@ -391,9 +396,17 @@ flattenTupleApp app = let list = unfoldr1 split app in
                       if (length list) > 1 then Just list
                                            else Nothing
   where
-    split (Isa.App (Isa.App (Isa.Var c) x) xs) | Isa.isPairCon c = Just (x, xs)
+    split (Isa.App (Isa.App (Isa.Var c) x) xs) | isPairCon c = Just (x, xs)
     split _ = Nothing
 
+-- flattenLambdas ``%x . %y . %z . foo'' => ([x,y,z], foo)
+--
+flattenLambdas :: Isa.Term -> ([Isa.Name], Isa.Term)
+flattenLambdas (Isa.Lambda arg1 (Isa.Lambda arg2 body)) 
+    = let (args, real_body) = flattenLambdas body
+      in ([arg1,arg2]++args, real_body)
+flattenLambdas (Isa.Lambda arg body) = ([arg], body)
+flattenLambdas t = ([], t)
 
 isCompound :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
 isCompound t lookupFn

@@ -19,10 +19,10 @@ cd "$EXECPATH"
 
 [ -z "$ISABELLE" ] && ISABELLE="$(isatool getenv -b ISABELLE)"
 
-SRC="$EXECPATH/adapt/adapt.txt"
-DST="$EXECPATH/Importer/AdaptMapping.hs"
-PRELUDE="$EXECPATH/adapt/Prelude"
-CONV="$EXECPATH/adapt/mk_adapt.ML"
+SRC="$EXECPATH/misc/adapt.txt"
+DST="$EXECPATH/Importer/Adapt/Raw.hs"
+PRELUDE="$EXECPATH/misc/Prelude"
+CONV="$EXECPATH/misc/mk_adapt.ML"
 CMD="use_thy \"$PRELUDE\"; use \"$CONV\"; MkAdapt.run (theory \"Main\") \"$SRC\" \"$DST\";"
 
 "$ISABELLE" -q -e "$CMD" HOL || exit 1

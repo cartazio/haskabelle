@@ -261,9 +261,9 @@ instance Adapt Isa.Term where
     adapt (Isa.If c t e)        = do c' <- adapt c ; t' <- adapt t ; e' <- adapt e
                                      return (Isa.If c' t' e')
 
-    adapt (Isa.Lambda boundNs body)
-        = shadowing boundNs $
-            adapt body >>= (return . Isa.Lambda boundNs)
+    adapt (Isa.Lambda boundN body)
+        = shadowing [boundN] $
+            adapt body >>= (return . Isa.Lambda boundN)
 
     adapt (Isa.Let bindings body)
         = nested_binding (map (\(p,t) -> (extractNames p, adapt t)) bindings) $

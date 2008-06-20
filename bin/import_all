@@ -26,7 +26,7 @@ do
   ./bin/import_file "$SRC" "$DST" > /dev/zero 2> /dev/zero || fail "could not import $SRC"
 done
 
-cp -vu adapt/Prelude.thy ex/dst_thy/
+cp -vu misc/Prelude.thy ex/dst_thy/
 cd ex/dst_thy/
 for THY in *.thy
 do

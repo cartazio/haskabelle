@@ -44,7 +44,7 @@ makeConversionUnit hsmodule
                 in fail (Msg.cycle_in_dependency_graph (map toModuleName (head cycles)))
          let toHsModule v = case fromVertex v of (m,_,_) -> m
          let [hsmodules]  = map (map toHsModule . flatten) (components depGraph)
-         return (HskUnit hsmodules Env.emptyGlobalEnv)
+         return (HskUnit hsmodules Env.initialGlobalEnv)
 
 cyclesFromGraph :: Graph -> [[Vertex]]
 cyclesFromGraph graph

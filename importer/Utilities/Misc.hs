@@ -27,9 +27,9 @@ unfoldl f x = aux [] f x
                 Nothing     -> []
                 Just (z, x') -> aux (z:acc) f x'
 
-unfoldr1 f x = 
-    case f x of Nothing -> [x]
-                Just (z, x') -> z : unfoldr1 f x'
+unfoldr1 f x 
+    = case f x of Nothing -> [x]
+                  Just (z, x') -> z : unfoldr1 f x'
 
 unfoldl1 f x = aux [] f x
     where aux acc f x = case f x of

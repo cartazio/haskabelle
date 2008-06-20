@@ -89,8 +89,8 @@ fun run thy src_loc dst_loc =
       (map (Pretty.str o quote) (ThyInfo.get_names ()));
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
       "-- $" ^ "Id" ^ "$", "",
-      "module Importer." ^ modl_name ^ " where", "",
-      "import Importer.AdaptTable", "",
+      "module Importer.Adapt." ^ modl_name ^ " where", "",
+      "import Importer.Adapt.Common", "",
       "rawAdaptionTable = " ^ adaptions, "",
       "usedConstNames = " ^ Pretty.string_of const_names, "",
       "usedThyNames = " ^ Pretty.string_of thy_names, ""];

@@ -5,31 +5,15 @@ module Importer.Adapt.Raw where
 
 import Importer.Adapt.Common
 
-import Language.Haskell.Hsx
-
-primitive_tycon_table, primitive_datacon_table :: [(HsSpecialCon, HsQName)]
-
-primitive_tycon_table 
-    = [(HsListCon,    Qual (Module "Prelude") (HsIdent "[]")),
-       (HsTupleCon 2, Qual (Module "Prelude") (HsSymbol ","))
-      ]
-
-primitive_datacon_table 
-    = [(HsCons,       Qual (Module "Prelude") (HsSymbol ":")),
-       (HsListCon,    Qual (Module "Prelude") (HsIdent "[]")),
-       (HsTupleCon 2, Qual (Module "Prelude") (HsSymbol ","))
-      ]
-
-
-raw_adaption_table = [(Haskell "Prelude.Bool" Type, Isabelle "Main.bool" Type),
+raw_adaption_table = [(Haskell "Prelude.Bool" Type, Isabelle "bool" Type),
   (Haskell "Prelude.List" Type, Isabelle "List.list" Type),
   (Haskell "Prelude.Maybe" Type, Isabelle "Datatype.option" Type),
   (Haskell "Prelude.id" Function, Isabelle "Fun.id" Function),
   (Haskell "Prelude.True" Function, Isabelle "Main.True" Function),
   (Haskell "Prelude.False" Function, Isabelle "Main.False" Function),
   (Haskell "Prelude.not" Function, Isabelle "Main.Not" Function),
-  (Haskell "Prelude.&&" (InfixOp RightAssoc 35), Isabelle "Main.&" (InfixOp RightAssoc 35)),
-  (Haskell "Prelude.||" (InfixOp RightAssoc 30), Isabelle "Main.|" (InfixOp RightAssoc 30)),
+  (Haskell "Prelude.&&" (InfixOp RightAssoc 35), Isabelle "&" (InfixOp RightAssoc 35)),
+  (Haskell "Prelude.||" (InfixOp RightAssoc 30), Isabelle "|" (InfixOp RightAssoc 30)),
   (Haskell "Prelude.fst" Function, Isabelle "Main.fst" Function),
   (Haskell "Prelude.snd" Function, Isabelle "Main.snd" Function),
   (Haskell "Prelude.[]" Function, Isabelle "List.list.Nil" Function),

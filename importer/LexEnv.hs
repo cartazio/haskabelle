@@ -18,7 +18,7 @@ import qualified Importer.IsaSyntax as Isa
 import Importer.Utilities.Hsk
 import Importer.Utilities.Misc
 
-import Importer.Adapt.Raw (primitive_tycon_table, primitive_datacon_table)
+import Importer.Adapt.Common (primitive_tycon_table, primitive_datacon_table)
 
 --
 -- Identifier information
@@ -71,9 +71,11 @@ data Identifier = Variable LexInfo
 
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
 makeLexInfo moduleID identifierID t
-    = assert (moduleID /= "") $ LexInfo { nameOf   = identifierID,
-                                          typeOf   = t,
-                                          moduleOf = moduleID }
+    = let mID = (if moduleID == "" then prelude else moduleID)
+      in 
+        LexInfo { nameOf   = identifierID,
+                  typeOf   = t,
+                  moduleOf = mID }
 
 updateIdentifier :: Identifier -> LexInfo -> Identifier
 updateIdentifier (Variable _) lexinfo       = Variable lexinfo
@@ -138,18 +140,6 @@ instance Hsk2Env HsName IdentifierID where
     fromHsk (HsIdent s)  = s
     fromHsk (HsSymbol s) = s
     toHsk id             = string2HsName id
-
-data ConKind = DataCon | TypeCon deriving Show
-
-translateSpecialCon :: ConKind -> HsSpecialCon -> HsQName
-translateSpecialCon DataCon con = fromJust $ Prelude.lookup con primitive_datacon_table
-translateSpecialCon TypeCon con = fromJust $ Prelude.lookup con primitive_tycon_table
-
-retranslateSpecialCon :: ConKind -> HsQName -> Maybe HsSpecialCon
-retranslateSpecialCon DataCon qname 
-    = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_datacon_table ]
-retranslateSpecialCon TypeCon qname 
-    = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_tycon_table ]
 
 
 instance Hsk2Env HsQName EnvName where
@@ -277,14 +267,36 @@ instance Isa2Env Isa.Type EnvType where
     toIsa (EnvTyCon qn tyvars)    = Isa.TyCon (toIsa qn) (map toIsa tyvars)
 
 
+data ConKind = DataCon | TypeCon deriving Show
+
+translateSpecialCon :: ConKind -> HsSpecialCon -> HsQName
+translateSpecialCon DataCon con = fromJust $ Prelude.lookup con primitive_datacon_table
+translateSpecialCon TypeCon con = fromJust $ Prelude.lookup con primitive_tycon_table
+
+retranslateSpecialCon :: ConKind -> HsQName -> Maybe HsSpecialCon
+retranslateSpecialCon DataCon qname 
+    = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_datacon_table ]
+retranslateSpecialCon TypeCon qname 
+    = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_tycon_table ]
+
+
+isNil, isCons, isPairCon :: EnvName -> Bool
+
+mk_isFoo foo envname
+    = case retranslateSpecialCon DataCon (toHsk envname) of
+        Nothing  -> False
+        Just con -> con == foo
+
+isNil     = mk_isFoo HsListCon
+isCons    = mk_isFoo HsCons
+isPairCon = mk_isFoo (HsTupleCon 2)
+
 --
 -- LexEnv
 --
 
 data LexE = LexEnv (Map.Map IdentifierID Identifier)
   deriving (Show)
-
-emptyLexEnv = LexEnv Map.empty
 
 makeLexEnv :: [Identifier] -> LexE
 makeLexEnv identifiers
@@ -333,13 +345,11 @@ mergeLexEnvs (LexEnv map1) (LexEnv map2)
 data ModuleE = ModuleEnv ModuleID [EnvImport] [EnvExport] LexE
   deriving (Show)
 
-emptyModuleEnv = ModuleEnv "Main" [] [] emptyLexEnv
-
 
 data EnvImport = EnvImport ModuleID Bool (Maybe ModuleID)
   deriving (Show, Eq)
 
-defaultImports = [EnvImport "Prelude" False Nothing]
+defaultImports = [EnvImport prelude False Nothing]
 
 isQualifiedImport :: EnvImport -> Bool
 isQualifiedImport (EnvImport _ isQual _) = isQual
@@ -400,7 +410,7 @@ computeIdentifierMappings modul decl
 
 mergeModuleEnvs (ModuleEnv m1 is1 es1 lex1) (ModuleEnv m2 is2 es2 lex2)
     = assert (m1 == m2)
-        $ ModuleEnv m1 (is1 ++ is2) (es1 ++ es2) (mergeLexEnvs lex1 lex2)
+        $ ModuleEnv m1 (nub $ is1 ++ is2) (nub $ es1 ++ es2) (mergeLexEnvs lex1 lex2)
 
 importedModuleIDs :: ModuleE -> [ModuleID]
 importedModuleIDs (ModuleEnv _ imports _ _)
@@ -423,7 +433,8 @@ importedModuleIDs (ModuleEnv _ imports _ _)
 
 isImportedModule :: ModuleID -> ModuleE -> Bool
 isImportedModule moduleID moduleEnv
-    = case filter (== moduleID) (importedModuleIDs moduleEnv) of
+    = -- trace ("isImportedModule " ++ moduleID ++ " " ++ prettyShow' "moduleEnv" moduleEnv) $
+      case filter (== moduleID) (importedModuleIDs moduleEnv) of
         []     -> False
         [name] -> True
         etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
@@ -437,7 +448,11 @@ isImportedModule moduleID moduleEnv
 data GlobalE = GlobalEnv (Map.Map ModuleID ModuleE)
   deriving (Show)
 
-emptyGlobalEnv = GlobalEnv (Map.empty)
+prelude = "Prelude"
+
+initialGlobalEnv = GlobalEnv 
+                     $ Map.singleton prelude 
+                           (ModuleEnv prelude [] [] (LexEnv (Map.empty)))
 
 makeGlobalEnv :: (ModuleID -> [EnvImport]) -> (Identifier -> Bool) -> [Identifier] -> GlobalE
 makeGlobalEnv compute_imports shall_export_p identifiers
@@ -626,11 +641,13 @@ updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
                     old_mEnv        = findModuleEnv_OrLose old_mID globalEnv
                     old_imports     = (let (ModuleEnv _ imps _ _) = old_mEnv in imps)
                     old_import_mIDs = importedModuleIDs old_mEnv
-                in
+                in  
                   do (old_imported_mID, old_import) <- zip old_import_mIDs old_imports
                      case fromJust (Map.lookup old_imported_mID rev_mod_tbl) of
                        []       -> return old_import
-                       mIDs     -> old_import : map (\mID -> EnvImport mID False Nothing) mIDs
+                       mIDs     -> let new_imports = map (\mID -> EnvImport mID False Nothing) mIDs
+                                   in if old_imported_mID `elem` mIDs then new_imports
+                                                                      else old_import : new_imports
 
           -- The new ModuleE must export all those identifiers that are the same
           -- as the exported identifiers in the old ModuleE, and all those that

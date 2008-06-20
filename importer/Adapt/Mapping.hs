@@ -3,7 +3,7 @@
 -}
 
 module Importer.Adapt.Mapping 
-    (initialGlobalEnv, AdaptionTable(..), adaptionTable) 
+    (AdaptionTable(..), adaptionTable, makeGlobalEnv_FromAdaptionTable) 
 where
 
 import List (intersperse, groupBy, sortBy)
@@ -32,8 +32,8 @@ adaptionTable
         $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
               raw_adaption_table 
 
-initialGlobalEnv :: Env.GlobalE
-initialGlobalEnv 
+makeGlobalEnv_FromAdaptionTable :: AdaptionTable -> Env.GlobalE
+makeGlobalEnv_FromAdaptionTable adaptionTable
     = Env.makeGlobalEnv importNothing exportAll (hskIdentifiers adaptionTable)
     where importNothing = const []
           exportAll     = const True
@@ -43,11 +43,17 @@ initialGlobalEnv
 parseEntry :: AdaptionEntry -> Env.Identifier
 
 parseEntry (Haskell raw_identifier op)
-     = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
-       in makeIdentifier op moduleID identifierID Env.EnvTyNone
+    = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
+      in makeIdentifier op moduleID identifierID Env.EnvTyNone
 parseEntry (Isabelle raw_identifier op)
-     = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
-       in makeIdentifier op moduleID identifierID Env.EnvTyNone
+    -- the raw identifier may look like "Datatype.option.None", where
+    -- "Datatype" is the ModuleID, and "None" is the real identifier,
+    -- and "option" basically noisy garbage.
+    = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
+          moduleID'                = (case wordsBy (== '.') moduleID of 
+                                        []  -> moduleID
+                                        m:_ -> m)
+      in makeIdentifier op moduleID' identifierID Env.EnvTyNone
 
 parseRawIdentifier :: String -> (String, String)
 parseRawIdentifier string

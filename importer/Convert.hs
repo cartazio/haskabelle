@@ -22,7 +22,7 @@ import Importer.Preprocess
 import Importer.ConversionUnit
 import Importer.DeclDependencyGraph
 
-import Importer.Adapt.Mapping (initialGlobalEnv, adaptionTable)
+import Importer.Adapt.Mapping (adaptionTable, makeGlobalEnv_FromAdaptionTable)
 import Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit)
 
 import qualified Importer.IsaSyntax as Isa
@@ -33,16 +33,21 @@ import qualified Importer.LexEnv as Env
 import qualified Data.Map as Map
 
 convertHskUnit :: ConversionUnit -> ConversionUnit
-convertHskUnit (HskUnit hsmodules _emptyEnv)
-    = let hsmodules'     = map preprocessHsModule hsmodules
-          globalenv_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
-          globalenv_hsk' = Env.mergeGlobalEnvs globalenv_hsk initialGlobalEnv
-          globalenv_isa  = adaptGlobalEnv globalenv_hsk' adaptionTable
-          hskmodules     = map (toHskModule globalenv_hsk') hsmodules'
-          (isathys, _)   = runConversion globalenv_hsk' $ mapM convert hskmodules 
-      in -- trace (prettyShow' "globalenv_isa" globalenv_isa) $ -- trace ("convertHskUnit") $
-         let !r = adaptIsaUnit globalenv_hsk' adaptionTable 
-                  $ IsaUnit isathys globalenv_isa 
+convertHskUnit (HskUnit hsmodules initialGlobalEnv)
+    = let table_env       = makeGlobalEnv_FromAdaptionTable adaptionTable
+          initial_env     = Env.mergeGlobalEnvs initialGlobalEnv table_env
+
+          hsmodules'      = map preprocessHsModule hsmodules
+          global_env_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
+
+          global_env_hsk' = Env.mergeGlobalEnvs global_env_hsk initial_env
+          global_env_isa  = adaptGlobalEnv global_env_hsk' adaptionTable
+
+          hskmodules      = map (toHskModule global_env_hsk') hsmodules'
+          (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
+      in -- trace (prettyShow' "global_env_isa" global_env_isa) $
+         let !r = adaptIsaUnit global_env_hsk' adaptionTable 
+                  $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
            r
     where toHskModule globalEnv (HsModule loc modul _exports _imports decls)
@@ -78,7 +83,7 @@ data Context    = Context
     }
 
 emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default Module in Haskell
-                         _globalEnv   = Env.emptyGlobalEnv,  --  is called `Main'; clashes with Isabelle.
+                         _globalEnv   = Env.initialGlobalEnv,  --  is called `Main'; clashes with Isabelle.
                          _warnings    = [],
                          _backtrace   = [],
                          _gensymcount = 0 }
@@ -406,7 +411,7 @@ instance Convert HsExp Isa.Term where
     convert' (HsLambda _loc pats body)
         = do pats'  <- mapM convert pats
              body'  <- convert body
-             if all isVar pats' then return $ Isa.Lambda [n | Isa.Var n <- pats'] body'
+             if all isVar pats' then return $ makeLambda [n | Isa.Var n <- pats'] body'
                                 else makePatternMatchingLambda pats' body'
           where isVar (Isa.Var _)   = True
                 isVar _             = False
@@ -426,6 +431,11 @@ instance Convert HsExp Isa.Term where
                 
     convert' junk = barf "HsExp -> Isa.Term" junk
 
+-- We desugare lambda expressions to true unary functions, i.e. to
+-- lambda expressions binding only one argument.
+makeLambda :: [Isa.Name] -> Isa.Term -> Isa.Term
+makeLambda varNs body
+    = foldr Isa.Lambda body varNs
 
 -- Since HOL doesn't have true n-tuple constructors (it uses nested
 -- pairs to represent n-tuples), we simply return a lambda expression
@@ -438,7 +448,7 @@ makeTupleDataCon n     -- n < 2  cannot happen (cf. Language.Haskell.Hsx.HsTuple
          args   <- return (map HsVar argNs)
          argNs' <- mapM convert argNs
          args'  <- convert (HsTuple args)
-         return $ Isa.Parenthesized (Isa.Lambda argNs' args')
+         return $ Isa.Parenthesized (makeLambda argNs' args')
     where pair x y = HsApp (HsApp (HsCon (Special (HsTupleCon 2))) x) y
 
 -- HOL does not support pattern matching directly within a lambda
@@ -457,7 +467,7 @@ makePatternMatchingLambda patterns theBody
     = foldM mkMatchingLambda theBody (reverse patterns) -- foldM is a left fold.
       where mkMatchingLambda body pat
                 = do g <- lift (genIsaName (Isa.Name "arg"))
-                     return $ Isa.Lambda [g] (Isa.Case (Isa.Var g) [(pat, body)])
+                     return $ Isa.Lambda g (Isa.Case (Isa.Var g) [(pat, body)])
 
 
 isRecDecls :: [HsConDecl] -> Bool
