@@ -45,7 +45,7 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 
           hskmodules      = map (toHskModule global_env_hsk') hsmodules'
           (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in -- trace (prettyShow' "global_env_isa" global_env_isa) $
+      in trace (prettyShow' "isathys" isathys) $
          let !r = adaptIsaUnit global_env_hsk' adaptionTable 
                   $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r

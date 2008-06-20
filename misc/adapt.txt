@@ -25,6 +25,7 @@ consts
 
   "Prelude.head"    "List.hd"
   "Prelude.tail"    "List.tl"
+  "Prelude.map"     "List.map"
   "Prelude.++"      "List.append"
 
   "Prelude.Nothing" "None"

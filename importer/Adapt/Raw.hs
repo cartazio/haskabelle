@@ -20,6 +20,7 @@ raw_adaption_table = [(Haskell "Prelude.Bool" Type, Isabelle "bool" Type),
   (Haskell "Prelude.:" (InfixOp RightAssoc 65), Isabelle "List.#" (InfixOp RightAssoc 65)),
   (Haskell "Prelude.head" Function, Isabelle "List.hd" Function),
   (Haskell "Prelude.tail" Function, Isabelle "List.tl" Function),
+  (Haskell "Prelude.map" Function, Isabelle "List.map" Function),
   (Haskell "Prelude.++" (InfixOp RightAssoc 65), Isabelle "List.@" (InfixOp RightAssoc 65)),
   (Haskell "Prelude.Nothing" Function, Isabelle "Datatype.option.None" Function),
   (Haskell "Prelude.Just" Function, Isabelle "Datatype.option.Some" Function)]

@@ -282,14 +282,24 @@ retranslateSpecialCon TypeCon qname
 
 isNil, isCons, isPairCon :: EnvName -> Bool
 
-mk_isFoo foo envname
-    = case retranslateSpecialCon DataCon (toHsk envname) of
-        Nothing  -> False
-        Just con -> con == foo
+-- mk_isFoo foo envname
+--     = case retranslateSpecialCon DataCon (toHsk envname) of
+--         Nothing  -> False
+--         Just con -> con == foo
 
-isNil     = mk_isFoo HsListCon
-isCons    = mk_isFoo HsCons
-isPairCon = mk_isFoo (HsTupleCon 2)
+-- isNil     = mk_isFoo HsListCon
+-- isCons    = mk_isFoo HsCons
+-- isPairCon = mk_isFoo (HsTupleCon 2)
+
+-- FIXME
+
+isNil (EnvQualName "List" "Nil") = True
+isNil _ = False
+
+isCons (EnvQualName "List" "#") = True
+isCons _ = False
+
+isPairCon _ = False
 
 --
 -- LexEnv

@@ -216,12 +216,16 @@ instance Printer Isa.Cmd where
                 -> blankline $
                    text "definition" <+> ppHeader vname tysig $$
                    text "where" $$
-                   space <+> (maybeWithinHOL $ pprint' pat <+> equals <+> parens (pprint' term))
-        where ppHeader n sig
-                  | isEmptySig sig 
-                      = pprint' n
-                  | otherwise
-                      = pprint' n <+> text "::" <+> maybeWithinHOL (pprint' sig)
+                   space <+> (maybeWithinHOL $ ppEquation pat term)
+        where 
+          ppHeader n sig
+              | isEmptySig sig = pprint' n
+              | otherwise      = pprint' n <+> text "::" <+> maybeWithinHOL (pprint' sig)
+          ppEquation pat term
+              = do thy <- queryPP currentTheory 
+                   env <- queryPP globalEnv
+                   let lookup = (\n -> lookupIdentifier thy n env)
+                   pprint' pat <+> equals <+> parensIf (isCompound term lookup) (pprint' term)
 
     pprint' (Isa.FunCmd fnames tysigs equations)
         = blankline $
@@ -229,20 +233,19 @@ instance Printer Isa.Cmd where
           text "where" $$
           vcat (zipWith (<+>) (space : repeat (char '|'))
                               (map ppEquation equations))
-          where ppHeader (fn, sig)
-                    | isEmptySig sig 
-                        = pprint' fn
-                    | otherwise
-                        = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
-                ppEquation (fname, pattern, term) 
-                    = do do thy <- queryPP currentTheory 
-                            env <- queryPP globalEnv
-                            let lookup = (\n -> lookupIdentifier thy n env)
-                            maybeWithinHOL $
-                              pprint' fname <+> 
-                              hsep (map pprint' pattern) <+> 
-                              equals <+> 
-                              parensIf (isCompound term lookup) (pprint' term)
+          where 
+            ppHeader (fn, sig)
+                | isEmptySig sig = pprint' fn
+                | otherwise      = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
+            ppEquation (fname, pattern, term) 
+                = do thy <- queryPP currentTheory 
+                     env <- queryPP globalEnv
+                     let lookup = (\n -> lookupIdentifier thy n env)
+                     maybeWithinHOL $
+                       pprint' fname <+> 
+                       hsep (map pprint' pattern) <+> 
+                       equals <+> 
+                       parensIf (isCompound term lookup) (pprint' term)
  
     pprint' (Isa.InfixDeclCmd op assoc prio)
         = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op
@@ -346,8 +349,10 @@ instance Printer Isa.Term where
 isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
 isEmptySig _ = False
 
-isNil  n    = Env.isNil     (Env.fromIsa n)
-isCons n    = Env.isCons    (Env.fromIsa n)
+isNil  n    = let r = Env.isNil     (Env.fromIsa n) in
+              trace ("isNil " ++ show n ++ " => " ++ show r) r
+isCons  n   = let r = Env.isCons     (Env.fromIsa n) in
+              trace ("isCons " ++ show n ++ " => " ++ show r) r
 isPairCon n = Env.isPairCon (Env.fromIsa n)
 
 pprintAsList :: [Isa.Term] -> DocM P.Doc
