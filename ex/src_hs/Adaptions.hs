@@ -1,4 +1,4 @@
--- some rather fundamtenal adaptions
+-- some rather fundamental adaptions
 
 module Adapations where
 
