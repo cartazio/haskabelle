@@ -299,6 +299,7 @@ isNil _ = False
 isCons (EnvQualName "List" "#") = True
 isCons _ = False
 
+isPairCon (EnvQualName prelude ",") = True
 isPairCon _ = False
 
 --

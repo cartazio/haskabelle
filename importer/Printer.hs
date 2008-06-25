@@ -349,10 +349,12 @@ instance Printer Isa.Term where
 isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
 isEmptySig _ = False
 
-isNil  n    = let r = Env.isNil     (Env.fromIsa n) in
-              trace ("isNil " ++ show n ++ " => " ++ show r) r
-isCons  n   = let r = Env.isCons     (Env.fromIsa n) in
-              trace ("isCons " ++ show n ++ " => " ++ show r) r
+-- isNil  n    = let r = Env.isNil     (Env.fromIsa n) in
+--               trace ("isNil " ++ show n ++ " => " ++ show r) r
+-- isCons  n   = let r = Env.isCons     (Env.fromIsa n) in
+--               trace ("isCons " ++ show n ++ " => " ++ show r) r
+isNil n = Env.isNil (Env.fromIsa n)
+isCons n = Env.isCons (Env.fromIsa n)
 isPairCon n = Env.isPairCon (Env.fromIsa n)
 
 pprintAsList :: [Isa.Term] -> DocM P.Doc

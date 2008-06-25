@@ -23,7 +23,7 @@ import Data.Generics.PlateData
 import Language.Haskell.Hsx
 
 
-import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates, wordsBy)
+import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates, wordsBy, trace, prettyShow')
 import Importer.Utilities.Gensym
 
 string2HsName :: String -> HsName

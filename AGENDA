@@ -18,6 +18,4 @@ BUG / TODO Liste:
 
 * newtype decls
 
-* Preprocess; closure detection is buggy
-
 $Id$

@@ -29,11 +29,14 @@ data AdptState = AdptState { oldGlobalEnv     :: Env.GlobalE,
 
 type AdaptM v = State AdptState v
 
+getAdptState :: AdaptM AdptState
+getAdptState = do s <- get; return s
+
 query :: (AdptState -> x) -> AdaptM x
-query slot = do s <- get; return (slot s)
+query slot = do s <- getAdptState; return (slot s)
 
 set :: (AdptState -> AdptState) -> AdaptM ()
-set update = do s <- get; put (update s); return ()
+set update = do s <- getAdptState; put (update s); return ()
 
 shadow :: [Env.EnvName] -> AdaptM ()
 shadow names
@@ -88,13 +91,17 @@ nested_binding bindings continuation
          return r
                          
 
+runAdaptionWith :: AdaptM v -> AdptState -> v
+runAdaptionWith adaption state
+    = evalState adaption state
+
 runAdaption :: Env.GlobalE -> Env.GlobalE -> AdaptionTable -> AdaptM v -> v
-runAdaption oldEnv newEnv tbl state 
-    = evalState state (AdptState { oldGlobalEnv     = oldEnv,
-                                   adaptedGlobalEnv = newEnv,
-                                   adaptionTable    = tbl,
-                                   currentModuleID  = Nothing 
-                                 })
+runAdaption oldEnv newEnv tbl adaption 
+    = runAdaptionWith adaption (AdptState { oldGlobalEnv     = oldEnv,
+                                            adaptedGlobalEnv = newEnv,
+                                            adaptionTable    = tbl,
+                                            currentModuleID  = Nothing 
+                                          })
 
 adaptGlobalEnv :: Env.GlobalE -> AdaptionTable -> Env.GlobalE
 adaptGlobalEnv env tbl
@@ -266,10 +273,11 @@ instance Adapt Isa.Term where
             adapt body >>= (return . Isa.Lambda boundN)
 
     adapt (Isa.Let bindings body)
-        = nested_binding (map (\(p,t) -> (extractNames p, adapt t)) bindings) $
-            \terms' -> do body' <- adapt body
-                          let pats = map fst bindings
-                          return (Isa.Let (zip pats terms') body')
+        = do pats' <- mapM adapt (map fst bindings)
+             nested_binding (zipWith (\p' t -> (extractNames p', adapt t))
+                                     pats' (map snd bindings)) $
+               \terms' -> do body' <- adapt body
+                             return (Isa.Let (zip pats' terms') body')
 
     adapt (Isa.Case term patterns)
         = do term'     <- adapt term

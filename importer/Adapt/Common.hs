@@ -23,12 +23,12 @@ data AdaptionEntry = Haskell String OpKind
 primitive_tycon_table, primitive_datacon_table :: [(HsSpecialCon, HsQName)]
 
 primitive_tycon_table 
-    = [(HsListCon,    Qual (Module "Prelude") (HsIdent "[]")),
-       (HsTupleCon 2, Qual (Module "Prelude") (HsSymbol ","))
+    = [(HsListCon,    Qual (Module "Prelude") (HsIdent "ListTyCon")),
+       (HsTupleCon 2, Qual (Module "Prelude") (HsSymbol "PairTyCon"))
       ]
 
 primitive_datacon_table 
     = [(HsCons,       Qual (Module "Prelude") (HsSymbol ":")),
        (HsListCon,    Qual (Module "Prelude") (HsIdent "[]")),
-       (HsTupleCon 2, Qual (Module "Prelude") (HsSymbol ","))
+       (HsTupleCon 2, Qual (Module "Prelude") (HsSymbol "PairDataCon"))
       ]
