@@ -24,6 +24,7 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
       where topdecls' = runGensym 0 (runDelocalizer (concatMapM delocalize_HsDecl topdecls))
 
 
+
 -- Delocalization of HsDecls:
 --
 --  Since Isabelle/HOL does not really support local function

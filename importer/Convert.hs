@@ -45,7 +45,7 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 
           hskmodules      = map (toHskModule global_env_hsk') hsmodules'
           (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in trace (prettyShow' "isathys" isathys) $
+      in -- trace (prettyShow' "isathys" isathys) $
          let !r = adaptIsaUnit global_env_hsk' adaptionTable 
                   $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
@@ -222,6 +222,9 @@ instance Convert HsDecl Isa.Cmd where
              tycon  <- convert tyconN
              typ'   <- convert typ
              return (Isa.TypesCmd [(Isa.TypeSpec tyvars tycon, typ')])
+                                
+    convert' (HsNewTypeDecl loc context tyconN tyvarNs condecl derivings)
+        = convert' (HsDataDecl loc context tyconN tyvarNs [condecl] derivings)
 
     convert' (HsDataDecl _loc _context tyconN tyvarNs condecls _deriving)
         = let strip (HsQualConDecl _loc _FIXME _context decl) = decl

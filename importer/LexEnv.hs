@@ -280,16 +280,6 @@ retranslateSpecialCon TypeCon qname
     = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_tycon_table ]
 
 
-isNil, isCons, isPairCon :: EnvName -> Bool
-
--- mk_isFoo foo envname
---     = case retranslateSpecialCon DataCon (toHsk envname) of
---         Nothing  -> False
---         Just con -> con == foo
-
--- isNil     = mk_isFoo HsListCon
--- isCons    = mk_isFoo HsCons
--- isPairCon = mk_isFoo (HsTupleCon 2)
 
 -- FIXME
 
@@ -404,6 +394,8 @@ computeIdentifierMappings modul decl
            HsFunBind _         -> [Function defaultLexInfo]
            HsInfixDecl _ a p _ -> [InfixOp  defaultLexInfo (fromHsk a) p]
            HsTypeSig _ _ typ   -> [TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ})]
+           HsNewTypeDecl loc ctx conN tyvarNs condecl derives
+               -> computeIdentifierMappings modul (HsDataDecl loc ctx conN tyvarNs [condecl] derives)
            HsDataDecl _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
                   let tycon = mkTyCon (fromHsk name) tyvarNs

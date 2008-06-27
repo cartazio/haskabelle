@@ -13,6 +13,9 @@ import qualified Importer.IsaSyntax as Isa
 
 import qualified Importer.LexEnv as Env
 
+import Importer.Adapt.Mapping (adaptionTable, AdaptionTable(..))
+import Language.Haskell.Hsx.Syntax (HsSpecialCon(..), HsQName(..))
+
 import qualified Text.PrettyPrint as P
 
 
@@ -346,16 +349,29 @@ instance Printer Isa.Term where
                     = pprint' pat <+> equals <+> pprint' term
 
 
+reAdaptEnvName :: Env.EnvName -> Maybe Env.EnvName
+reAdaptEnvName name
+    = let AdaptionTable mappings = adaptionTable
+          mappings' = [ (Env.identifier2name id2, Env.identifier2name id1) 
+                            | (id1, id2) <- mappings ]
+      in lookup name mappings'
+
+isNil, isCons, isPairCon :: Isa.Name -> Bool
+
+mk_isFoo foo n
+    = let n' = reAdaptEnvName (Env.fromIsa n)
+      in case n' of
+           Nothing -> False
+           Just x -> case Env.toHsk x of
+                       Special con -> con == foo
+                       _ -> False
+
+isNil     = mk_isFoo HsListCon
+isCons    = mk_isFoo HsCons
+isPairCon = mk_isFoo (HsTupleCon 2)
+
 isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
 isEmptySig _ = False
-
--- isNil  n    = let r = Env.isNil     (Env.fromIsa n) in
---               trace ("isNil " ++ show n ++ " => " ++ show r) r
--- isCons  n   = let r = Env.isCons     (Env.fromIsa n) in
---               trace ("isCons " ++ show n ++ " => " ++ show r) r
-isNil n = Env.isNil (Env.fromIsa n)
-isCons n = Env.isCons (Env.fromIsa n)
-isPairCon n = Env.isPairCon (Env.fromIsa n)
 
 pprintAsList :: [Isa.Term] -> DocM P.Doc
 pprintAsList list = let (xs, [Isa.Var nil]) = splitAt (length list - 1) list

@@ -99,6 +99,7 @@ instance Letifiable HsRhs where
     letify' bindings (HsUnGuardedRhs body)  = HsUnGuardedRhs (letify bindings body)
 
 
+
 type Renaming = (HsQName, HsQName)
 
 freshIdentifiers :: [HsQName] -> State GensymCount [Renaming]
