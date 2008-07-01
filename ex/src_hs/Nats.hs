@@ -1,7 +1,7 @@
 module Nats where {
 
 
-data Nat = Suc Nat | Zero_nat;
+data Nat = Suc Nat | Zero_nat deriving Show;
 
 eq_nat :: Nat -> Nat -> Bool;
 eq_nat Zero_nat Zero_nat = True;

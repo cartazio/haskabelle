@@ -3,9 +3,10 @@
 *)
 
 types
-  "Prelude.Bool"    "bool"
-  "Prelude.List"    "list"
-  "Prelude.Maybe"   "option"
+  "Prelude.Bool"      "bool"
+  "Prelude.ListTyCon" "list"
+  "Prelude.Maybe"     "option"
+  "Prelude.PairTyCon" "*"
 
 consts
   "Prelude.id"      "id"
@@ -14,19 +15,22 @@ consts
   "Prelude.False"   "False"
 
   "Prelude.not"     "Not"
-  "Prelude.&&"      "op &"
-  "Prelude.||"      "op |"
+  "Prelude.(&&)"      "op &"
+  "Prelude.(||)"      "op |"
 
+  "Prelude.PairDataCon"   "Pair"
   "Prelude.fst"     "fst"
   "Prelude.snd"     "snd"
 
-  "Prelude.[]"      "List.Nil"
-  "Prelude.:"       "List.Cons"
+  "Prelude.([])"      "List.Nil"
+  "Prelude.(:)"       "List.Cons"
+
+  "Prelude.(.)"	    "Fun.comp"
 
   "Prelude.head"    "List.hd"
   "Prelude.tail"    "List.tl"
   "Prelude.map"     "List.map"
-  "Prelude.++"      "List.append"
+  "Prelude.(++)"      "List.append"
   "Prelude.reverse" "List.rev"
 
   "Prelude.Nothing" "None"

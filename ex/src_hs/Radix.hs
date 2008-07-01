@@ -14,4 +14,16 @@ radix ch r n = reverse (rad ch r n) where
   rad ch r n       = let (m, d) = divmod n r in ch d : rad ch r m 
 
 radix_10 :: Nat -> [Nat]
-radix_10 = radix id (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero_nat))))))))))
+radix_10 = radix id (toNat 10)
+
+-- toNat :: Int -> Nat
+-- toNat 0 = Zero_nat
+-- toNat n = Suc (toNat (n-1))
+
+-- fromNat :: Nat -> Int
+-- fromNat Zero_nat = 0
+-- fromNat (Suc n) = 1 + fromNat n
+
+-- divmod' :: Int -> Int -> (Int, Int)
+-- divmod' m n = let (q,r) = divmod (toNat m) (toNat n)
+--               in (fromNat q, fromNat r)

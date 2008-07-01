@@ -12,10 +12,10 @@ Arbeitsplan Haskell-Importer:
 
 BUG / TODO Liste:
 
-* Rat.hs, Radix.hs
+* used_consts_names
 
-* isCons etc printer
+* Haskell infix priorities
 
-* newtype decls
+* Type classes
 
 $Id$

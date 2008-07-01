@@ -7,7 +7,7 @@ module Importer.DeclDependencyGraph
 
 import Monad
 import Maybe
-import List (groupBy, sortBy)
+import List (groupBy, sortBy, intersect)
 
 import Data.Graph
 import Data.Tree
@@ -59,6 +59,26 @@ flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
     -- source-line wise, and then sort each such component also source-line wise.
     -- Objective: To preserve the ordering of the original source code file as
     --            much as possible.
-    = sortBy (\decls1 decls2 -> orderDeclsBySourceLine (head decls1) (head decls2))
-        $ map (sortBy orderDeclsBySourceLine . map declFromVertex . flatten) $ scc graph
-    where declFromVertex v = let (decl,_,_) = fromVertex v in decl 
+    = let declFromVertex v = (let (decl,_,_) = fromVertex v in decl)
+      in map (map declFromVertex)
+             $ sortBy orderComponents_ByDependencies
+                 (map (sortBy orderVertices_BySourceLine . flatten) $ scc graph)
+    where
+      orderVertices_BySourceLine v1 v2
+          = let (decl1,_,_) = fromVertex v1
+                (decl2,_,_) = fromVertex v2
+            in orderDeclsBySourceLine decl1 decl2
+
+      orderComponents_ByDependencies vs1 vs2
+          = let used_vs_in_1 = concatMap (reachable graph) vs1
+                used_vs_in_2 = concatMap (reachable graph) vs2
+            in if (isContained used_vs_in_1 vs2)      -- does vs2 define stuff needed in vs1?
+               then assert (not (isContained used_vs_in_2 vs1)) $ GT
+               else if (isContained used_vs_in_2 vs1) -- does vs1 define stuff needed in vs2?
+                    then assert (not (isContained used_vs_in_1 vs2)) $ LT
+                    else                              -- vs1 and vs2 are independant.
+                        let (decl1,_,_) = fromVertex (head vs1)
+                            (decl2,_,_) = fromVertex (head vs2)
+                        in orderDeclsBySourceLine decl1 decl2
+            where 
+              isContained xs ys = not (null (intersect xs ys))

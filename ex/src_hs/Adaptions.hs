@@ -1,6 +1,6 @@
 -- some rather fundamental adaptions
 
-module Adapations where
+module Adaptions where
 
 implies :: Bool -> Bool -> Bool
 implies False _ = True
