@@ -267,6 +267,8 @@ renameHsPat renams pat
         HsPTuple pats               -> HsPTuple (map (renameHsPat renams) pats)
         HsPList  pats               -> HsPList (map (renameHsPat renams) pats)
         HsPParen pat                -> HsPParen (renameHsPat renams pat)
+        HsPWildCard                 -> HsPWildCard
+        _ -> error ("renameHsPat: Fall through: " ++ show pat)
 
 
 -- Kludge.
