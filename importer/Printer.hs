@@ -301,7 +301,12 @@ instance Printer Isa.Literal where
 instance Printer Isa.Term where
     pprint' (Isa.Var vname)         = pprint' vname
     pprint' (Isa.Literal lit)       = pprint' lit
-    pprint' (Isa.Parenthesized t)   = parens $ pprint' t
+    pprint' (Isa.Parenthesized t)   
+        = do thy <- queryPP currentTheory 
+             env <- queryPP globalEnv
+             let lookup = (\n -> lookupIdentifier thy n env)
+             parensIf (not (isSelfEvaluating t lookup)) 
+               $ pprint' t
 
     pprint' app @ (Isa.App t1 t2)   
         = do thy <- queryPP currentTheory 
@@ -336,7 +341,7 @@ instance Printer Isa.Term where
 
     pprint' (Isa.Case term matchs)
          = hang (text "case" <+> pprint' term <+> text "of")
-                2
+                1
                 (vcat $ zipWith (<+>) (space : repeat (char '|'))
                                       (map pp matchs))
            where pp (pat, term) = (pprint' pat) <+> text "=>" <+> pprint' term
@@ -430,6 +435,20 @@ flattenLambdas (Isa.Lambda arg1 (Isa.Lambda arg2 body))
       in ([arg1,arg2]++args, real_body)
 flattenLambdas (Isa.Lambda arg body) = ([arg], body)
 flattenLambdas t = ([], t)
+
+isSelfEvaluating :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
+isSelfEvaluating t lookupFn
+    = case t of
+        Isa.Var _            -> True
+        Isa.Literal _        -> True
+        Isa.Parenthesized _  -> True
+        Isa.App _ _          -> case categorizeApp t lookupFn of
+                                  ListApp  _     -> True
+                                  TupleApp _     -> True
+                                  FunApp         -> False
+                                  UnaryOpApp     -> False
+                                  InfixApp _ _ _ -> False
+        _ -> False
 
 isCompound :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
 isCompound t lookupFn

@@ -461,8 +461,8 @@ makeGlobalEnv :: (ModuleID -> [EnvImport]) -> (Identifier -> Bool) -> [Identifie
 makeGlobalEnv compute_imports shall_export_p identifiers
      = GlobalEnv
          $ Map.fromListWith failDups
-             (do (moduleID, ids) <- groupIdentifiers identifiers
-                 return (moduleID, makeModuleEnv (compute_imports moduleID) shall_export_p ids))
+               (do (moduleID, ids) <- groupIdentifiers identifiers
+                   return (moduleID, makeModuleEnv (compute_imports moduleID) shall_export_p ids))
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
 groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]

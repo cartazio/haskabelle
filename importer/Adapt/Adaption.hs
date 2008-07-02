@@ -105,12 +105,11 @@ runAdaption oldEnv newEnv tbl adaption
 
 adaptGlobalEnv :: Env.GlobalE -> AdaptionTable -> Env.GlobalE
 adaptGlobalEnv env tbl
-    = let r = Env.updateGlobalEnv 
-               (\n -> case translateName tbl n of 
-                        Just new_id -> Just new_id
-                        Nothing     -> adapt_type_in_identifier env tbl n)
-               env
-      in r -- trace (prettyShow' "adaptionTable" tbl) r
+    = Env.updateGlobalEnv 
+        (\n -> case translateName tbl n of 
+                 Just new_id -> Just new_id
+                 Nothing     -> adapt_type_in_identifier env tbl n)
+        env
 
 translateName :: AdaptionTable -> Env.EnvName -> Maybe Env.Identifier
 translateName (AdaptionTable mappings) name
