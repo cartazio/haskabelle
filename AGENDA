@@ -12,10 +12,10 @@ Arbeitsplan Haskell-Importer:
 
 BUG / TODO Liste:
 
-* used_consts_names
-
 * Haskell infix priorities
 
 * Type classes
+
+* Printing imports correctly.
 
 $Id$
