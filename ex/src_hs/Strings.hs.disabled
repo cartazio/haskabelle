@@ -1,7 +1,7 @@
 module Strings where
 
 import Radix
-import Nat
+import Nats
 
 digit10 :: Nat -> Char
 digit10 Zero = '0'
