@@ -48,14 +48,13 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
           table_env       = makeGlobalEnv_FromAdaptionTable adaptionTable'
           initial_env     = Env.mergeGlobalEnvs initialGlobalEnv table_env
 
-          
           global_env_hsk' = Env.mergeGlobalEnvs global_env_hsk initial_env
           global_env_isa  = adaptGlobalEnv global_env_hsk' adaptionTable'
 
           hskmodules      = map (toHskModule global_env_hsk') hsmodules'
           (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in -- trace (prettyShow' "global_env_hsk'" global_env_hsk') $ -- trace (prettyShow' "isathys" isathys) $
-         let !r = adaptIsaUnit global_env_hsk' adaptionTable'
+      in -- trace (prettyShow' "isathys" isathys) $
+         let r = adaptIsaUnit global_env_hsk' adaptionTable 
                   $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
            r
@@ -123,7 +122,7 @@ currentModule = (\c -> let (Isa.Theory n) = _theory c in Module n, \c f -> c)
 type ContextM v = StateT Context (State GensymCount) v
 
 runConversion :: Env.GlobalE -> ContextM v -> (v, Context)
-runConversion env m = runGensym 0 (runStateT m (emptyContext { _globalEnv = env }))
+runConversion env m = evalGensym 0 (runStateT m (emptyContext { _globalEnv = env }))
 
 queryContext :: (FieldSurrogate field) -> ContextM field
 queryContext (query, _)
@@ -166,7 +165,6 @@ class Show a => Convert a b | a -> b where
                        (\bt -> let frameName = "frame" ++ show (length bt)
                                in prettyShow' frameName hsexpr : bt)
                      $ convert' hsexpr
-
 
 instance Convert HskModule Isa.Cmd where
     convert' (HskModule _loc modul dependentDecls)
@@ -387,7 +385,10 @@ instance Convert HsExp Isa.Term where
           where cons x y = HsApp (HsApp (HsCon (Special HsCons)) x) y
                 nil = HsList []
 
-    convert' (HsTuple exps)    = convert (foldr1 pair exps)
+    -- We have to wrap the last expression in an explicit HsParen as that last
+    -- expression may itself be a pair. If we didn't, we couldn't distinguish
+    -- between "((1,2), (3,4))" and "((1,2), 3, 4)" afterwards anymore.
+    convert' (HsTuple exps)    = convert (foldr pair (HsParen (last exps)) (init exps))
         where pair x y 
                   = HsApp (HsApp (HsCon (Special (HsTupleCon 2))) x) y
 
@@ -429,7 +430,7 @@ instance Convert HsExp Isa.Term where
              alts' <- mapM convert alts
              return $ Isa.Case exp' alts'
 
-    convert' (HsLambda _loc pats body)
+    convert' x@(HsLambda _loc pats body)
         = do pats'  <- mapM convert pats
              body'  <- convert body
              if all isVar pats' then return $ makeLambda [n | Isa.Var n <- pats'] body'
@@ -456,7 +457,7 @@ instance Convert HsExp Isa.Term where
 -- lambda expressions binding only one argument.
 makeLambda :: [Isa.Name] -> Isa.Term -> Isa.Term
 makeLambda varNs body
-    = foldr Isa.Lambda body varNs
+    = assert (not (null varNs)) $ foldr Isa.Lambda body varNs
 
 -- Since HOL doesn't have true n-tuple constructors (it uses nested
 -- pairs to represent n-tuples), we simply return a lambda expression

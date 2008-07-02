@@ -53,10 +53,18 @@ handleDuplicateEdges edges
           isTypeAnnotation ((HsTypeSig _ _ _, _ , _)) = True
           isTypeAnnotation _ = False
 
+-- In Haskell definitions may appear anywhere in a source file, but in
+-- Isar/HOL (like in ML), definitions that are used in another definition
+-- must appear lexically before that other definition.
+
 flattenDeclDepGraph :: HskDeclDepGraph -> [[HsDecl]]
 flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
-    -- We sort each declaration within a component (consisting of inter-dependent decls)
-    -- source-line wise, and then sort each such component also source-line wise.
+    -- We first partition the graph into groups of mutually-dependent declarations
+    -- (i.e. its strongly-connected components); we then sort these components according
+    -- their dependencies (decls used later must come first.)
+    -- 
+    -- Additionally we sort each declaration in such a component source-line wise, 
+    -- and also sort source-line wise if two components are completely independent.
     -- Objective: To preserve the ordering of the original source code file as
     --            much as possible.
     = let declFromVertex v = (let (decl,_,_) = fromVertex v in decl)

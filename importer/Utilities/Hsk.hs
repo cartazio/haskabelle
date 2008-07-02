@@ -7,7 +7,7 @@ Auxiliary.
 module Importer.Utilities.Hsk ( 
   namesFromHsDecl, bindingsFromDecls, bindingsFromPats, 
   extractBindingNs, extractFreeVarNs, letify,
-  Renaming, renameFreeVars, renameHsDecl,
+  Renaming, renameFreeVars, renameHsDecl, renameHsPat,
   freshIdentifiers, isFreeVar, string2HsName,
   srcloc2string, module2FilePath, isHaskellSourceFile,
   orderDeclsBySourceLine, getSourceLine,
@@ -272,7 +272,7 @@ renameHsPat renams pat
 -- Kludge.
 --
 isFreeVar qname body
-    = occurs qname body && let body' = renameFreeVars (runGensym 999 (freshIdentifiers [qname])) body
+    = occurs qname body && let body' = renameFreeVars (evalGensym 9999 (freshIdentifiers [qname])) body
                            in not (occurs qname body')
     where occurs qname body 
               = not (null [ qn | HsVar qn <- universeBi body, qn == qname ])

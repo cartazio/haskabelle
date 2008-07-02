@@ -17,17 +17,23 @@ import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
 
 import qualified Importer.Msg as Msg
+
+import Importer.Adapt.Raw (used_const_names, used_thy_names)
         
+
 preprocessHsModule :: HsModule -> HsModule
 
 preprocessHsModule (HsModule loc modul exports imports topdecls)
-    = HsModule loc modul exports imports topdecls''
-      where topdecls'  = runGensym 0 (runDelocalizer (concatMapM delocalize_HsDecl topdecls))
-            topdecls'' = map normalizePatterns_HsDecl topdecls'
+    = HsModule loc modul exports imports topdecls'''
+      where (topdecls', gensymcount) 
+                        = runGensym 0 (runDelocalizer (concatMapM delocalize_HsDecl topdecls))
+            topdecls''  = map normalizePatterns_HsDecl topdecls'
+            topdecls''' = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls'')
+--            modul'      = (let (Module n) = modul in Module (normalizeModuleName n))
 
 
 
--- Delocalization of HsDecls:
+---- Delocalization of HsDecls:
 --
 --  Since Isabelle/HOL does not really support local function
 --  declarations, we convert the Haskell AST to an equivalent AST
@@ -202,7 +208,7 @@ checkForClosures closedNs decls = map check decls
                                            else error (Msg.free_vars_found loc freeNs)
 
 
--- Normalization of As-patterns
+---- Normalization of As-patterns
 
 normalizePatterns_HsDecl :: HsDecl -> HsDecl
 
@@ -215,9 +221,7 @@ normalizePatterns_HsDecl (HsFunBind matchs)
             in HsMatch loc name pats' (HsUnGuardedRhs body') where_binds
 
 normalizePatterns_HsDecl decl 
-    = let (exps, regenerate) = (biplate' decl :: ([HsExp], [HsExp] -> HsDecl))
-      in regenerate (map normalizePatterns_HsExp exps) 
-
+    = descendBi normalizePatterns_HsExp decl
 
 biplate' thing
      = let (str, regen) = biplate thing in (flattenStr str, \xs -> regen (rebuildStr str xs))
@@ -312,3 +316,40 @@ normalizePattern (HsPInfixApp p1 qn p2)
       in (HsPInfixApp p1' qn p2', concat [as_pats1, as_pats2])
 
 normalizePattern p = error ("Pattern not supported: " ++ show p)
+
+
+---- Normalization of names.
+--
+-- Function definitions are restricted in Isar/HOL such that names of
+-- constants must not be used as a bound variable name in those definitions.
+-- 
+-- We simply rename all those identifiers.
+--
+
+normalizeNames_HsDecl :: HsDecl -> State GensymCount HsDecl
+
+should_be_renamed :: HsQName -> Bool
+should_be_renamed qn = case qn of
+                         Qual _ n -> consider n
+                         UnQual n -> consider n
+    where consider (HsIdent s)  = s `elem` used_const_names
+          consider (HsSymbol s) = s `elem` used_const_names
+
+normalizeNames_HsDecl (HsFunBind matchs)
+    = do matchs' <- mapM normalizePatterns_HsMatch matchs
+         return (HsFunBind matchs')
+    where
+      normalizePatterns_HsMatch (HsMatch loc name pats (HsUnGuardedRhs body) where_binds)
+          = let bound_var_ns = bindingsFromPats pats
+                clashes      = filter should_be_renamed bound_var_ns
+            in do renames <- freshIdentifiers clashes
+                  pats'   <- return (map (renameHsPat renames) pats)
+                  body'   <- return (renameFreeVars renames body)
+                  binds'  <- normalizeNames_HsBinds where_binds
+                  return (HsMatch loc name pats' (HsUnGuardedRhs body') binds') 
+
+      normalizeNames_HsBinds (HsBDecls decls)
+          = do decls' <- mapM normalizeNames_HsDecl decls
+               return (HsBDecls decls')
+
+-- normalizeModuleName :: String -> String
