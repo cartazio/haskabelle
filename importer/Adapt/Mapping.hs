@@ -3,7 +3,8 @@
 -}
 
 module Importer.Adapt.Mapping 
-    (AdaptionTable(..), adaptionTable, makeGlobalEnv_FromAdaptionTable) 
+    (AdaptionTable(..), adaptionTable, 
+     makeGlobalEnv_FromAdaptionTable, filterAdaptionTable) 
 where
 
 import List (intersperse, groupBy, sortBy)
@@ -12,7 +13,7 @@ import qualified Data.Map as Map
 
 import Language.Haskell.Hsx
 
-import Importer.Utilities.Misc (wordsBy, prettyShow', trace)
+import Importer.Utilities.Misc (wordsBy, prettyShow', trace, assert)
 import Importer.Utilities.Hsk (string2HsName)
 
 import qualified Importer.LexEnv as Env
@@ -39,6 +40,9 @@ makeGlobalEnv_FromAdaptionTable adaptionTable
           exportAll     = const True
           hskIdentifiers (AdaptionTable mapping) = map fst mapping
 
+filterAdaptionTable :: ((Env.Identifier, Env.Identifier) -> Bool) -> AdaptionTable -> AdaptionTable
+filterAdaptionTable predicate (AdaptionTable entries)
+    = AdaptionTable (filter predicate entries)
 
 parseEntry :: AdaptionEntry -> Env.Identifier
 
@@ -57,10 +61,15 @@ parseEntry (Isabelle raw_identifier op)
 
 parseRawIdentifier :: String -> (String, String)
 parseRawIdentifier string
-    = let parts      = wordsBy (== '.') string
-          identifier = last parts
-          modul      = concat $ intersperse "." (init parts)
-      in (modul, identifier)
+    = if '(' `elem` string 
+      then let (modul, identifier) = break (== '(') string -- "Prelude.(:)"
+           in assert (last modul == '.' && 
+                      last identifier == ')') 
+                 $ (init modul, tail (init identifier))
+      else let parts      = wordsBy (== '.') string
+               identifier = last parts
+               modul      = concat $ intersperse "." (init parts)
+           in (modul, identifier)
 
 makeIdentifier :: OpKind -> Env.ModuleID -> Env.IdentifierID -> Env.EnvType -> Env.Identifier
 makeIdentifier Variable m identifier t
