@@ -352,4 +352,8 @@ normalizeNames_HsDecl (HsFunBind matchs)
           = do decls' <- mapM normalizeNames_HsDecl decls
                return (HsBDecls decls')
 
+normalizeNames_HsDecl decl 
+    -- There aren't any subdecls in decl anymore after delocalization.
+    = return decl
+
 -- normalizeModuleName :: String -> String
