@@ -410,6 +410,17 @@ instance Convert HsExp Isa.Term where
         where 
           mkInfixApp t1 op t2 = Isa.App (Isa.App op t1) t2
 
+    convert' (HsLeftSection e qop)
+        = do e'   <- convert e
+             qop' <- convert qop
+             g    <- lift (genIsaName (Isa.Name "arg"))
+             return (makeLambda [g] $ Isa.App (Isa.App qop' e') (Isa.Var g))
+
+    convert' (HsRightSection qop e)
+        = do e'   <- convert e
+             qop' <- convert qop
+             g <- lift (genIsaName (Isa.Name "arg"))
+             return (makeLambda [g] $ Isa.App (Isa.App qop' (Isa.Var g)) e')
 
     convert' (HsRecConstr qname updates)
         = do qname'   <- convert qname
