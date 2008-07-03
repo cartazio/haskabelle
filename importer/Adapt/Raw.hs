@@ -1159,3 +1159,5 @@ used_thy_names = ["Pure", "HOL", "Code_Setup", "Orderings", "Set", "Fun", "Latti
   "Equiv_Relations", "Int", "SetInterval", "IntDiv", "NatBin",
   "Groebner_Basis", "Arith_Tools", "Presburger", "Relation_Power", "Refute",
   "SAT", "ATP_Linkup", "List", "Map", "Main", "Prelude"]
+
+reserved_keywords = ["distinct"]

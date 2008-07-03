@@ -14,6 +14,8 @@ import qualified Importer.IsaSyntax as Isa
 import qualified Importer.LexEnv as Env
 
 import Importer.Adapt.Mapping (adaptionTable, AdaptionTable(..))
+import Importer.Adapt.Raw (used_thy_names, reserved_keywords)
+
 import Language.Haskell.Hsx.Syntax (HsSpecialCon(..), HsQName(..))
 
 import qualified Text.PrettyPrint as P
@@ -136,6 +138,17 @@ maybeWithinHOL d
                              updatePP (\pps -> pps { withinHOL = False })
                              return result
 
+withinHOL_if :: Bool -> Doc -> Doc
+withinHOL_if pred doc
+    | pred = do within_p <- queryPP withinHOL
+                if within_p then doc
+                            else do updatePP (\pps -> pps { withinHOL = True })
+                                    result <- doubleQuotes doc
+                                    updatePP (\pps -> pps { withinHOL = False })
+                                    return result
+    | otherwise = doc
+
+
 comment :: Doc -> Doc
 comment d = text "(*" <+> d <+> text "*)"
 
@@ -190,14 +203,16 @@ instance Printer Isa.Cmd where
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
     pprint' (Isa.TheoryCmd thy cmds)
         = do env <- queryPP globalEnv
-             let imps  = lookupImports thy env
-             let imps' = {-map pprint' imps-}[return (P.text "Prelude")]
+             let imps  = filter (not . isStandardTheory) (lookupImports thy env)
+             let imps' = map pprint' (imps ++ [Isa.Theory Env.prelude])
              withCurrentTheory thy $
                text "theory" <+> pprint' thy                     $+$
                text "imports " <> fsep  imps'    $+$
                text "begin"                                      $+$
                (vcat $ map pprint' cmds)                         $+$
                text "\nend"
+        where
+          isStandardTheory (Isa.Theory n) = n `elem` used_thy_names
 
     pprint' (Isa.DatatypeCmd tyspec dataspecs)
         = blankline $
@@ -267,9 +282,9 @@ instance Printer Isa.TypeSpec where
           in tyvars' <+> pprint' tycon
 
 instance Printer Isa.Name where
-    pprint' (Isa.Name str) = text str
-    --pprint' (Isa.QName thy str) = pprint' thy <> dot <> text str
-    pprint' (Isa.QName thy str) = text str -- FIXME
+    pprint' (Isa.Name str)      = withinHOL_if (isReservedKeyword str) $ text str
+    pprint' (Isa.QName thy str) = withinHOL_if (isReservedKeyword str) $ text str -- FIXME
+
 
 instance Printer Isa.Type where
     pprint' (Isa.TyNone)      = text ""
@@ -377,6 +392,9 @@ isPairCon = mk_isFoo (HsTupleCon 2)
 
 isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
 isEmptySig _ = False
+
+isReservedKeyword :: String -> Bool
+isReservedKeyword str = str `elem` reserved_keywords
 
 pprintAsList :: [Isa.Term] -> DocM P.Doc
 pprintAsList list = let (xs, [Isa.Var nil]) = splitAt (length list - 1) list
