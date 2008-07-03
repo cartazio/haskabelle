@@ -27,7 +27,9 @@ raw_adaption_table = [(Haskell "Prelude.Bool" Type, Isabelle "bool" Type),
   (Haskell "Prelude.(++)" (InfixOp RightAssoc 65), Isabelle "@" (InfixOp RightAssoc 65)),
   (Haskell "Prelude.reverse" Function, Isabelle "List.rev" Function),
   (Haskell "Prelude.Nothing" Function, Isabelle "Datatype.option.None" Function),
-  (Haskell "Prelude.Just" Function, Isabelle "Datatype.option.Some" Function)]
+  (Haskell "Prelude.Just" Function, Isabelle "Datatype.option.Some" Function),
+  (Haskell "Prelude.elem" Function, Isabelle "List.member" Function)
+                     ]
 
 used_const_names = ["sko_Lattices_Xcomplete_lattice_locale_Xcomplete_lattice_class_Xless_eq_less_inf_sup_Inf_Sup_XInf_greatest_1",
   "sko_Lattices_Xcomplete_lattice_locale_Xcomplete_lattice_class_Xless_eq_less_inf_sup_Inf_Sup_XSup_least_1",

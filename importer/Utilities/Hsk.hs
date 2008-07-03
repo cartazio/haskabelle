@@ -149,6 +149,14 @@ instance AlphaConvertable HsExp where
                      where e1'  = renameFreeVars renams e1
                            qop' = qoptranslate renams qop
                            e2'  = renameFreeVars renams e2
+            HsLeftSection e qop
+                -> HsLeftSection e' qop'
+                     where e'   = renameFreeVars renams e
+                           qop' = qoptranslate renams qop
+            HsRightSection qop e
+                -> HsRightSection qop' e'
+                     where e'   = renameFreeVars renams e
+                           qop' = qoptranslate renams qop
             HsLambda loc pats body
                 -> HsLambda loc pats body'
                      where body' = let boundNs = bindingsFromPats pats
