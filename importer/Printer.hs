@@ -95,6 +95,7 @@ equals = return P.equals
 dot       = char '.'
 apostroph = char '\''
 asterisk  = char '*'
+plus      = char '+'
 
 lparen,rparen,lbrack,rbrack,lbrace,rbrace :: Doc
 lparen = return  P.lparen
@@ -264,6 +265,17 @@ instance Printer Isa.Cmd where
                        hsep (map pprint' pattern) <+> 
                        equals <+> 
                        parensIf (isCompound term lookup) (pprint' term)
+
+    pprint' (Isa.ClassCmd classN superclassNs typesigs)
+        = text "class" <+> pprint' classN 
+                       <+> equals 
+                       <+> hsep (punctuate plus (map pprint' superclassNs)) 
+                       <+> plus $$
+          space <> space <> vcat (zipWith (<+>) (repeat (text "fixes"))
+                                                (map ppSig typesigs))
+        where ppSig (Isa.TypeSig n t)
+                  = pprint' n <+> text "::" <+> pprint' t
+          
  
     pprint' (Isa.InfixDeclCmd op assoc prio)
         = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op
@@ -357,7 +369,7 @@ instance Printer Isa.Term where
     pprint' (Isa.Case term matchs)
          = hang (text "case" <+> pprint' term <+> text "of")
                 1
-                (vcat $ zipWith (<+>) (space : repeat (char '|'))
+                (vcat $ zipWith (<+>) (repeat (char '|'))
                                       (map pp matchs))
            where pp (pat, term) = (pprint' pat) <+> text "=>" <+> pprint' term
 

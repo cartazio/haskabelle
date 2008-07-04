@@ -6,7 +6,7 @@ Auxiliary.
 
 module Importer.Utilities.Hsk ( 
   namesFromHsDecl, bindingsFromDecls, bindingsFromPats, 
-  extractBindingNs, extractFreeVarNs, letify,
+  extractBindingNs, extractFreeVarNs, extractSuperclassNs, letify,
   Renaming, renameFreeVars, renameHsDecl, renameHsPat,
   freshIdentifiers, isFreeVar, string2HsName,
   srcloc2string, module2FilePath, isHaskellSourceFile,
@@ -43,6 +43,10 @@ module2FilePath (Module name)
 
 isHaskellSourceFile :: FilePath -> Bool
 isHaskellSourceFile fp = map toLower (last (wordsBy (== '.') fp)) == "hs"
+
+extractSuperclassNs :: HsContext -> [HsQName]
+extractSuperclassNs ctx = map extract ctx
+    where extract (HsClassA qn _) = qn
 
 
 namesFromHsDecl :: HsDecl -> Maybe [HsQName]
@@ -201,6 +205,10 @@ instance AlphaConvertable HsDecl where
                 -> HsPatBind loc pat (HsUnGuardedRhs body') binds'
                       where (HsLet binds' body') = renameFreeVars renams' (HsLet binds body)
                             renams' = shadow (bindingsFromPats [pat]) renams
+            HsClassDecl loc ctx classN varNs fundeps decls
+                -> HsClassDecl loc ctx classN varNs fundeps decls'
+                      where decls'  = map (renameFreeVars renams') decls
+                            renams' = shadow [UnQual classN] renams
 
 
 instance AlphaConvertable HsAlt where

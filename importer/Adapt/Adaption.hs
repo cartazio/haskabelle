@@ -245,6 +245,10 @@ instance Adapt Isa.Cmd where
              shadowing (extractNames pat) $
                do term' <- adapt term ; return (Isa.DefinitionCmd name typesig' (pat, term'))
 
+    adapt (Isa.ClassCmd classN supclassNs typesigs)
+        = do typesigs' <- mapM adapt typesigs
+             return (Isa.ClassCmd classN supclassNs typesigs')
+
 instance Adapt Isa.TypeSpec where
     adapt (Isa.TypeSpec tyvarNs tycoN)
         = do (Isa.TyCon tycoN' tyvars') <- adaptType (Isa.TyCon tycoN (map Isa.TyVar tyvarNs))

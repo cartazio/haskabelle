@@ -75,21 +75,30 @@ delocalize_HsAlt   :: HsAlt   -> DelocalizerM (HsAlt, [HsDecl])
 delocalize_HsBinds :: HsBinds -> DelocalizerM (HsBinds, [HsDecl], [Renaming])
 
 
-delocalize_HsDecl (HsPatBind loc pat rhs wbinds)
-    = withBindings (extractBindingNs pat)
-      $ do (rhs', localdecls)  <- delocalize_HsRhs (letify wbinds rhs)
-           return $ localdecls ++ [HsPatBind loc pat rhs' (HsBDecls [])]
+delocalize_HsDecl decl = do (decl', localdecls) <- delocalize_HsDecl' decl
+                            return (localdecls ++ [decl'])
+    where
+      delocalize_HsDecl' :: HsDecl -> DelocalizerM (HsDecl, [HsDecl])
 
-delocalize_HsDecl (HsFunBind matchs)
-    = do (matchs', localdecls) <- liftM (\(xs, ys) -> (xs, concat ys))
-                                    $ mapAndUnzipM delocalize_HsMatch matchs
-         return (localdecls ++ [HsFunBind matchs'])
+      delocalize_HsDecl' (HsPatBind loc pat rhs wbinds)
+          = withBindings (extractBindingNs pat)
+            $ do (rhs', localdecls)  <- delocalize_HsRhs (letify wbinds rhs)
+                 return (HsPatBind loc pat rhs' (HsBDecls []), localdecls)
 
-delocalize_HsDecl decl  = assert (check decl) $ return [decl]
+      delocalize_HsDecl' (HsFunBind matchs)
+          = do (matchs', localdecls) <- liftM (\(xs, ys) -> (xs, concat ys))
+                                        $ mapAndUnzipM delocalize_HsMatch matchs
+               return (HsFunBind matchs', localdecls)
+
+      delocalize_HsDecl' (HsClassDecl loc ctx classN varNs fundeps decls)
+          = do (decls', localdeclss) <- mapAndUnzipM delocalize_HsDecl' decls
+               return (HsClassDecl loc ctx classN varNs fundeps decls', concat localdeclss)
+
+      delocalize_HsDecl' decl  = assert (check decl) $ return (decl,[])
           -- Safety check to make sure we didn't miss anything.
-    where check decl   = and [null (universeBi decl :: [HsBinds]),
-                              null [ True | HsLet _ _ <- universeBi decl ]]
-          isHsLet expr = case expr of HsLet _ _ -> True; _ -> False
+          where check decl   = and [null (universeBi decl :: [HsBinds]),
+                                    null [ True | HsLet _ _ <- universeBi decl ]]
+                isHsLet expr = case expr of HsLet _ _ -> True; _ -> False
 
 delocalize_HsMatch (HsMatch loc name pats rhs wbinds)
     = withBindings (extractBindingNs pats)
@@ -143,43 +152,6 @@ delocalize_HsExp exp = descendM (\(e, ds) -> do (e', ds') <- delocalize_HsExp e
                                                 return (e', ds++ds')) 
                          (exp, [])
 
--- Base cases.
--- delocalize_HsExp e@(HsVar _) = return (e, [])
--- delocalize_HsExp e@(HsCon _) = return (e, [])
--- delocalize_HsExp e@(HsLit _) = return (e, [])
--- delocalize_HsExp (HsLeftSection e qop) 
---     = do (e', ds) <- delocalize_HsExp e
---          return (HsLeftSection e' qop, ds)
--- delocalize_HsExp (HsRightSection qop e) 
---     = do (e', ds) <- delocalize_HsExp e
---          return (HsRightSection qop e', ds)
--- delocalize_HsExp (HsInfixApp e1 qop e2) 
---     = do (e1', ds1) <- delocalize_HsExp e1
---          (e2', ds2) <- delocalize_HsExp e2
---          return (HsInfixApp e1' qop e2', ds1++ds2)
--- delocalize_HsExp (HsApp e1 e2)
---     = do (e1', ds1) <- delocalize_HsExp e1
---          (e2', ds2) <- delocalize_HsExp e2
---          return (HsApp e1' e2', ds1++ds2)
--- delocalize_HsExp (HsLambda loc pats e)
---     = do (e', ds) <- delocalize_HsExp e 
---          return (HsLambda loc pats e', ds)
--- delocalize_HsExp (HsIf e1 e2 e3)
---     = do (e1', ds1) <- delocalize_HsExp e1
---          (e2', ds2) <- delocalize_HsExp e2
---          (e3', ds3) <- delocalize_HsExp e3
---          return (HsIf e1' e2' e3', ds1++ds2++ds3)
--- delocalize_HsExp (HsTuple es)
---     = do (es', dss) <- mapAndUnzipM delocalize_HsExp es
---          return (HsTuple es', concat dss)
--- delocalize_HsExp (HsList es)
---     = do (es', dss) <- mapAndUnzipM delocalize_HsExp es
---          return (HsList es', concat dss)
--- delocalize_HsExp (HsParen e)
---     = do (e', ds) <- delocalize_HsExp e
---          return (HsParen e', ds)
--- delocalize_HsExp junk
---     = error ("delocalize_HsExp: Fall through. " ++ show junk)
 
 isHsPatBind (HsPatBind _ _ _ _) = True
 isHsPatBind _ = False
@@ -202,6 +174,7 @@ splitPatBinds (HsBDecls decls)
           split decl@(HsTypeSig loc names typ)
               = (Nothing, Just decl, Nothing)
           split decl = (Nothing, Nothing, Just decl)
+splitPatBinds junk = error ("splitPatBinds: Fall through. " ++ show junk)
 
 flattenHsTypeSig :: HsDecl -> [HsDecl]
 flattenHsTypeSig (HsTypeSig loc names typ)
@@ -243,22 +216,6 @@ normalizePatterns_HsDecl (HsFunBind matchs)
 normalizePatterns_HsDecl decl 
     = descendBi normalizePatterns_HsExp decl
 
-biplate' thing
-     = let (str, regen) = biplate thing in (flattenStr str, \xs -> regen (rebuildStr str xs))
-    where flattenStr :: Str x -> [x]
-          flattenStr Zero = []
-          flattenStr (One x) = [x]
-          flattenStr (Two strA strB) = flattenStr strA ++ flattenStr strB
-
-          rebuildStr :: Str x -> [x] -> Str x
-          rebuildStr str xs = let (str', []) = rebuild str xs in str'
-              where rebuild Zero    xs     = (Zero, xs)
-                    rebuild (One _) (x:xs) = (One x, xs)
-                    rebuild (Two strA strB) xs
-                        = let (strA', xs')  = rebuild strA xs
-                              (strB', xs'') = rebuild strB xs'
-                          in (Two strA' strB', xs'')
-         
 
 normalizePatterns_HsExp :: HsExp -> HsExp
 
@@ -278,29 +235,6 @@ normalizePatterns_HsExp (HsLambda loc pats body)
       in HsLambda loc pats' body'
 
 normalizePatterns_HsExp exp = descend normalizePatterns_HsExp exp
-
--- normalizePatterns_HsExp e@(HsVar _) = e
--- normalizePatterns_HsExp e@(HsCon _) = e
--- normalizePatterns_HsExp e@(HsLit _) = e
-
--- normalizePatterns_HsExp (HsInfixApp e1 qop e2)
---     = let e1' = normalizePatterns_HsExp e1
---           e2' = normalizePatterns_HsExp e2
---       in HsInfixApp e1' qop e2'
--- normalizePatterns_HsExp (HsApp e1 e2)
---     = let e1' = normalizePatterns_HsExp e1
---           e2' = normalizePatterns_HsExp e2
---       in HsApp e1' e2'
--- normalizePatterns_HsExp (HsLet binds e) = HsLet binds (normalizePatterns_HsExp e)
--- normalizePatterns_HsExp (HsIf e1 e2 e3)
---     = let e1' = normalizePatterns_HsExp e1
---           e2' = normalizePatterns_HsExp e2
---           e3' = normalizePatterns_HsExp e3
---       in HsIf e1' e2' e3'
--- normalizePatterns_HsExp (HsTuple es) = HsTuple (map normalizePatterns_HsExp es)
--- normalizePatterns_HsExp (HsList es)  = HsList (map normalizePatterns_HsExp es)
--- normalizePatterns_HsExp (HsParen e)  = HsParen (normalizePatterns_HsExp e)
-
 
 
 makeCase :: SrcLoc -> [(HsName, HsPat)] -> HsExp -> HsExp
@@ -438,5 +372,4 @@ deguardify_HsGuardedRhss guards
                           guards of
                  (guards', (HsGuardedRhs _ _ last_expr):_) -> (guards', last_expr)
                  (guards', [])                             -> (guards', bottom)
-
 

@@ -65,6 +65,7 @@ data Identifier = Variable LexInfo
                 | Function LexInfo
                 | Op LexInfo Int
                 | InfixOp  LexInfo EnvAssoc Int
+                | Class LexInfo [EnvName]
                 | TypeAnnotation LexInfo
                 | Type LexInfo [Identifier] -- Type lexinfo [constructors]
   deriving (Eq, Ord,Show)
@@ -110,6 +111,7 @@ lexInfoOf (Variable i)       = i
 lexInfoOf (Function i)       = i
 lexInfoOf (Op i _)           = i
 lexInfoOf (InfixOp i _ _)    = i
+lexInfoOf (Class i _)        = i
 lexInfoOf (Type i _)         = i
 lexInfoOf (TypeAnnotation i) = i
 
@@ -390,10 +392,11 @@ computeIdentifierMappings modul decl
          let moduleID       = fromHsk modul
          let defaultLexInfo = LexInfo { nameOf=nameID, typeOf=EnvTyNone, moduleOf=moduleID}
          case decl of
-           HsPatBind _ _ _ _   -> [Variable defaultLexInfo]
-           HsFunBind _         -> [Function defaultLexInfo]
-           HsInfixDecl _ a p _ -> [InfixOp  defaultLexInfo (fromHsk a) p]
-           HsTypeSig _ _ typ   -> [TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ})]
+           HsPatBind _ _ _ _         -> [Variable defaultLexInfo]
+           HsFunBind _               -> [Function defaultLexInfo]
+           HsInfixDecl _ a p _       -> [InfixOp  defaultLexInfo (fromHsk a) p]
+           HsTypeSig _ _ typ         -> [TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ})]
+           HsClassDecl _ ctx _ _ _ _ -> [Class defaultLexInfo $ map fromHsk (extractSuperclassNs ctx)]
            HsNewTypeDecl loc ctx conN tyvarNs condecl derives
                -> computeIdentifierMappings modul (HsDataDecl loc ctx conN tyvarNs [condecl] derives)
            HsDataDecl _ _ conN tyvarNs condecls _

@@ -69,3 +69,14 @@ failed_lookup curModule envname globalEnv
 ambiguous_decl_definitions decls
     = "Ambiguous definitions between\n" ++ concatMap (linify . prettyShow' "decl") decls
 
+complex_toplevel_patbinding
+    = "Complex pattern binding on toplevel is not supported by Isar/HOL."
+
+only_one_tyvar_in_class_decl
+    = "Only one type variable allowed in class declarations."
+
+no_fundeps_in_class_decl
+    = "No functional dependencies allowed in class declarations."
+
+no_default_methods_in_class_decl
+    = "No default methods, or infix declarations allowed in class declarations."

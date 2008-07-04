@@ -17,7 +17,7 @@ import Maybe
 import Control.Monad.State
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Hsk (extractBindingNs)
+import Importer.Utilities.Hsk (extractBindingNs, extractSuperclassNs, srcloc2string)
 import Importer.Utilities.Gensym
 import Importer.Preprocess
 import Importer.ConversionUnit
@@ -150,12 +150,21 @@ warn :: String -> ContextM ()
 warn msg = updateContext warnings (\warnings -> warnings ++ [(Warning msg)])
      
 die :: String -> ContextM t
-die msg = do backtrace <- queryContext backtrace
-             error $ msg ++ "\n\n"
-                         ++ "Backtrace:\n"
-                         ++ foldr1 (++) (map (++"\n\n") (reverse backtrace))
+die msg 
+    = do backtrace <- queryContext backtrace
+         error $ msg ++ "\n\n"
+                   ++ "Backtrace:\n"
+                   ++ foldr1 (++) (map (++"\n\n") (reverse backtrace))
 
-barf str obj = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
+dieWithLoc :: SrcLoc -> String -> ContextM t
+dieWithLoc loc msg 
+    = do backtrace <- queryContext backtrace
+         error $ srcloc2string loc ++ ": " ++ msg ++ "\n\n"
+                   ++ "Backtrace:\n"
+                   ++ foldr1 (++) (map (++"\n\n") (reverse backtrace))
+
+pattern_match_exhausted str obj 
+    = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
 
 
 class Show a => Convert a b | a -> b where
@@ -189,8 +198,8 @@ instance Convert HskDependentDecls Isa.Cmd where
               splitFunCmd (Isa.FunCmd [n] [s] eqs) = (n, s, eqs)
 
 instance Convert HsModule Isa.Cmd where
-    convert' (HsModule _loc modul _exports _imports decls)
-        = die "Internal Error: Each HsModule should have been pre-converted to HskModule."
+    convert' (HsModule loc modul _exports _imports decls)
+        = dieWithLoc loc "Internal Error: Each HsModule should have been pre-converted to HskModule."
 
 
 --- Trivially convertable stuff.
@@ -211,23 +220,23 @@ instance Convert HsType Isa.Type where
     convert' t = return (Env.toIsa (Env.fromHsk t :: Env.EnvType))
 
 instance Convert HsBangType Isa.Type where
-    convert' t@(HsBangedTy _)   = barf "HsBangType -> Isa.Type" t
+    convert' t@(HsBangedTy _)   = pattern_match_exhausted "HsBangType -> Isa.Type" t
     convert' (HsUnBangedTy typ) = convert typ
 
 instance Convert HsQOp Isa.Term where
     convert' (HsQVarOp qname) = do qname' <- convert qname; return (Isa.Var qname')
     convert' (HsQConOp qname) = do qname' <- convert qname; return (Isa.Var qname')
-    -- convert' junk = barf "HsQOp -> Isa.Term" junk
+    -- convert' junk = pattern_match_exhausted "HsQOp -> Isa.Term" junk
 
 instance Convert HsOp Isa.Name where
     convert' (HsVarOp qname) = convert qname
     convert' (HsConOp qname) = convert qname
-    -- convert' junk = barf "HsOp -> Isa.Name" junk
+    -- convert' junk = pattern_match_exhausted "HsOp -> Isa.Name" junk
 
 instance Convert HsLiteral Isa.Literal where
     convert' (HsInt i)      = return (Isa.Int i)
     convert' (HsString str) = return (Isa.String str)
-    convert' junk           = barf "HsLiteral -> Isa.Literal" junk
+    convert' junk           = pattern_match_exhausted "HsLiteral -> Isa.Literal" junk
 
 
 --- Not so trivially convertable stuff.
@@ -255,7 +264,7 @@ instance Convert HsDecl Isa.Cmd where
                            = do name'  <- convert name
                                 tyvars <- mapM convert types
                                 return $ Isa.Constructor name' tyvars
-                       cnvt junk = barf ("Internal Error: " ++
+                       cnvt junk = pattern_match_exhausted ("Internal Error: " ++
                                          "HsRecDecl should have been dealt with elsewhere already.")
                                         junk
 
@@ -302,7 +311,7 @@ instance Convert HsDecl Isa.Cmd where
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of HsBDecls [] -> True; _ -> False
 
-    convert' (HsPatBind _loc pattern rhs _wherebinds)
+    convert' (HsPatBind loc pattern rhs _wherebinds)
         = case pattern of
             pat@(HsPVar name) 
                 -> do name' <- convert name
@@ -313,15 +322,40 @@ instance Convert HsDecl Isa.Cmd where
                                   Nothing -> return Isa.TyNone
                                   Just t  -> convert' t) >>= (return . Isa.TypeSig name') 
                       return $ Isa.DefinitionCmd name' sig' (pat', rhs')
-            _   -> die "Complex pattern binding on toplevel is not supported by Isar/HOL."
+            _   -> dieWithLoc loc (Msg.complex_toplevel_patbinding)
     
+    convert' decl@(HsClassDecl _ ctx classN _ _ decls)
+        = check_class_decl decl
+            $ do let superclassNs   = extractSuperclassNs ctx
+                 superclassNs' <- mapM convert superclassNs
+                 let superclassNs'' = if null superclassNs' then [Isa.Name "type"]
+                                                            else superclassNs'
+                 classN'       <- convert classN
+                 typesigs'     <- concatMapM convertToTypeSig decls
+                 return (Isa.ClassCmd classN' superclassNs'' typesigs')
+        where
+          check_class_decl (HsClassDecl loc ctx classN varNs fundeps decls) cont
+              | length varNs /= 1         = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
+              | not (null fundeps)        = dieWithLoc loc (Msg.no_fundeps_in_class_decl)
+              | not (all isTypeSig decls) = dieWithLoc loc (Msg.no_default_methods_in_class_decl)
+              | otherwise                 = cont
+              
+          isTypeSig (HsTypeSig _ _ _)      = True
+          isTypeSig _                      = False 
 
-    convert' junk = barf "HsDecl -> Isa.Cmd" junk
+
+          convertToTypeSig (HsTypeSig _ names typ)
+                  = do names' <- mapM convert names
+                       typ'   <- convert typ
+                       return (map (flip Isa.TypeSig typ') names')
+              
+
+    convert' junk = pattern_match_exhausted "HsDecl -> Isa.Cmd" junk
 
 
 instance Convert HsBinds [Isa.Cmd] where
     convert' (HsBDecls decls) = mapM convert decls
-    convert' junk = barf "HsBinds -> Isa.Cmd" junk
+    convert' junk = pattern_match_exhausted "HsBinds -> Isa.Cmd" junk
 
 
 -- As we convert to Isa.Term anyway, we can translate each HsPat
@@ -350,13 +384,13 @@ convertHsPat (HsPApp qname pats)
     = do pats' <- mapM convertHsPat pats
          return $ foldl HsApp (HsCon qname) pats'
 
-convertHsPat junk = barf "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" junk
+convertHsPat junk = pattern_match_exhausted "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" junk
 
 
 instance Convert HsRhs Isa.Term where
     convert' (HsUnGuardedRhs exp) = convert exp
     -- convert (HsGuardedRhss rhss) ; FIXME
-    convert' junk = barf "HsRhs -> Isa.Term" junk
+    convert' junk = pattern_match_exhausted "HsRhs -> Isa.Term" junk
 
 instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
     convert' (HsFieldUpdate qname exp)
@@ -368,7 +402,7 @@ instance Convert HsAlt (Isa.Term, Isa.Term) where
     convert' (HsAlt _loc pat (HsUnGuardedAlt exp) _wherebinds)
         = do pat' <- convert pat; exp' <- convert exp; return (pat', exp')
     convert' junk 
-        = barf "HsAlt -> (Isa.Term, Isa.Term)" junk
+        = pattern_match_exhausted "HsAlt -> (Isa.Term, Isa.Term)" junk
 
 
 instance Convert HsExp Isa.Term where
@@ -462,7 +496,7 @@ instance Convert HsExp Isa.Term where
                 isPatBinding (HsPatBind _ _ _ (HsBDecls [])) = True
                 isPatBinding _                   = False
                 
-    convert' junk = barf "HsExp -> Isa.Term" junk
+    convert' junk = pattern_match_exhausted "HsExp -> Isa.Term" junk
 
 -- We desugare lambda expressions to true unary functions, i.e. to
 -- lambda expressions binding only one argument.

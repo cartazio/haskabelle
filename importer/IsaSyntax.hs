@@ -19,6 +19,7 @@ data Name      = QName Theory String | Name String
 type VarName   = Name
 type ConName   = Name
 type OpName    = Name
+type ClassName = Name
 
 data Cmd =
     Block [Cmd]
@@ -52,6 +53,7 @@ data Cmd =
     -- where
     --   "id a = a"
     --
+    | ClassCmd ClassName [ClassName] [TypeSig]
     | DefinitionCmd VarName TypeSig (Pat, Term)
     | InfixDeclCmd OpName Assoc Prio
     | Comment String
