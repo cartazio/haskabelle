@@ -343,11 +343,18 @@ instance Convert HsDecl Isa.Cmd where
           isTypeSig (HsTypeSig _ _ _)      = True
           isTypeSig _                      = False 
 
-
           convertToTypeSig (HsTypeSig _ names typ)
                   = do names' <- mapM convert names
                        typ'   <- convert typ
                        return (map (flip Isa.TypeSig typ') names')
+
+    convert' (HsInstDecl loc ctx classN tys decls)
+        | length tys /= 1 = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
+        | otherwise
+            = do classN' <- convert classN
+                 type'   <- convert (head tys)
+                 decls'  <- mapM convert decls
+                 return (Isa.InstanceCmd classN' type' decls')
               
 
     convert' junk = pattern_match_exhausted "HsDecl -> Isa.Cmd" junk

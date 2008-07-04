@@ -249,6 +249,11 @@ instance Adapt Isa.Cmd where
         = do typesigs' <- mapM adapt typesigs
              return (Isa.ClassCmd classN supclassNs typesigs')
 
+    adapt (Isa.InstanceCmd classN typ cmds)
+        = shadowing [classN] $ do typ'  <- adaptType typ
+                                  cmds' <- mapM adapt cmds
+                                  return (Isa.InstanceCmd classN typ' cmds')
+
 instance Adapt Isa.TypeSpec where
     adapt (Isa.TypeSpec tyvarNs tycoN)
         = do (Isa.TyCon tycoN' tyvars') <- adaptType (Isa.TyCon tycoN (map Isa.TyVar tyvarNs))

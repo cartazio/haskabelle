@@ -48,10 +48,19 @@ handleDuplicateEdges edges
     = concatMap handleGroup (groupBy (\(_,x,_) (_,y,_) -> x == y) edges)
     where handleGroup edges
               = let edges' = filter (not . isTypeAnnotation) edges
-                in if (length edges' > 1) then error (Msg.ambiguous_decl_definitions edges')
-                                          else edges'
-          isTypeAnnotation ((HsTypeSig _ _ _, _ , _)) = True
-          isTypeAnnotation _ = False
+                in if ambiguous_edges edges' then error (Msg.ambiguous_decl_definitions edges')
+                                             else edges'
+          ambiguous_edges edges
+              = (length edges > 1) && any (\e -> not ((isClass e) || (isInstance e))) edges
+
+          isTypeAnnotation (HsTypeSig _ _ _, _ , _) = True
+          isTypeAnnotation _                        = False
+          isInstance (HsInstDecl _ _ _ _ _, _, _)   = True
+          isInstance _                              = False
+          isClass (HsClassDecl _ _ _ _ _ _, _, _)   = True
+          isClass _                                 = False
+
+
 
 -- In Haskell definitions may appear anywhere in a source file, but in
 -- Isar/HOL (like in ML), definitions that are used in another definition

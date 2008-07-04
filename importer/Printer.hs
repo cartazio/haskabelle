@@ -267,7 +267,8 @@ instance Printer Isa.Cmd where
                        parensIf (isCompound term lookup) (pprint' term)
 
     pprint' (Isa.ClassCmd classN superclassNs typesigs)
-        = text "class" <+> pprint' classN 
+        = blankline $
+          text "class" <+> pprint' classN 
                        <+> equals 
                        <+> hsep (punctuate plus (map pprint' superclassNs)) 
                        <+> plus $$
@@ -276,6 +277,15 @@ instance Printer Isa.Cmd where
         where ppSig (Isa.TypeSig n t)
                   = pprint' n <+> text "::" <+> pprint' t
           
+    pprint' (Isa.InstanceCmd classN typ cmds)
+        = blankline $
+          text "instantiation" <+> pprint' typ <+> text "::" <+> pprint' classN $$
+          text "begin" $$
+          space <> space <> vcat (map pprint' cmds) $$
+          (blankline $
+           text "instance" $$
+           text "by intro_classes" $$
+           text "end")
  
     pprint' (Isa.InfixDeclCmd op assoc prio)
         = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op
@@ -369,7 +379,7 @@ instance Printer Isa.Term where
     pprint' (Isa.Case term matchs)
          = hang (text "case" <+> pprint' term <+> text "of")
                 1
-                (vcat $ zipWith (<+>) (repeat (char '|'))
+                (vcat $ zipWith (<+>) (space : repeat (char '|'))
                                       (map pp matchs))
            where pp (pat, term) = (pprint' pat) <+> text "=>" <+> pprint' term
 

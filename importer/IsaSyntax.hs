@@ -54,6 +54,7 @@ data Cmd =
     --   "id a = a"
     --
     | ClassCmd ClassName [ClassName] [TypeSig]
+    | InstanceCmd ClassName Type [Cmd]
     | DefinitionCmd VarName TypeSig (Pat, Term)
     | InfixDeclCmd OpName Assoc Prio
     | Comment String

@@ -397,6 +397,7 @@ computeIdentifierMappings modul decl
            HsInfixDecl _ a p _       -> [InfixOp  defaultLexInfo (fromHsk a) p]
            HsTypeSig _ _ typ         -> [TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ})]
            HsClassDecl _ ctx _ _ _ _ -> [Class defaultLexInfo $ map fromHsk (extractSuperclassNs ctx)]
+           HsInstDecl  _ _ _ _ _     -> []
            HsNewTypeDecl loc ctx conN tyvarNs condecl derives
                -> computeIdentifierMappings modul (HsDataDecl loc ctx conN tyvarNs [condecl] derives)
            HsDataDecl _ _ conN tyvarNs condecls _

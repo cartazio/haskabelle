@@ -94,6 +94,10 @@ delocalize_HsDecl decl = do (decl', localdecls) <- delocalize_HsDecl' decl
           = do (decls', localdeclss) <- mapAndUnzipM delocalize_HsDecl' decls
                return (HsClassDecl loc ctx classN varNs fundeps decls', concat localdeclss)
 
+      delocalize_HsDecl' (HsInstDecl loc ctx qname tys decls)
+          = do (decls', localdeclss) <- mapAndUnzipM delocalize_HsDecl' decls
+               return (HsInstDecl loc ctx qname tys decls', concat localdeclss)
+
       delocalize_HsDecl' decl  = assert (check decl) $ return (decl,[])
           -- Safety check to make sure we didn't miss anything.
           where check decl   = and [null (universeBi decl :: [HsBinds]),

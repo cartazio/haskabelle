@@ -209,6 +209,10 @@ instance AlphaConvertable HsDecl where
                 -> HsClassDecl loc ctx classN varNs fundeps decls'
                       where decls'  = map (renameFreeVars renams') decls
                             renams' = shadow [UnQual classN] renams
+            HsInstDecl loc ctx qname tys decls
+                -> HsInstDecl loc ctx qname tys decls'
+                      where decls'  = map (renameFreeVars renams') decls
+                            renams' = shadow [qname] renams
 
 
 instance AlphaConvertable HsAlt where
