@@ -3,35 +3,36 @@
 *)
 
 types
-  "Prelude.Bool"      "bool"
-  "Prelude.ListTyCon" "list"
-  "Prelude.Maybe"     "option"
-  "Prelude.PairTyCon" "*"
+  "Prelude.Bool"        "bool"
+  "Prelude.PairTyCon"   "*"
+  "Prelude.ListTyCon"   "list"
+  "Prelude.Maybe"       "option"
 
 consts
-  "Prelude.id"      "id"
+  "Prelude.id"          "id"
+  "Prelude.(.)"         "Fun.comp"
 
-  "Prelude.True"    "True"
-  "Prelude.False"   "False"
+  "Prelude.True"        "True"
+  "Prelude.False"       "False"
 
-  "Prelude.not"     "Not"
-  "Prelude.(&&)"      "op &"
-  "Prelude.(||)"      "op |"
+  "Prelude.not"         "Not"
+  "Prelude.(&&)"        "op &"
+  "Prelude.(||)"        "op |"
 
-  "Prelude.PairDataCon"   "Pair"
-  "Prelude.fst"     "fst"
-  "Prelude.snd"     "snd"
+  "Prelude.PairDataCon" "Pair"
 
-  "Prelude.([])"      "List.Nil"
-  "Prelude.(:)"       "List.Cons"
+  "Prelude.fst"         "fst"
+  "Prelude.snd"         "snd"
 
-  "Prelude.(.)"	    "Fun.comp"
+  "Prelude.([])"        "List.Nil"
+  "Prelude.(:)"         "List.Cons"
 
-  "Prelude.head"    "List.hd"
-  "Prelude.tail"    "List.tl"
-  "Prelude.map"     "List.map"
-  "Prelude.(++)"      "List.append"
-  "Prelude.reverse" "List.rev"
+  "Prelude.head"        "List.hd"
+  "Prelude.tail"        "List.tl"
+  "Prelude.map"         "List.map"
+  "Prelude.(++)"        "List.append"
+  "Prelude.reverse"     "List.rev"
+  "Prelude.elem"        "List.member"
 
-  "Prelude.Nothing" "None"
-  "Prelude.Just"    "Some"
+  "Prelude.Nothing"     "None"
+  "Prelude.Just"        "Some"

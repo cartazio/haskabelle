@@ -42,7 +42,7 @@ fun mk_constentry thy (hs, raw_isa) =
       | string_of_syn (SOME (InfixrName (s, j))) = 
           (s, enclose "(" ")" ("InfixOp RightAssoc " ^ string_of_int j))
     val (sym, syn') = string_of_syn syn;
-    val s = "(Haskell " ^ quote hs ^ " " ^ syn' ^ ", Isabelle "
+    val s = "(Haskell " ^ quote hs ^ " Function, Isabelle "
       ^ quote sym ^ " " ^ syn' ^ ")";
   in s end;
 
@@ -76,6 +76,11 @@ fun convert thy pos = Source.of_string
 
 (* glueing it together *)
 
+val prep_string =
+  translate_string (fn "\\" => "\\\\" | s => s)
+  #> quote
+  #> Pretty.str;
+
 fun run thy src_loc dst_loc =
   let
     val _ = writeln ("Reading from " ^ src_loc);
@@ -83,15 +88,19 @@ fun run thy src_loc dst_loc =
     val dst_path = Path.explode dst_loc;
     val modl_name = (Path.implode o fst o Path.split_ext o Path.base) dst_path;
     val adaptions = convert thy (Position.file src_loc) src;
+    val keywords = Pretty.enum "," "[" "]"
+      (map prep_string (sort string_ord
+        (OuterKeyword.dest_commands () @ OuterKeyword.dest_keywords ())));
     val const_names = Pretty.enum "," "[" "]"
-      (map (Pretty.str o quote) (used_constants thy));
+      (map prep_string (used_constants thy));
     val thy_names = Pretty.enum "," "[" "]"
-      (map (Pretty.str o quote) (ThyInfo.get_names ()));
+      (map prep_string (ThyInfo.get_names ()));
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
       "-- $" ^ "Id" ^ "$", "",
       "module Importer.Adapt." ^ modl_name ^ " where", "",
       "import Importer.Adapt.Common", "",
       "raw_adaption_table = " ^ adaptions, "",
+      "reserved_keywords = " ^ Pretty.string_of keywords, "",
       "used_const_names = " ^ Pretty.string_of const_names, "",
       "used_thy_names = " ^ Pretty.string_of thy_names, ""];
     val _ = File.write dst_path (cat_lines dsts);

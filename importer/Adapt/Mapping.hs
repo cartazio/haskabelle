@@ -9,6 +9,7 @@ where
 
 import List (intersperse, groupBy, sortBy)
 
+import Data.Maybe (fromMaybe)
 import qualified Data.Map as Map
 
 import Language.Haskell.Hsx
@@ -21,6 +22,8 @@ import qualified Importer.LexEnv as Env
 import qualified Importer.IsaSyntax as Isa
 
 import Importer.Adapt.Common
+
+import Importer.Adapt.Precedence (precedences)
 
 import Importer.Adapt.Raw (raw_adaption_table)
 
@@ -46,8 +49,9 @@ filterAdaptionTable predicate (AdaptionTable entries)
 
 parseEntry :: AdaptionEntry -> Env.Identifier
 
-parseEntry (Haskell raw_identifier op)
+parseEntry (Haskell raw_identifier _)
     = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
+          op = fromMaybe Function (lookup raw_identifier precedences)
       in makeIdentifier op moduleID identifierID Env.EnvTyNone
 parseEntry (Isabelle raw_identifier op)
     -- the raw identifier may look like "Datatype.option.None", where
