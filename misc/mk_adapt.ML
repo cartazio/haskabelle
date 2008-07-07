@@ -23,6 +23,10 @@ fun used_constants thy = []
 
 (* concrete output syntax *)
 
+fun mk_classentry thy (hs, raw_isa) = ""; (*FIXME*)
+
+fun mk_instanceentry thy (hs, raw_isa) = ""; (*FIXME*)
+
 fun mk_typentry thy (hs, raw_isa) =
   let
     val isa = Sign.intern_type thy raw_isa;
@@ -52,18 +56,29 @@ fun mk_constentry thy (hs, raw_isa) =
 structure T = OuterLex;
 structure P = OuterParse;
 
+val classesN = "classes";
+val instancesN = "instances";
 val typesN = "types";
 val constsN = "consts";
 
-val adapt_lexicon = Scan.make_lexicon (map Symbol.explode [typesN, constsN]);
+val adapt_lexicon = Scan.make_lexicon (map Symbol.explode
+  [classesN, instancesN, typesN, constsN]);
 
+fun classes thy = P.$$$ classesN |--
+  Scan.repeat1 (P.name -- P.name >> mk_classentry thy);
+fun instances thy = P.$$$ instancesN |--
+  Scan.repeat1 (P.name -- P.name >> mk_instanceentry thy);
 fun types thy = P.$$$ typesN |--
   Scan.repeat1 (P.name -- P.name >> mk_typentry thy);
 fun consts thy = P.$$$ constsN |--
   Scan.repeat1 (P.name -- P.name >> mk_constentry thy);
 
-fun adapt thy = (types thy @@@ Scan.optional (consts thy) []
-  || consts thy) >> (space_implode ",\n  " #> enclose "[" "]");
+fun adapt thy = ((*classes thy @@@ Scan.optional (instances thy) []
+        @@@ Scan.optional (types thy) [] @@@ Scan.optional (consts thy) []
+  || instances thy @@@ Scan.optional (types thy) [] @@@ Scan.optional (consts thy) []
+  ||*) types thy @@@ Scan.optional (consts thy) []
+  || consts thy)
+  >> (space_implode ",\n  " #> enclose "[" "]");
 
 fun convert thy pos = Source.of_string
   #> Symbol.source false

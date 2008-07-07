@@ -2,6 +2,9 @@
     Author:     Florian Haftmann, TU Muenchen
 *)
 
+(*classes
+  "Prelude.Num"         "Prelude.Num"*)
+
 types
   "Prelude.Bool"        "bool"
   "Prelude.PairTyCon"   "*"
