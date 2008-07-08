@@ -4,86 +4,85 @@
 Auxiliary.
 -}
 
-module Importer.Utilities.Isa (
-  alphaConvertTerm, alphaConvertCmd,
-) where
+module Importer.Utilities.Isa 
+    (renameIsaCmd, namesFromIsaCmd, mk_InstanceCmd_name) where
 
-import Maybe (fromMaybe)
-import Data.Generics.PlateData
+import Control.Monad.State
+import Maybe
+import Data.Generics.Biplate (universeBi)
+
 import Importer.IsaSyntax
 
+renameIsaCmd :: Theory -> [(Name, Name)] -> Cmd -> Cmd
+renameIsaCmd thy renamings cmd
+    = let rs = canonicalizeRenamings thy renamings
+      in case cmd of
+           FunCmd ns tysigs clauses -> FunCmd ns' tysigs clauses'
+               where ns'      = map (translate thy rs) ns
+                     clauses' = map (renameClause rs) clauses
+                     renameClause rs (n, pats, body) 
+                         = (translate thy rs n, pats, alphaConvertTerm thy rs body)
 
--- getBoundVarsFromCmd :: Cmd -> Maybe [Name]
--- getBoundVarsFromCmd cmd = bindings cmd
---  where bindings (FunCmd fname _ _)       = Just [fname]
---        bindings (Block cmds)             = liftM concat (sequence (map bindings cmds))
---        bindings (DefinitionCmd name _ _) = Just [name]
---        bindings (InfixDeclCmd opN _ _)   = Just [opN]
---        bindings (Comment _)              = Just []
---        bindings _                        = Nothing
+           DefinitionCmd n sig (p, t) -> DefinitionCmd n' sig (p', t')
+               where n' = translate thy rs n
+                     p' = alphaConvertTerm thy rs p
+                     t' = alphaConvertTerm thy rs t
+
+           _ -> error ("renameIsaCmd: Fall through: " ++ show cmd)
 
 
 alphaConvertTerm :: Theory -> [(Name, Name)] -> Term -> Term
 
-alphaConvertTerm thy alist term = aconvert (map (\(k,v) -> (canonicalize thy k, v)) alist) term
-    where aconvert alist term
-              = case term of
-                  Var n             -> Var (translate n alist thy)
-                  App t1 t2         -> apply2 App $ map (aconvert alist) [t1, t2]
-                  If c t e          -> apply3 If  $ map (aconvert alist) [c, t, e]
-                  Parenthesized t   -> Parenthesized (aconvert alist t)
-                  Lambda vars body
-                      -> let boundvs = map (canonicalize thy) vars
-                         in aconvert (shadow boundvs alist) body
-                  RecConstr recordN updates
-                      -> let recordN'       = translate recordN alist thy
-                             (names, terms) = unzip updates
-                             names'         = map (\n -> translate n alist thy) names
-                             terms'         = map (aconvert alist) terms
-                         in RecConstr recordN' (zip names' terms')
-                  RecUpdate term updates
-                      -> let term'          = aconvert alist term
-                             (names, terms) = unzip updates
-                             names'         = map (\n -> translate n alist thy) names
-                             terms'         = map (aconvert alist) terms
-                         in RecUpdate term' (zip names' terms')
-                  Case term matches
-                      -> Case (aconvert alist term) (map cnv matches)
-                         where cnv (pat, term)
-                                   = let boundvs = map (canonicalize thy) [ n | Var n <- universeBi pat]
-                                     in (pat, aconvert (shadow boundvs alist) term)
+alphaConvertTerm thy alist term = aconvert (canonicalizeRenamings thy alist) term
+    where 
+      aconvert alist term
+          = case term of
+              Literal l         -> Literal l
+              Var n             -> Var (translate thy alist n)
+              App t1 t2         -> apply2 App $ map (aconvert alist) [t1, t2]
+              If c t e          -> apply3 If  $ map (aconvert alist) [c, t, e]
+              Parenthesized t   -> Parenthesized (aconvert alist t)
+              Let binds body    -> Let binds' body'
+                  where
+                    body' = aconvert (shadow boundvs alist) body
+                    (binds', boundvs)
+                        -- A let expression binds sequentially in Isar/HOL.
+                        -- We remember all currently bound variables in a state.
+                        = flip runState []
+                            $ foldM (\r (p, t) 
+                                         -> do let new_bound_vs = [ canonicalize thy n 
+                                                                        | Var n <- universeBi p]
+                                               old_bound_vs <- get
+                                               let boundvs = new_bound_vs ++ old_bound_vs
+                                               put boundvs
+                                               return (r ++ [(p, aconvert (shadow boundvs alist) t)]))
+                                     [head binds]
+                                     (tail binds)
 
-alphaConvertCmd  :: Theory -> [(Name, Name)] -> Cmd  -> Cmd
+              Lambda var body
+                  -> let boundvs = [canonicalize thy var]
+                     in aconvert (shadow boundvs alist) body
+              RecConstr recordN updates
+                  -> let recordN'       = translate thy alist recordN
+                         (names, terms) = unzip updates
+                         names'         = map (\n -> translate thy alist n) names
+                         terms'         = map (aconvert alist) terms
+                     in RecConstr recordN'(zip names' terms')
+              RecUpdate term updates
+                  -> let term'          = aconvert alist term
+                         (names, terms) = unzip updates
+                         names'         = map (\n -> translate thy alist n) names
+                         terms'         = map (aconvert alist) terms
+                     in RecUpdate term' (zip names' terms')
+              Case term matches
+                  -> Case (aconvert alist term) (map cnv matches)
+                      where cnv (pat, term)
+                                = let boundvs = [ canonicalize thy n | Var n <- universeBi pat]
+                                  in (pat, aconvert (shadow boundvs alist) term)
 
-alphaConvertCmd thy alist cmd = aconvert (map (\(k,v) -> (canonicalize thy k, v)) alist) cmd
-    where aconvert alist cmd
-              = case cmd of
-                  Block cmds                -> Block $ map (aconvert alist) cmds
-                  TheoryCmd theoryN cmds    -> TheoryCmd theoryN  $ map (alphaConvertCmd theoryN alist) cmds
-                  DatatypeCmd tyspec dspecs -> DatatypeCmd tyspec $ map cnv dspecs
-                      where cnv (Constructor conN types)
-                                = Constructor (translate conN alist thy) types
-                  RecordCmd tspec slotspecs -> RecordCmd tspec (map cnv slotspecs)
-                      where cnv (slotN, slotTy)
-                                = (translate slotN alist thy, slotTy)
-                  FunCmd fname sig matches  
-                      -> FunCmd (translate fname alist thy) 
-                                (aconvertSig alist sig)
-                                (map (aconvertMatch alist) matches)
-                  DefinitionCmd name tsig match 
-                      -> DefinitionCmd (translate name alist thy) 
-                                       (aconvertSig alist tsig)
-                                       (aconvertMatch alist match)
-                  InfixDeclCmd opN assoc prio 
-                      -> InfixDeclCmd (translate opN alist thy) assoc prio
-                  TypesCmd specs -> TypesCmd specs
-                  Comment  str   -> Comment str
-          aconvertMatch alist (pats, term)
-              = let boundvs = map (canonicalize thy) [ n | Var n <- universeBi pats]
-                in (pats, alphaConvertTerm thy (shadow boundvs alist) term)
-          aconvertSig alist (TypeSig name typ)
-              = TypeSig (translate name alist thy) typ
 
+canonicalizeRenamings thy renamings
+    = map (\(k,v) -> (canonicalize thy k, v)) renamings
 
 canonicalize, decanonicalize :: Theory -> Name -> Name
 
@@ -96,9 +95,27 @@ decanonicalize _ (Name n)      = Name n
 shadow :: [Name] -> [(Name, Name)] -> [(Name, Name)]
 shadow vars alist = filter ((`notElem` vars) . fst) alist
           
-translate :: Name -> [(Name, Name)] -> Theory -> Name
-translate name alist thy
+translate :: Theory -> [(Name, Name)] -> Name -> Name
+translate thy alist name
     = decanonicalize thy (fromMaybe name (lookup (canonicalize thy name) alist))
 
 apply2 f [a,b]     = f a b
 apply3 f [a,b,c]   = f a b c
+
+
+namesFromIsaCmd :: Cmd -> [Name]
+namesFromIsaCmd (FunCmd ns _ _)       = ns
+namesFromIsaCmd (DefinitionCmd n _ _) = [n]
+namesFromIsaCmd junk 
+    = error ("namesFromIsaCmd: Fall through: " ++ show junk)
+
+name2str (QName _ s) = s
+name2str (Name s)    = s
+
+mk_InstanceCmd_name :: Name -> Type -> Name
+mk_InstanceCmd_name (QName t n) (TyCon conN [])
+    = QName t (concat [n, "_", name2str conN])
+mk_InstanceCmd_name (Name n) (TyCon conN [])
+    = Name (concat [n, "_", name2str conN])
+
+                    

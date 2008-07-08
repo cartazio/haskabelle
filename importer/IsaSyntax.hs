@@ -41,7 +41,7 @@ data Cmd =
     --
     | TypesCmd [(TypeSpec, Type)]
     --
-    -- fun fib :: "nat ⇒ nat"
+    -- fun fib :: "nat => nat"
     -- where
     --   "fib 0 = 1"
     -- | "fib (Suc 0) = 1"
@@ -49,7 +49,7 @@ data Cmd =
     --
     | FunCmd [VarName] [TypeSig] [(VarName, [Pat], Term)]
     --
-    -- definition id :: "'a ⇒ 'a"
+    -- definition id :: "int"
     -- where
     --   "id a = a"
     --

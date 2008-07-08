@@ -281,6 +281,7 @@ renameHsDecl renams (HsFunBind matchs)
 renameHsDecl renams (HsPatBind loc pat rhs wbinds)
     = HsPatBind loc (renameHsPat renams pat) rhs wbinds
 
+renameHsDecl _ junk = error ("renameHsDecl: Fall through: " ++ show junk)
 
 renameHsPat :: [Renaming] -> HsPat -> HsPat
 

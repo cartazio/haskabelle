@@ -80,3 +80,6 @@ no_fundeps_in_class_decl
 
 no_default_methods_in_class_decl
     = "No default methods, or infix declarations allowed in class declarations."
+
+only_specializing_on_tycon_allowed
+    = "Only specializing on a simple type constructor allowed in instance declarations."

@@ -14,10 +14,25 @@ BUG / TODO Liste:
 
 * Type classes
 
-* instantiation Integer -> Int.int
+* Typen in instantiations, alpha -> "(alpha :: typ)"
 
-* instance by introclasses -> instance ..
+* foo :: Context a -> Foo a -> Bar b
+    
+    => foo :: Foo (a::Context) -> Bar (b::Context)
 
-* instantiation definition names "foo" -> "foo_typeCon"
+* Characters & Strings:
+
+* Adaption OpKind fuer Class mappings
+
+
+definition foo :: string
+where
+  "foo = ''asdf''"
+
+definition bar :: char
+where
+  "bar = CHR ''a''"
+
+
 
 $Id$

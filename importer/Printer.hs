@@ -9,8 +9,9 @@ module Importer.Printer where
 import Maybe
 
 import Importer.Utilities.Misc
-import qualified Importer.IsaSyntax as Isa
+import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, mk_InstanceCmd_name)
 
+import qualified Importer.IsaSyntax as Isa
 import qualified Importer.LexEnv as Env
 
 import Importer.Adapt.Mapping (adaptionTable, AdaptionTable(..))
@@ -278,14 +279,20 @@ instance Printer Isa.Cmd where
                   = pprint' n <+> text "::" <+> pprint' t
           
     pprint' (Isa.InstanceCmd classN typ cmds)
-        = blankline $
-          text "instantiation" <+> pprint' typ <+> text "::" <+> pprint' classN $$
-          text "begin" $$
-          space <> space <> vcat (map pprint' cmds) $$
-          (blankline $
-           text "instance" $$
-           text "by intro_classes" $$
-           text "end")
+        = do thy <- queryPP currentTheory
+             let cmds' = map (renameInstanceCmd thy typ) cmds
+             blankline $
+               text "instantiation" <+> pprint' typ <+> text "::" <+> pprint' classN $$
+               text "begin" $$
+               space <> space <> vcat (map pprint' cmds') $$
+               (blankline $
+                text "instance .." $$
+                text "end")
+        where
+          renameInstanceCmd thy t c
+              = let renams = map (\old_name -> (old_name, mk_InstanceCmd_name old_name t))
+                                 (namesFromIsaCmd c)
+                in renameIsaCmd thy renams c
  
     pprint' (Isa.InfixDeclCmd op assoc prio)
         = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op

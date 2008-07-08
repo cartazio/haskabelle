@@ -17,7 +17,8 @@ import Maybe
 import Control.Monad.State
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Hsk (extractBindingNs, extractSuperclassNs, srcloc2string)
+import Importer.Utilities.Hsk (extractBindingNs, extractSuperclassNs, 
+                               namesFromHsDecl, renameHsDecl, srcloc2string)
 import Importer.Utilities.Gensym
 import Importer.Preprocess
 import Importer.ConversionUnit
@@ -347,15 +348,16 @@ instance Convert HsDecl Isa.Cmd where
                        return (map (flip Isa.TypeSig typ') names')
 
     convert' (HsInstDecl loc ctx classN tys inst_decls)
-        | length tys /= 1 = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
+        | length tys /= 1          = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
+        | not (isTyCon (head tys)) = dieWithLoc loc (Msg.only_specializing_on_tycon_allowed)
         | otherwise
             = do classN' <- convert classN
                  type'   <- convert (head tys)
                  decls'  <- mapM convert (map toHsDecl inst_decls)
                  return (Isa.InstanceCmd classN' type' decls')
         where 
+          isTyCon t = case t of { HsTyCon _ -> True; _ -> False }
           toHsDecl (HsInsDecl decl) = decl
-              
 
     convert' junk = pattern_match_exhausted "HsDecl -> Isa.Cmd" junk
 
