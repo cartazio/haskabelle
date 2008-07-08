@@ -9,4 +9,12 @@ theory Prelude
 imports Main
 begin
 
+class print = type +
+  fixes print :: "'a \<Rightarrow> string"
+
+class eq = type +
+  fixes eq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+
+class num = number_ring + eq + print + abs + sgn
+
 end

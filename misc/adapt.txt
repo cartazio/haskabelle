@@ -3,13 +3,18 @@
 *)
 
 (*classes
-  "Prelude.Num"         "Prelude.Num"*)
+  "Prelude.Show"        "Prelude.print"
+  "Prelude.Eq"          "Prelude.eq"
+  "Prelude.Num"         "Prelude.num"*)
 
 types
   "Prelude.Bool"        "bool"
   "Prelude.PairTyCon"   "*"
   "Prelude.ListTyCon"   "list"
   "Prelude.Maybe"       "option"
+
+  "Prelude.Int"         "int"
+  "Prelude.Integer"     "int"
 
 consts
   "Prelude.id"          "id"
@@ -39,3 +44,11 @@ consts
 
   "Prelude.Nothing"     "None"
   "Prelude.Just"        "Some"
+
+  "Prelude.(+)"         "HOL.plus"
+  "Prelude.(*)"         "HOL.times"
+  "Prelude.negate"      "HOL.uminus"
+  "Prelude.(-)"         "HOL.minus"
+  "Prelude.abs"         "HOL.abs"
+  "Prelude.sgn"         "HOL.sgn"
+  "Prelude.fromInteger" "Int.of_int"
