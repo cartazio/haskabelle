@@ -5,11 +5,15 @@ To get it run, install the following:
     GHC:
         http://www.haskell.org/ghc/
 
+    mtl:
+        http://hackage.haskell.org/cgi-bin/hackage-scripts/package/mtl-1.1.0.1
+
     Happy:
         http://www.haskell.org/happy/
 
     HSX:
         http://www.cs.chalmers.se/~d00nibro/haskell-src-exts/
+        darcs get http://code.haskell.org/HSP/haskell-src-exts
 
     Uniplate:
         darcs get --partial http://www.cs.york.ac.uk/fp/darcs/uniplate  
