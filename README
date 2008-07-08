@@ -11,6 +11,9 @@ To get it run, install the following:
     HSX:
         http://www.cs.chalmers.se/~d00nibro/haskell-src-exts/
 
+    Uniplate:
+        darcs get --partial http://www.cs.york.ac.uk/fp/darcs/uniplate  
+
 Sources of the importer itself are available from SVN:
 
     svn+ssh://haftmann@atbroy100.informatik.tu-muenchen.de/home/wiss/haftmann/repos/shared/trunk/hsimp
