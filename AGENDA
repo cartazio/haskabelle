@@ -12,10 +12,12 @@ Arbeitsplan Haskell-Importer:
 
 BUG / TODO Liste:
 
-* Haskell infix priorities
-
 * Type classes
 
-* Printing imports correctly.
+* instantiation Integer -> Int.int
+
+* instance by introclasses -> instance ..
+
+* instantiation definition names "foo" -> "foo_typeCon"
 
 $Id$

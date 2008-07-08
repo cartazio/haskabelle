@@ -20,7 +20,7 @@ import Char (toLower)
 
 import Control.Monad.State
 import Data.Generics.PlateData
-import Language.Haskell.Hsx
+import Language.Haskell.Exts
 
 
 import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates, wordsBy, trace, prettyShow')
@@ -52,8 +52,7 @@ extractSuperclassNs ctx = map extract ctx
 namesFromHsDecl :: HsDecl -> Maybe [HsQName]
 
 namesFromHsDecl (HsTypeDecl _ name _ _)        = Just [UnQual name]
-namesFromHsDecl (HsDataDecl _ _ name _ _ _)    = Just [UnQual name]
-namesFromHsDecl (HsNewTypeDecl _ _ name _ _ _) = Just [UnQual name]
+namesFromHsDecl (HsDataDecl _ _ _ name _ _ _)  = Just [UnQual name]
 namesFromHsDecl (HsClassDecl _ _ name _ _ _)   = Just [UnQual name]
 namesFromHsDecl (HsInstDecl _ _ qname _ _)     = Just [qname]
 namesFromHsDecl (HsTypeSig _ names _)          = Just (map UnQual names)
@@ -133,6 +132,8 @@ optranslate renamings op
     = case op of HsVarOp qname -> HsVarOp (translate renamings qname)
                  HsConOp qname -> HsConOp (translate renamings qname)
 
+not_supported_conversion ctx junk
+    = error ("renameFreeVars (" ++ ctx ++ "): Fall through: " ++ show junk)
 
 class AlphaConvertable a where
     renameFreeVars :: [Renaming] -> a -> a
@@ -205,15 +206,25 @@ instance AlphaConvertable HsDecl where
                 -> HsPatBind loc pat (HsUnGuardedRhs body') binds'
                       where (HsLet binds' body') = renameFreeVars renams' (HsLet binds body)
                             renams' = shadow (bindingsFromPats [pat]) renams
-            HsClassDecl loc ctx classN varNs fundeps decls
+            HsClassDecl loc ctx classN varNs fundeps class_decls
                 -> HsClassDecl loc ctx classN varNs fundeps decls'
-                      where decls'  = map (renameFreeVars renams') decls
+                      where decls'  = map (renameFreeVars renams') class_decls
                             renams' = shadow [UnQual classN] renams
-            HsInstDecl loc ctx qname tys decls
+            HsInstDecl loc ctx qname tys inst_decls
                 -> HsInstDecl loc ctx qname tys decls'
-                      where decls'  = map (renameFreeVars renams') decls
+                      where decls'  = map (renameFreeVars renams') inst_decls
                             renams' = shadow [qname] renams
+            _   -> not_supported_conversion "HsDecl" hsdecl
 
+instance AlphaConvertable HsClassDecl where
+    renameFreeVars renams (HsClsDecl decl)
+        = HsClsDecl (renameFreeVars renams decl)
+    renameFreeVars _ junk = not_supported_conversion "HsClassDecl" junk
+
+instance AlphaConvertable HsInstDecl where
+    renameFreeVars renams (HsInsDecl decl)
+        = HsInsDecl (renameFreeVars renams decl) 
+    renameFreeVars _ junk = not_supported_conversion "HsClassDecl" junk
 
 instance AlphaConvertable HsAlt where
     renameFreeVars renams hsalt@(HsAlt _ pat _ _)
@@ -240,11 +251,12 @@ instance AlphaConvertable HsBinds where
     renameFreeVars renams (HsBDecls decls) = HsBDecls decls'
         where declNs = extractBindingNs decls
               decls' = map (renameFreeVars (shadow declNs renams)) decls
+    renameFreeVars _ junk = not_supported_conversion "HsBinds" junk
 
 instance AlphaConvertable HsRhs where
     renameFreeVars renams (HsUnGuardedRhs exp)
         = HsUnGuardedRhs (renameFreeVars renams exp)
-
+    renameFreeVars _ junk = not_supported_conversion "HsBinds" junk
 
 
 renameHsDecl :: [Renaming] -> HsDecl -> HsDecl
@@ -252,8 +264,8 @@ renameHsDecl :: [Renaming] -> HsDecl -> HsDecl
 renameHsDecl renams (HsTypeDecl loc tyconN tyvarNs typ)
     = HsTypeDecl loc (translate renams tyconN) tyvarNs typ
 
-renameHsDecl renams (HsDataDecl loc context tyconN tyvarNs condecls derives)
-    = HsDataDecl loc context (translate renams tyconN) tyvarNs condecls derives
+renameHsDecl renams (HsDataDecl loc kind context tyconN tyvarNs condecls derives)
+    = HsDataDecl loc kind context (translate renams tyconN) tyvarNs condecls derives
 
 renameHsDecl renams (HsInfixDecl loc assoc prio ops)
     = HsInfixDecl loc assoc prio (map (optranslate renams) ops)

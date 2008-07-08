@@ -10,7 +10,7 @@ import IO
 import Monad
 import Data.Graph
 import Data.Tree
-import Language.Haskell.Hsx
+import Language.Haskell.Exts
 
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg

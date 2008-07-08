@@ -6,7 +6,7 @@ module Importer.Utilities.Gensym where
 
 import Control.Monad.State
 
-import Language.Haskell.Hsx (HsName(..), HsQName(..))
+import Language.Haskell.Exts (HsName(..), HsQName(..))
 import Importer.IsaSyntax (Name(..))
 
 newtype GensymCount = GensymCount Int

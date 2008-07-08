@@ -15,7 +15,7 @@ import Debug.Trace (trace)
 import Monad (liftM)
 import qualified List
 
-import qualified Language.Haskell.Hsx as Hsx
+import qualified Language.Haskell.Exts as Hsx
 
 unfoldr, unfoldl    :: (b -> Maybe (a,b)) -> b -> [a]
 unfoldr1, unfoldl1  :: (a -> Maybe (a, a)) -> a -> [a]

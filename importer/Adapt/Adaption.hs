@@ -18,7 +18,7 @@ import Importer.Utilities.Misc
 import Importer.Adapt.Mapping (AdaptionTable(..))
 
 import qualified Importer.IsaSyntax as Isa
-import Language.Haskell.Hsx
+import Language.Haskell.Exts
 
 
 data AdptState = AdptState { oldGlobalEnv     :: Env.GlobalE,

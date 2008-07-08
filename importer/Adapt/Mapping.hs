@@ -12,7 +12,7 @@ import List (intersperse, groupBy, sortBy)
 import Data.Maybe (fromMaybe)
 import qualified Data.Map as Map
 
-import Language.Haskell.Hsx
+import Language.Haskell.Exts
 
 import Importer.Utilities.Misc (wordsBy, prettyShow', trace, assert)
 import Importer.Utilities.Hsk (string2HsName)

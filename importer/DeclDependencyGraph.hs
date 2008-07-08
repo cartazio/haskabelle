@@ -11,7 +11,7 @@ import List (groupBy, sortBy, intersect)
 
 import Data.Graph
 import Data.Tree
-import Language.Haskell.Hsx
+import Language.Haskell.Exts
 
 import Importer.Utilities.Misc
 import Importer.Utilities.Hsk

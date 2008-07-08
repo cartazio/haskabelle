@@ -16,7 +16,7 @@ import qualified Importer.LexEnv as Env
 import Importer.Adapt.Mapping (adaptionTable, AdaptionTable(..))
 import Importer.Adapt.Raw (used_thy_names, reserved_keywords)
 
-import Language.Haskell.Hsx.Syntax (HsSpecialCon(..), HsQName(..))
+import Language.Haskell.Exts.Syntax (HsSpecialCon(..), HsQName(..))
 
 import qualified Text.PrettyPrint as P
 

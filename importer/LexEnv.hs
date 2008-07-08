@@ -10,7 +10,7 @@ import List (nub)
 import Control.Monad.State
 import qualified Data.Map as Map
 
-import Language.Haskell.Hsx
+import Language.Haskell.Exts
 
 import qualified Importer.Msg as Msg
 import qualified Importer.IsaSyntax as Isa
@@ -398,9 +398,7 @@ computeIdentifierMappings modul decl
            HsTypeSig _ _ typ         -> [TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ})]
            HsClassDecl _ ctx _ _ _ _ -> [Class defaultLexInfo $ map fromHsk (extractSuperclassNs ctx)]
            HsInstDecl  _ _ _ _ _     -> []
-           HsNewTypeDecl loc ctx conN tyvarNs condecl derives
-               -> computeIdentifierMappings modul (HsDataDecl loc ctx conN tyvarNs [condecl] derives)
-           HsDataDecl _ _ conN tyvarNs condecls _
+           HsDataDecl _ _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
                   let tycon = mkTyCon (fromHsk name) tyvarNs
                       constructors = map (mkDataCon tycon) condecls

@@ -7,7 +7,7 @@ Basic data structures for adaption table.
 module Importer.Adapt.Common (OpKind(..), Assoc(..), AdaptionEntry(..),
                               primitive_tycon_table, primitive_datacon_table) where
 
-import Language.Haskell.Hsx
+import Language.Haskell.Exts
 
 data OpKind = Variable | Function | Op Int | InfixOp Assoc Int | Type
   deriving Show

@@ -8,7 +8,7 @@ module Importer.Convert (
   convertHskUnit
 ) where
 
-import Language.Haskell.Hsx
+import Language.Haskell.Exts
 
 import List (unzip4, partition)
 import Monad
@@ -75,7 +75,7 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 
 
 -- The naming scheme "HsFoo" is treated as being owned by the parser
--- libary Language.Haskell.Hsx. We use "HskFoo" instead to
+-- libary Language.Haskell.Exts. We use "HskFoo" instead to
 -- differentiate between what's defined by us and by that library. 
 --
 -- (Ok, this might sound somewhat confusing, at least we're consistent
@@ -248,10 +248,7 @@ instance Convert HsDecl Isa.Cmd where
              typ'   <- convert typ
              return (Isa.TypesCmd [(Isa.TypeSpec tyvars tycon, typ')])
                                 
-    convert' (HsNewTypeDecl loc context tyconN tyvarNs condecl derivings)
-        = convert' (HsDataDecl loc context tyconN tyvarNs [condecl] derivings)
-
-    convert' (HsDataDecl _loc _context tyconN tyvarNs condecls _deriving)
+    convert' (HsDataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
         = let strip (HsQualConDecl _loc _FIXME _context decl) = decl
               decls = map strip condecls
           in if isRecDecls decls then
@@ -324,37 +321,40 @@ instance Convert HsDecl Isa.Cmd where
                       return $ Isa.DefinitionCmd name' sig' (pat', rhs')
             _   -> dieWithLoc loc (Msg.complex_toplevel_patbinding)
     
-    convert' decl@(HsClassDecl _ ctx classN _ _ decls)
+    convert' decl@(HsClassDecl _ ctx classN _ _ class_decls)
         = check_class_decl decl
             $ do let superclassNs   = extractSuperclassNs ctx
                  superclassNs' <- mapM convert superclassNs
                  let superclassNs'' = if null superclassNs' then [Isa.Name "type"]
                                                             else superclassNs'
                  classN'       <- convert classN
-                 typesigs'     <- concatMapM convertToTypeSig decls
+                 typesigs'     <- concatMapM convertToTypeSig class_decls
                  return (Isa.ClassCmd classN' superclassNs'' typesigs')
         where
           check_class_decl (HsClassDecl loc ctx classN varNs fundeps decls) cont
-              | length varNs /= 1         = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
-              | not (null fundeps)        = dieWithLoc loc (Msg.no_fundeps_in_class_decl)
-              | not (all isTypeSig decls) = dieWithLoc loc (Msg.no_default_methods_in_class_decl)
-              | otherwise                 = cont
+              | length varNs /= 1          = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
+              | not (null fundeps)         = dieWithLoc loc (Msg.no_fundeps_in_class_decl)
+              | not (all isTypeSig decls)  = dieWithLoc loc (Msg.no_default_methods_in_class_decl)
+              | otherwise                  = cont
               
-          isTypeSig (HsTypeSig _ _ _)      = True
-          isTypeSig _                      = False 
+          isTypeSig decl = case decl of 
+                             HsClsDecl (HsTypeSig _ _ _) -> True
+                             _                           -> False
 
-          convertToTypeSig (HsTypeSig _ names typ)
+          convertToTypeSig (HsClsDecl (HsTypeSig _ names typ))
                   = do names' <- mapM convert names
                        typ'   <- convert typ
                        return (map (flip Isa.TypeSig typ') names')
 
-    convert' (HsInstDecl loc ctx classN tys decls)
+    convert' (HsInstDecl loc ctx classN tys inst_decls)
         | length tys /= 1 = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
         | otherwise
             = do classN' <- convert classN
                  type'   <- convert (head tys)
-                 decls'  <- mapM convert decls
+                 decls'  <- mapM convert (map toHsDecl inst_decls)
                  return (Isa.InstanceCmd classN' type' decls')
+        where 
+          toHsDecl (HsInsDecl decl) = decl
               
 
     convert' junk = pattern_match_exhausted "HsDecl -> Isa.Cmd" junk
@@ -516,7 +516,7 @@ makeLambda varNs body
 -- that takes n parameters and constructs the nested pairs within its
 -- body.
 makeTupleDataCon :: Int -> ContextM Isa.Term
-makeTupleDataCon n     -- n < 2  cannot happen (cf. Language.Haskell.Hsx.HsTupleCon)
+makeTupleDataCon n     -- n < 2  cannot happen (cf. Language.Haskell.Exts.HsTupleCon)
     = assert (n > 2) $ -- n == 2, i.e. pairs, can and are dealt with by usual conversion.
       do argNs  <- mapM (lift . genHsQName) (replicate n (UnQual (HsIdent "arg")))
          args   <- return (map HsVar argNs)
