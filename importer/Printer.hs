@@ -519,7 +519,7 @@ isInfixOp name lookupFn
 isUnaryOp :: Isa.Name -> (Isa.Name -> Maybe Env.Identifier) -> Bool
 isUnaryOp name lookupFn
     = case lookupFn name of
-        Just id -> Env.isOp id
+        Just id -> Env.isUnaryOp id
         _       -> False
 
 lookupIdentifier :: Isa.Theory -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier

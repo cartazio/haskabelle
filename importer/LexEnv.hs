@@ -63,11 +63,11 @@ data LexInfo = LexInfo {
 
 data Identifier = Variable LexInfo
                 | Function LexInfo
-                | Op LexInfo Int
+                | UnaryOp  LexInfo Int
                 | InfixOp  LexInfo EnvAssoc Int
-                | Class LexInfo [EnvName]
+                | Class    LexInfo [EnvName]
                 | TypeAnnotation LexInfo
-                | Type LexInfo [Identifier] -- Type lexinfo [constructors]
+                | Type     LexInfo [Identifier] -- Type lexinfo [constructors]
   deriving (Eq, Ord,Show)
 
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
@@ -81,12 +81,12 @@ makeLexInfo moduleID identifierID t
 updateIdentifier :: Identifier -> LexInfo -> Identifier
 updateIdentifier (Variable _) lexinfo       = Variable lexinfo
 updateIdentifier (Function _) lexinfo       = Function lexinfo
-updateIdentifier (Op _ p) lexinfo           = Op lexinfo p
+updateIdentifier (UnaryOp _ p) lexinfo      = UnaryOp lexinfo p
 updateIdentifier (InfixOp _ a p) lexinfo    = InfixOp lexinfo a p
 updateIdentifier (TypeAnnotation _) lexinfo = TypeAnnotation lexinfo
 updateIdentifier (Type _ conNs) lexinfo     = Type lexinfo conNs
 
-isVariable, isFunction, isOp, isInfixOp, isTypeAnnotation :: Identifier -> Bool
+isVariable, isFunction, isUnaryOp, isInfixOp, isTypeAnnotation :: Identifier -> Bool
 
 isVariable (Variable _)   = True
 isVariable _              = False
@@ -94,8 +94,8 @@ isVariable _              = False
 isFunction (Function _)   = True
 isFunction _              = False
 
-isOp (Op _ _)             = True
-isOp _                    = False
+isUnaryOp (UnaryOp _ _)   = True
+isUnaryOp _               = False
 
 isInfixOp (InfixOp _ _ _) = True
 isInfixOp _               = False
@@ -109,7 +109,7 @@ isType _          = False
 
 lexInfoOf (Variable i)       = i
 lexInfoOf (Function i)       = i
-lexInfoOf (Op i _)           = i
+lexInfoOf (UnaryOp i _)      = i
 lexInfoOf (InfixOp i _ _)    = i
 lexInfoOf (Class i _)        = i
 lexInfoOf (Type i _)         = i
@@ -318,11 +318,11 @@ mergeIdentifiers ident1 ident2
       $ case (ident1, ident2) of
           (Variable i,       TypeAnnotation ann) -> Just $ Variable (update i ann)
           (Function i,       TypeAnnotation ann) -> Just $ Function (update i ann)
-          (Op       i p,     TypeAnnotation ann) -> Just $ Op       (update i ann) p
+          (UnaryOp  i p,     TypeAnnotation ann) -> Just $ UnaryOp  (update i ann) p
           (InfixOp  i a p,   TypeAnnotation ann) -> Just $ InfixOp  (update i ann) a p
           (TypeAnnotation ann, Variable i)       -> Just $ Variable (update i ann)
           (TypeAnnotation ann, Function i)       -> Just $ Function (update i ann)
-          (TypeAnnotation ann, Op       i p)     -> Just $ Op       (update i ann) p
+          (TypeAnnotation ann, UnaryOp  i p)     -> Just $ UnaryOp  (update i ann) p
           (TypeAnnotation ann, InfixOp  i a p)   -> Just $ InfixOp  (update i ann) a p
           (_,_) -> Nothing
     where update lexinfo@(LexInfo { typeOf = EnvTyNone }) (LexInfo { typeOf = typ })

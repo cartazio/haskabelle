@@ -9,7 +9,7 @@ where
 
 import List (intersperse, groupBy, sortBy)
 
-import Data.Maybe (fromMaybe)
+import Data.Maybe
 import qualified Data.Map as Map
 
 import Language.Haskell.Exts
@@ -22,8 +22,6 @@ import qualified Importer.LexEnv as Env
 import qualified Importer.IsaSyntax as Isa
 
 import Importer.Adapt.Common
-
-import Importer.Adapt.Precedence (precedences)
 
 import Importer.Adapt.Raw (raw_adaption_table)
 
@@ -49,10 +47,11 @@ filterAdaptionTable predicate (AdaptionTable entries)
 
 parseEntry :: AdaptionEntry -> Env.Identifier
 
-parseEntry (Haskell raw_identifier _)
+parseEntry (Haskell raw_identifier op)
     = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
-          op = fromMaybe Function (lookup raw_identifier precedences)
-      in makeIdentifier op moduleID identifierID Env.EnvTyNone
+          op' = (case op of Function -> fromMaybe Function (lookup raw_identifier hsk_infix_ops)
+                            etc      -> etc)
+      in makeIdentifier op' moduleID identifierID Env.EnvTyNone
 parseEntry (Isabelle raw_identifier op)
     -- the raw identifier may look like "Datatype.option.None", where
     -- "Datatype" is the ModuleID, and "None" is the real identifier,
@@ -80,8 +79,8 @@ makeIdentifier Variable m identifier t
     = Env.Variable $ Env.makeLexInfo m identifier t
 makeIdentifier Function m identifier t
     = Env.Function $ Env.makeLexInfo m identifier t
-makeIdentifier (Op prio) m identifier t
-    = Env.Op (Env.makeLexInfo m identifier t) prio
+makeIdentifier (UnaryOp prio) m identifier t
+    = Env.UnaryOp (Env.makeLexInfo m identifier t) prio
 makeIdentifier (InfixOp assoc prio) m identifier t
     = Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
 makeIdentifier Type m identifier t

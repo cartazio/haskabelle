@@ -5,11 +5,17 @@ Basic data structures for adaption table.
 -}
 
 module Importer.Adapt.Common (OpKind(..), Assoc(..), AdaptionEntry(..),
-                              primitive_tycon_table, primitive_datacon_table) where
+                              primitive_tycon_table, primitive_datacon_table,
+                              hsk_infix_ops) where
 
 import Language.Haskell.Exts
 
-data OpKind = Variable | Function | Op Int | InfixOp Assoc Int | Type
+data OpKind = Type 
+            | Variable 
+            | Function 
+            | RawHskOp 
+            | UnaryOp Int 
+            | InfixOp Assoc Int
   deriving Show
 
 data Assoc = RightAssoc | LeftAssoc | NoneAssoc
@@ -32,3 +38,14 @@ primitive_datacon_table
        (HsListCon,    Qual (Module "Prelude") (HsIdent "[]")),
        (HsTupleCon 2, Qual (Module "Prelude") (HsIdent "PairDataCon"))
       ]
+
+hsk_infix_ops :: [(String, OpKind)]
+hsk_infix_ops = [
+  ("Prelude.(.)",  InfixOp RightAssoc 9),
+  ("Prelude.(&&)", InfixOp LeftAssoc 3),
+  ("Prelude.(||)", InfixOp LeftAssoc 2),
+  ("Prelude.(:)",  InfixOp RightAssoc 5),
+  ("Prelude.(++)", InfixOp RightAssoc 5),
+  ("Prelude.(+)",  InfixOp LeftAssoc 6),
+  ("Prelude.(*)",  InfixOp LeftAssoc 7),
+  ("Prelude.(-)",  InfixOp LeftAssoc 6)]
