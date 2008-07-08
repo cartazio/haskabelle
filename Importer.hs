@@ -21,7 +21,7 @@ import Control.Monad
 import Data.Tree
 import Text.PrettyPrint (render, vcat, text, (<>))
 
-import Language.Haskell.Hsx (ParseResult(..), parseFile, HsModule(..))
+import Language.Haskell.Exts (ParseResult(..), parseFile, HsModule(..))
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
 import Importer.Utilities.Hsk (srcloc2string, module2FilePath, isHaskellSourceFile)
