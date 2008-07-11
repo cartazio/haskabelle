@@ -19,7 +19,7 @@ linify  x = x ++ "\n\n"
 quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
 
-printEnv env = "Global environment looked like:\n"
+printEnv env = "The Global Environment looked like:\n"
                ++ prettyShow' "globalenv" env
 
 assoc_mismatch op1 assoc1 op2 assoc2
@@ -56,14 +56,18 @@ free_vars_found loc freeVariableNames
     = srcloc2string loc ++ ": " ++ "Closures disallowed. The following variables occur free: "
       ++ concatMap (spacify . quote . prettyHsx) freeVariableNames
 
+merge_collision fn_str x y
+    = "Internal Error (" ++ fn_str ++ "): Merge collision between " 
+      ++ quote x ++ " and " ++ quote y ++ "."
+
 identifier_collision_in_lookup curModule qname foundIdentifiers
     = "Ambiguous occurences found for " ++ quote qname ++ "\n"
       ++ "while trying to look it up in " ++ quote curModule ++ ":\n\n" 
       ++ concatMap (linify . prettyShow' (show qname)) foundIdentifiers
 
-failed_lookup curModule envname globalEnv
-    = "No entry for " ++ quote envname ++ " found in global environment " ++ "\n"
-      ++ "while trying to look it up in " ++ quote curModule ++ ".\n"
+failed_lookup lookup_kind_str curModule envname globalEnv
+    = "No entry for the " ++ lookup_kind_str ++ " " ++ quote envname ++ "\n"
+      ++ "found in global environment while trying to look it up in " ++ quote curModule ++ ".\n"
       ++ printEnv globalEnv
 
 ambiguous_decl_definitions decls

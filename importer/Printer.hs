@@ -307,7 +307,8 @@ instance Printer Isa.TypeSpec where
     pprint' (Isa.TypeSpec [] tycon)
         = pprint' tycon
     pprint' (Isa.TypeSpec tyvars tycon)
-        = let tyvars' = parens . hsep . punctuate comma . accentuate apostroph $ map pprint' tyvars
+        = let tyvars' = parens . hsep . punctuate comma . accentuate apostroph $ 
+                        map pprint' tyvars
           in tyvars' <+> pprint' tycon
 
 instance Printer Isa.Name where
@@ -531,7 +532,8 @@ isUnaryOp name lookupFn
 
 lookupIdentifier :: Isa.Theory -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
 lookupIdentifier thy n globalEnv
-    = Env.lookup (Env.fromIsa thy) (Env.fromIsa n) globalEnv
+    = Env.lookupConstant (Env.fromIsa thy) (Env.fromIsa n) globalEnv
+
 
 lookupImports :: Isa.Theory -> Env.GlobalE -> [Isa.Theory]
 lookupImports thy globalEnv

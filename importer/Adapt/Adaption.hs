@@ -4,7 +4,7 @@
 
 module Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit) where
 
-import Maybe (fromJust, fromMaybe, isJust)
+import Maybe
 import List (partition)
 
 import Control.Monad.State
@@ -103,11 +103,23 @@ runAdaption oldEnv newEnv tbl adaption
                                             currentModuleID  = Nothing 
                                           })
 
+
+qualifyConstantName :: Env.GlobalE -> Env.ModuleID -> Env.EnvName -> Env.EnvName
+qualifyConstantName globalEnv mID name
+    = fromMaybe (Env.qualifyEnvName mID name)
+        $ Env.resolveConstantName globalEnv mID name
+
+qualifyTypeName :: Env.GlobalE -> Env.ModuleID -> Env.EnvName -> Env.EnvName
+qualifyTypeName globalEnv mID name
+    = fromMaybe (Env.qualifyEnvName mID name)
+        $ Env.resolveTypeName globalEnv mID name
+
+
 adaptGlobalEnv :: Env.GlobalE -> AdaptionTable -> Env.GlobalE
 adaptGlobalEnv env tbl
     = Env.updateGlobalEnv 
         (\n -> case translateName tbl n of 
-                 Just new_id -> Just new_id
+                 Just new_id -> [new_id]
                  Nothing     -> adapt_type_in_identifier env tbl n)
         env
 
@@ -121,22 +133,23 @@ translateIdentifier tbl id
         Nothing     -> id
         Just new_id -> new_id
 
-adapt_type_in_identifier :: Env.GlobalE -> AdaptionTable -> Env.EnvName -> Maybe Env.Identifier
+adapt_type_in_identifier :: Env.GlobalE -> AdaptionTable -> Env.EnvName -> [Env.Identifier]
 adapt_type_in_identifier globalEnv tbl n@(Env.EnvQualName mID _)
-    = do let old_id       = Env.lookup_OrLose mID n globalEnv
-         let old_lexinfo  = Env.lexInfoOf old_id
-         let old_type     = Env.typeOf old_lexinfo
-         new_type <- translateEnvType tbl (qualifier (Env.moduleOf old_lexinfo)) old_type
-         return $ Env.updateIdentifier old_id (old_lexinfo {Env.typeOf = new_type})
-    where qualifier mID n
-              = case Env.lookup mID n globalEnv of
-                  Nothing -> Env.qualifyEnvName mID n
-                  Just id -> Env.identifier2name id 
+    = let old_ids      = Env.lookupIdentifiers_OrLose mID n globalEnv
+          old_lexinfos = map Env.lexInfoOf old_ids
+          old_types    = map Env.typeOf old_lexinfos
+          new_types    = catMaybes (zipWith translate old_types old_lexinfos)
+          new_lexinfos = zipWith (\t lxinf -> lxinf {Env.typeOf = t}) new_types old_lexinfos
+      in 
+        zipWith Env.updateIdentifier old_ids new_lexinfos
+    where 
+      translate typ lexinfo
+          = translateEnvType tbl (qualifyTypeName globalEnv (Env.moduleOf lexinfo)) typ
 
 translateEnvType :: AdaptionTable -> (Env.EnvName -> Env.EnvName) -> Env.EnvType -> Maybe Env.EnvType
 translateEnvType (AdaptionTable mappings) qualify typ
-    = let type_renams  = filter (Env.isType . fst) mappings
-          type_renams' = assert (all (Env.isType . snd) type_renams) 
+    = let type_renams  = filter (Env.isData . fst) mappings
+          type_renams' = assert (all (Env.isData . snd) type_renams) 
                            $ map (\(t1,t2) -> (Env.identifier2name t1, Env.identifier2name t2)) 
                                  type_renams
       in case runState (translate type_renams' typ) False of
@@ -166,11 +179,11 @@ adaptEnvName n
          tbl      <- query adaptionTable
          oldEnv   <- query oldGlobalEnv
          newEnv   <- query adaptedGlobalEnv
-         case Env.lookup mID n oldEnv of
+         case Env.lookupConstant mID n oldEnv of
            Nothing -> return n
            Just id -> let new_id       = translateIdentifier tbl id
                           new_id_name  = Env.identifier2name new_id
-                      in assert (isJust (Env.lookup mID new_id_name newEnv))
+                      in assert (isJust (Env.lookupConstant mID new_id_name newEnv))
                            $ return new_id_name
 
 adaptEnvType :: Env.EnvType -> AdaptM Env.EnvType
@@ -178,10 +191,7 @@ adaptEnvType t
     = do Just mID <- query currentModuleID
          tbl      <- query adaptionTable
          oldEnv   <- query oldGlobalEnv
-         let qualify n
-              = case Env.lookup mID n oldEnv of
-                  Nothing -> Env.qualifyEnvName mID n
-                  Just id -> Env.identifier2name id 
+         let qualify n = qualifyTypeName oldEnv mID n
          return (fromMaybe t (translateEnvType tbl qualify t))
 
 adaptName :: Isa.Name -> AdaptM Isa.Name

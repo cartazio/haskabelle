@@ -70,8 +70,9 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
       extractDefNames globalEnv (HsModule _ m _ _ decls)
           = map (\n -> let m' = Env.fromHsk m
                            n' = Env.fromHsk n
-                           id = Env.lookup_OrLose m' n' globalEnv
-                       in Env.nameOf (Env.lexInfoOf id))
+                       in case Env.resolveEnvName_OrLose globalEnv m' n' of
+                            Env.EnvQualName _ s -> s
+                            Env.EnvUnqualName s -> s)
               $ concatMap extractBindingNs decls
 
 
@@ -619,17 +620,18 @@ normalizeAssociativity (HsAssocNone) = HsAssocLeft -- as specified in Haskell98.
 normalizeAssociativity etc = etc
 
 
-lookupIdentifier :: HsQName -> ContextM (Maybe Env.Identifier)
-lookupIdentifier qname
+lookupConstant :: HsQName -> ContextM (Maybe Env.Identifier)
+lookupConstant qname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
-         return (Env.lookup (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
+         return (Env.lookupConstant (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
 
 lookupInfixOp :: HsQOp -> ContextM (HsAssoc, Int)
 lookupInfixOp qop
-    = do identifier <- lookupIdentifier (qop2name qop)
+    = do identifier <- lookupConstant (qop2name qop)
          case identifier of
-           Just (Env.InfixOp _ envassoc prio) -> return (Env.toHsk envassoc, prio)
+           Just (Env.Constant (Env.InfixOp _ envassoc prio)) 
+                   -> return (Env.toHsk envassoc, prio)
            Nothing -> do globalEnv <- queryContext globalEnv;
                          warn (Msg.missing_infix_decl qop globalEnv)
                          return (HsAssocLeft, 9) -- default values in Haskell98
@@ -638,7 +640,7 @@ lookupInfixOp qop
 
 lookupType :: HsQName -> ContextM (Maybe HsType)
 lookupType fname
-    = do identifier <- lookupIdentifier fname
+    = do identifier <- lookupConstant fname -- we're interested in the type of a Constant.
          case identifier of
            Nothing -> return Nothing
            Just id -> let typ = Env.typeOf (Env.lexInfoOf id) 

@@ -76,15 +76,15 @@ parseRawIdentifier string
 
 makeIdentifier :: OpKind -> Env.ModuleID -> Env.IdentifierID -> Env.EnvType -> Env.Identifier
 makeIdentifier Variable m identifier t
-    = Env.Variable $ Env.makeLexInfo m identifier t
+    = Env.Constant $ Env.Variable $ Env.makeLexInfo m identifier t
 makeIdentifier Function m identifier t
-    = Env.Function $ Env.makeLexInfo m identifier t
+    = Env.Constant $ Env.Function $ Env.makeLexInfo m identifier t
 makeIdentifier (UnaryOp prio) m identifier t
-    = Env.UnaryOp (Env.makeLexInfo m identifier t) prio
+    = Env.Constant $ Env.UnaryOp (Env.makeLexInfo m identifier t) prio
 makeIdentifier (InfixOp assoc prio) m identifier t
-    = Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
+    = Env.Constant $ Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
 makeIdentifier Type m identifier t
-    = Env.Type (Env.makeLexInfo m identifier t) []
+    = Env.Type $ Env.Data (Env.makeLexInfo m identifier t) []
 
 transformAssoc :: Assoc -> Env.EnvAssoc
 transformAssoc RightAssoc = Env.EnvAssocRight
