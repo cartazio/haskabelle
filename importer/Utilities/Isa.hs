@@ -50,8 +50,7 @@ alphaConvertTerm thy alist term = aconvert (canonicalizeRenamings thy alist) ter
                         -- We remember all currently bound variables in a state.
                         = flip runState []
                             $ foldM (\r (p, t) 
-                                         -> do let new_bound_vs = [ canonicalize thy n 
-                                                                        | Var n <- universeBi p]
+                                         -> do let new_bound_vs = map (canonicalize thy) (pat_to_boundNs p)
                                                old_bound_vs <- get
                                                let boundvs = new_bound_vs ++ old_bound_vs
                                                put boundvs
@@ -77,9 +76,13 @@ alphaConvertTerm thy alist term = aconvert (canonicalizeRenamings thy alist) ter
               Case term matches
                   -> Case (aconvert alist term) (map cnv matches)
                       where cnv (pat, term)
-                                = let boundvs = [ canonicalize thy n | Var n <- universeBi pat]
+                                = let boundvs = map (canonicalize thy) (pat_to_boundNs pat)
                                   in (pat, aconvert (shadow boundvs alist) term)
 
+pat_to_boundNs (Var n)           = [n]
+pat_to_boundNs (App p1 p2)       = pat_to_boundNs p1 ++ pat_to_boundNs p2
+pat_to_boundNs (Parenthesized p) = pat_to_boundNs p
+pat_to_boundNs _                 = []
 
 canonicalizeRenamings thy renamings
     = map (\(k,v) -> (canonicalize thy k, v)) renamings
