@@ -75,9 +75,10 @@ data TypeSig = TypeSig Name Type
   deriving (Show, Eq, Data, Typeable)
 
 data Type = TyVar VarName
+          | TyScheme [(VarName, [ClassName])] Type
           | TyCon ConName [Type]
           | TyFun Type Type
-          | TyTuple [Type]
+          | TyTuple [Type] -- FIXME: unused
           | TyNone
   deriving (Show, Eq, Data, Typeable)
 

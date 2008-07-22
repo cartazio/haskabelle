@@ -31,6 +31,7 @@ data EnvType = EnvTyVar EnvName
              | EnvTyCon EnvName [EnvType]
              | EnvTyFun EnvType EnvType
              | EnvTyTuple [EnvType]
+             | EnvTyScheme [(EnvName, [EnvName])] EnvType
              | EnvTyNone
   deriving (Eq, Ord, Show)
 
@@ -90,7 +91,7 @@ data Constant = Variable LexInfo
               | UnaryOp  LexInfo Int
               | InfixOp  LexInfo EnvAssoc Int
               | Class    LexInfo ClassInfo
-              | TypeAnnotation LexInfo
+              | TypeAnnotation LexInfo 
   deriving (Eq, Ord, Show)
 
 data Type = Data LexInfo [Constant] -- Type lexinfo [constructors]
@@ -251,7 +252,15 @@ instance Hsk2Env HsType EnvType where
                                         type2' = fromHsk type2
                                     in EnvTyFun type1' type2'
 
-    fromHsk (HsTyForall (Just tyvars) [] typ) = fromHsk typ
+    fromHsk (HsTyForall _ [] typ)  = fromHsk typ
+    fromHsk (HsTyForall _ ctx typ) = EnvTyScheme (frobContext ctx) (fromHsk typ)
+        where frobContext [] = []
+              frobContext (HsClassA classqN tys : rest_ctx)
+                  = assert (all isTyVar tys) $
+                    groupAlist [ (fromHsk tyvarN, fromHsk classqN) | HsTyVar tyvarN <- tys ]
+                    ++ frobContext rest_ctx
+              isTyVar (HsTyVar _) = True
+              isTyVar _           = False
 
     -- Types aren't curried or partially appliable in HOL, so we must pull a nested
     -- chain of type application inside out:
@@ -386,10 +395,10 @@ mergeConstants c1 c2
       $ let merge c1 c2 
                 = case (c1, c2) of
                     -- Update saved types from explicit type annotations:
-                    (Variable i,       TypeAnnotation ann) -> Just $ Variable (update i ann)
-                    (Function i,       TypeAnnotation ann) -> Just $ Function (update i ann)
-                    (UnaryOp  i p,     TypeAnnotation ann) -> Just $ UnaryOp  (update i ann) p
-                    (InfixOp  i a p,   TypeAnnotation ann) -> Just $ InfixOp  (update i ann) a p
+                    (Variable i,            TypeAnnotation ann)   -> Just $ Variable (update i ann)
+                    (Function i,            TypeAnnotation ann)   -> Just $ Function (update i ann)
+                    (UnaryOp  i p,          TypeAnnotation ann)   -> Just $ UnaryOp  (update i ann) p
+                    (InfixOp  i a p,        TypeAnnotation ann)   -> Just $ InfixOp  (update i ann) a p
                     (_,_) -> Nothing
         in case merge c1 c2 of { Just c' -> Just c'; Nothing -> merge c2 c1 }
     where 
@@ -398,6 +407,7 @@ mergeConstants c1 c2
       update lexinfo typ    -- Cannot merge + internal inconsistency.
           = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
                    ++ " and `" ++ show typ ++ "'.")
+
 
 mergeLexEnvs (LexEnv cmap1 tmap1) (LexEnv cmap2 tmap2)
     = LexEnv (Map.unionWith constant_merger cmap1 cmap2)

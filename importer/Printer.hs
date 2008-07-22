@@ -9,7 +9,7 @@ module Importer.Printer where
 import Maybe
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, renameTyVarInType, 
+import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, 
                                mk_InstanceCmd_name)
 
 import qualified Importer.IsaSyntax as Isa
@@ -28,6 +28,7 @@ data PPState = PPState { globalEnv        :: Env.GlobalE,
                          currentTheory    :: Isa.Theory,
                          -- Are we in an Infix Application?
                          currentAppFlavor :: Maybe AppFlavor,
+                         currentTyScheme  :: [(Isa.Name, [Isa.Name])],
                          -- If True, we're already in doubly-quoted section.
                          withinHOL        :: Bool
                        }
@@ -37,6 +38,7 @@ data DocM v = DocM (PPState -> (v, PPState))
 emptyPPState = PPState { globalEnv = Env.initialGlobalEnv,
                          currentTheory = Isa.Theory "Scratch",
                          currentAppFlavor = Nothing,
+                         currentTyScheme = [],
                          withinHOL = False
                        }
 
@@ -163,6 +165,14 @@ withinApplication app d
          updatePP (\pps -> pps { currentAppFlavor = Just app })
          result <- d
          updatePP (\pps -> pps { currentAppFlavor = old_app })
+         return result
+
+withTyScheme :: [(Isa.Name, [Isa.Name])] -> Doc -> Doc
+withTyScheme ctx d
+    = do old_ctx <- queryPP (\pps -> currentTyScheme pps)
+         updatePP (\pps -> pps { currentTyScheme = ctx })
+         result <- d
+         updatePP (\pps -> pps { currentTyScheme = old_ctx })
          return result
 
 comment :: Doc -> Doc
@@ -304,8 +314,7 @@ instance Printer Isa.Cmd where
                 text "end")
         where
           renameInstanceCmd thy t c
-              = let renams = map (\old_name -> (old_name, mk_InstanceCmd_name old_name t))
-                                 (namesFromIsaCmd c)
+              = let renams = [ (n, mk_InstanceCmd_name n t) | n <- namesFromIsaCmd c ]
                 in renameIsaCmd thy renams c
  
     pprint' (Isa.InfixDeclCmd op assoc prio)
@@ -344,13 +353,25 @@ pprintName n@(Isa.Name str)
 
 instance Printer Isa.Type where
     pprint' (Isa.TyNone)      = text ""
-    pprint' (Isa.TyVar vname) = apostroph <> pprint' vname
+    pprint' (Isa.TyVar vname) 
+        = do alist <- queryPP currentTyScheme
+             let tyvar_doc = apostroph <> pprint' vname
+             case lookup vname alist of
+               Nothing       -> tyvar_doc
+               Just [classN] -> parens (tyvar_doc <+> text "::" <+> pprint' classN)
+               Just classNs  
+                   -> parens $ tyvar_doc <+> 
+                               text "::" <+> 
+                               (braces . vcat . punctuate comma . map pprint' $ classNs)
 
     pprint' (Isa.TyCon cname []) = pprint' cname 
     pprint' (Isa.TyCon cname tyvars) 
         = do maybeWithinHOL $
                hsep (map pp tyvars) <+> pprint' cname
           where pp tyvar = parensIf (isCompoundType tyvar) (pprint' tyvar)
+
+    pprint' (Isa.TyScheme [] t)  = pprint' t
+    pprint' (Isa.TyScheme ctx t) = withTyScheme ctx (pprint' t)
 
     pprint' (Isa.TyFun t1 t2)
         = maybeWithinHOL $

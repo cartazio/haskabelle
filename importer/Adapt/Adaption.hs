@@ -172,6 +172,13 @@ translateEnvType (AdaptionTable mappings) qualify typ
                                               return (Env.EnvTyFun t1' t2')
                      Env.EnvTyTuple ts  -> do ts' <- mapM (translate alist) ts
                                               return (Env.EnvTyTuple ts')
+                     Env.EnvTyScheme ctx t
+                        -> do let (tyvarNs, classNss) = unzip ctx
+                              tyvarNs'  <- mapM transl tyvarNs
+                              classNss' <- mapM (mapM transl) classNss
+                              t'        <- translate alist t
+                              let ctx'   = zip tyvarNs' classNss'
+                              return (Env.EnvTyScheme ctx' t')
 
 adaptEnvName :: Env.EnvName -> AdaptM Env.EnvName
 adaptEnvName n 

@@ -103,7 +103,12 @@ delocalize_HsDecl decl  = assert (check decl) $ return (decl,[])
 
 delocalize_HsClassDecl (HsClsDecl decl) 
     = do (decl', localdecls) <- delocalize_HsDecl decl
-         return (HsClsDecl decl', localdecls)
+         -- DECL is a TypeSig here (will be checked later in Convert.hs),
+         -- we explicitly put it out to make the later process be aware
+         -- of its presence. (The stuff defined by a Class will be used
+         -- by other functions, and the later process will barf on things
+         -- it doesn't know about.
+         return (HsClsDecl decl', localdecls ++ [decl'])
 
 delocalize_HsInstDecl (HsInsDecl decl)
     = do (decl', localdecls) <- delocalize_HsDecl decl
