@@ -1,15 +1,3 @@
-Arbeitsplan Haskell-Importer:
-
-* lauffähiges, konsistentes Repository                  Mitte April     Tobias
-* ausführlicheres README mit Installationsanweisungen
-    und Benutzung                                       Ende April      Tobias
-* Modulkommentare für alle Files                        Ende April      Tobias
-* Dokumentation der Architekur und Grundlagen
-    (im Repository)                                     Mitte Mai       Tobias
-* Behandlung von Typklassen                             Ende Mai        Tobias
-* Behandlung von Literalen (Numerale, Strings)          Ende Juni       Tobias
-
-
 BUG / TODO Liste:
 
 * Type classes
