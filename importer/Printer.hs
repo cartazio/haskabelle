@@ -24,15 +24,21 @@ import qualified Text.PrettyPrint as P
 
 
 
-data PPState = PPState { globalEnv     :: Env.GlobalE,
-                         currentTheory :: Isa.Theory,
-                         withinHOL     :: Bool}
+data PPState = PPState { globalEnv        :: Env.GlobalE,
+                         currentTheory    :: Isa.Theory,
+                         -- Are we in an Infix Application?
+                         currentAppFlavor :: Maybe AppFlavor,
+                         -- If True, we're already in doubly-quoted section.
+                         withinHOL        :: Bool
+                       }
 
 data DocM v = DocM (PPState -> (v, PPState))
 
-emptyPPState = PPState { globalEnv = Env.initialGlobalEnv, 
-                         currentTheory = Isa.Theory "Scratch", 
-                         withinHOL = False }
+emptyPPState = PPState { globalEnv = Env.initialGlobalEnv,
+                         currentTheory = Isa.Theory "Scratch",
+                         currentAppFlavor = Nothing,
+                         withinHOL = False
+                       }
 
 instance Monad DocM where
     return value = DocM (\state -> (value, state))
@@ -151,6 +157,13 @@ withinHOL_if pred doc
                                     return result
     | otherwise = doc
 
+withinApplication :: AppFlavor -> Doc -> Doc
+withinApplication app d
+    = do old_app <- queryPP (\pps -> currentAppFlavor pps)
+         updatePP (\pps -> pps { currentAppFlavor = Just app })
+         result <- d
+         updatePP (\pps -> pps { currentAppFlavor = old_app })
+         return result
 
 comment :: Doc -> Doc
 comment d = text "(*" <+> d <+> text "*)"
@@ -320,10 +333,13 @@ pprintName n@(Isa.Name str)
     = withinHOL_if (isReservedKeyword str) 
       $ do thy <- queryPP currentTheory 
            env <- queryPP globalEnv
-           let lookup = (\n -> lookupIdentifier thy n env)
-           if (isInfixOp n lookup || isUnaryOp n lookup)
-              then parens $ text "op" <+> text str
-              else text str
+           app <- queryPP currentAppFlavor
+           case app of
+             Just (InfixApp _ _ _) -> text str
+             _  -> let lookup = (\n -> lookupIdentifier thy n env)
+                   in if (isInfixOp n lookup || isUnaryOp n lookup)
+                      then parens $ text "op" <+> text str
+                      else text str
 
 
 instance Printer Isa.Type where
@@ -367,14 +383,16 @@ instance Printer Isa.Term where
         = do thy <- queryPP currentTheory 
              env <- queryPP globalEnv
              let lookup = (\n -> lookupIdentifier thy n env)
-             case categorizeApp app lookup of
-               ListApp  l      -> pprintAsList l
-               TupleApp l      -> pprintAsTuple l
-               InfixApp x op y -> let x' = parensIf (isCompound x lookup) $ pprint' x
-                                      y' = parensIf (isCompound y lookup) $ pprint' y
-                                  in  x' <+> pprint' op <+> y'
-               FunApp          -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
-               UnaryOpApp      -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
+             let flavor = categorizeApp app lookup
+             withinApplication flavor $
+               case flavor of
+                 ListApp  l      -> pprintAsList l
+                 TupleApp l      -> pprintAsTuple l
+                 InfixApp x op y -> let x' = parensIf (isCompound x lookup) $ pprint' x
+                                        y' = parensIf (isCompound y lookup) $ pprint' y
+                                    in  x' <+> pprint' op <+> y'
+                 FunApp          -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
+                 UnaryOpApp      -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
 
     pprint' (Isa.If t1 t2 t3)
         = fsep [text "if"   <+> pprint' t1,
