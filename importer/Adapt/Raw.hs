@@ -40,7 +40,7 @@ raw_adaption_table = [(Haskell "Prelude.Bool" Type, Isabelle "bool" Type),
   (Haskell "Prelude.fromInteger" Function, Isabelle "Int.ring_1_class.of_int" Function)]
 
 reserved_keywords = ["!", "!!", "%", "(", ")", "+", ",", "--", ".", "..", ":", "::", ";", "<",
-  "<=", "=", "==", "=>", "?", "Isabelle.command", "ML", "ML_command",
+  "<=", "=", "==", "=>", "?", "Isabelle.command", "ML", "ML_command", "distinct",
   "ML_val", "[", "\\<equiv>", "\\<leftharpoondown>", "\\<rightharpoonup>",
   "\\<rightleftharpoons>", "\\<subseteq>", "]", "abbreviation", "advanced",
   "also", "and", "apply", "apply_end", "arities", "assume", "assumes",

@@ -9,7 +9,8 @@ module Importer.Printer where
 import Maybe
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, mk_InstanceCmd_name)
+import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, renameTyVarInType, 
+                               mk_InstanceCmd_name)
 
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.LexEnv as Env
@@ -312,8 +313,17 @@ instance Printer Isa.TypeSpec where
           in tyvars' <+> pprint' tycon
 
 instance Printer Isa.Name where
-    pprint' (Isa.Name str)      = withinHOL_if (isReservedKeyword str) $ text str
-    pprint' (Isa.QName thy str) = withinHOL_if (isReservedKeyword str) $ text str -- FIXME
+    pprint' n@(Isa.Name _)      = pprintName n
+    pprint' (Isa.QName _ str)   = pprintName (Isa.Name str) -- FIXME
+
+pprintName n@(Isa.Name str)
+    = withinHOL_if (isReservedKeyword str) 
+      $ do thy <- queryPP currentTheory 
+           env <- queryPP globalEnv
+           let lookup = (\n -> lookupIdentifier thy n env)
+           if (isInfixOp n lookup || isUnaryOp n lookup)
+              then parens $ text "op" <+> text str
+              else text str
 
 
 instance Printer Isa.Type where

@@ -57,8 +57,15 @@ free_vars_found loc freeVariableNames
       ++ concatMap (spacify . quote . prettyHsx) freeVariableNames
 
 merge_collision fn_str x y
-    = "Internal Error (" ++ fn_str ++ "): Merge collision between " 
-      ++ quote x ++ " and " ++ quote y ++ "."
+    = "Internal Error (" ++ fn_str ++ "): Merge collision between" ++ "\n" 
+      ++ "    " ++ quote x ++ "\n"
+      ++ "and " ++ "\n"
+      ++ "    " ++ quote y ++ "."
+
+found_duplicates str x y
+    = "Found duplicates while " ++ str ++ ": " ++ "\n"
+      ++ "    " ++ quote x ++ "\n"
+      ++ "and " ++ quote y ++ "\n" 
 
 identifier_collision_in_lookup curModule qname foundIdentifiers
     = "Ambiguous occurences found for " ++ quote qname ++ "\n"

@@ -5,13 +5,26 @@ Auxiliary.
 -}
 
 module Importer.Utilities.Isa 
-    (renameIsaCmd, namesFromIsaCmd, mk_InstanceCmd_name) where
+    (renameIsaCmd, namesFromIsaCmd, renameTyVarInType,
+     mk_InstanceCmd_name) where
 
 import Control.Monad.State
 import Maybe
 import Data.Generics.Biplate (universeBi)
 
 import Importer.IsaSyntax
+
+renameTyVarInType :: Theory -> (Name, Name) -> Type -> Type
+renameTyVarInType thy (from, to) typ
+    = let from' = canonicalize thy from
+          to'   = canonicalize thy to
+      in case typ of
+           TyVar vN    -> TyVar (translate thy [(from', to')] vN)
+           TyCon cN ts -> TyCon cN $ map (renameTyVarInType thy (from, to)) ts
+           TyFun t1 t2 -> TyFun (renameTyVarInType thy (from,to) t1) 
+                                (renameTyVarInType thy (from,to) t2)
+           TyTuple ts  -> TyTuple $ map (renameTyVarInType thy (from, to)) ts
+           TyNone      -> TyNone
 
 renameIsaCmd :: Theory -> [(Name, Name)] -> Cmd -> Cmd
 renameIsaCmd thy renamings cmd

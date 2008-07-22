@@ -47,14 +47,14 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
                               adaptionTable
           
           table_env       = makeGlobalEnv_FromAdaptionTable adaptionTable'
-          initial_env     = Env.mergeGlobalEnvs initialGlobalEnv table_env
+          initial_env     = Env.unionGlobalEnvs initialGlobalEnv table_env
 
-          global_env_hsk' = Env.mergeGlobalEnvs global_env_hsk initial_env
+          global_env_hsk' = Env.unionGlobalEnvs global_env_hsk initial_env
           global_env_isa  = adaptGlobalEnv global_env_hsk' adaptionTable'
 
           hskmodules      = map (toHskModule global_env_hsk') hsmodules'
           (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in -- trace (prettyShow' "adaptionTable" adaptionTable) $
+      in -- trace (prettyShow' "global_env_isa" global_env_isa) $
          let r = adaptIsaUnit global_env_hsk' adaptionTable'
                   $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
@@ -317,7 +317,8 @@ instance Convert HsDecl Isa.Cmd where
                       pat'  <- convert pat
                       rhs'  <- convert rhs
                       ftype <- lookupType (UnQual name)
-                      sig'  <- (case ftype of 
+                      sig'  <- -- trace (prettyShow' "ftype" ftype)$
+                               (case ftype of 
                                   Nothing -> return Isa.TyNone
                                   Just t  -> convert' t) >>= (return . Isa.TypeSig name') 
                       return $ Isa.DefinitionCmd name' sig' (pat', rhs')
@@ -348,17 +349,35 @@ instance Convert HsDecl Isa.Cmd where
                        typ'   <- convert typ
                        return (map (flip Isa.TypeSig typ') names')
 
-    convert' (HsInstDecl loc ctx classN tys inst_decls)
+    convert' (HsInstDecl loc ctx classqN tys inst_decls)
         | length tys /= 1          = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
         | not (isTyCon (head tys)) = dieWithLoc loc (Msg.only_specializing_on_tycon_allowed)
         | otherwise
-            = do classN' <- convert classN
-                 type'   <- convert (head tys)
-                 decls'  <- mapM convert (map toHsDecl inst_decls)
-                 return (Isa.InstanceCmd classN' type' decls')
+            = do classqN'   <- convert classqN
+                 type'      <- convert (head tys)
+                 identifier <- lookupConstant classqN
+                 let Env.Constant (Env.Class _ classinfo)  
+                                   = fromJust identifier
+                 let methods       = Env.methodsOf classinfo
+                 let classVarN     = Env.classVarOf classinfo
+                 let inst_envtype  = Env.fromHsk (head tys)
+                 let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
+                 -- Methods must be explicitly annotated in Isar/HOL to keep
+                 -- the ability to resolve the types in all cases.
+                 withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
+                   do decls' <- mapM convert (map toHsDecl inst_decls)
+                      return (Isa.InstanceCmd classqN' type' decls')
         where 
           isTyCon t = case t of { HsTyCon _ -> True; _ -> False }
           toHsDecl (HsInsDecl decl) = decl
+
+          mk_method_annotation :: Env.EnvName -> Env.EnvType -> Env.Identifier -> Env.Identifier
+          mk_method_annotation tyvarN tycon class_method_annot
+              = assert (Env.isTypeAnnotation class_method_annot)
+                  $ let lexinfo = Env.lexInfoOf class_method_annot
+                        typ     = Env.typeOf lexinfo
+                        typ'    = Env.substituteTyVars [(Env.EnvTyVar tyvarN, tycon)] typ
+                    in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typeOf = typ' }))
 
     convert' junk = pattern_match_exhausted "HsDecl -> Isa.Cmd" junk
 

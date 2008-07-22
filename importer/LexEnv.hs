@@ -53,6 +53,23 @@ unqualifyEnvName :: ModuleID -> EnvName -> EnvName
 unqualifyEnvName mID (EnvQualName mID' id) = assert (mID == mID') $ EnvUnqualName id
 unqualifyEnvName mID n@(EnvUnqualName _)   = n
 
+substituteTyVars :: [(EnvType, EnvType)] -> EnvType -> EnvType
+substituteTyVars alist typ
+    = let lookup' = Prelude.lookup in
+      case typ of
+        t@(EnvTyVar _)     -> case lookup' t alist of { Just t' -> t'; Nothing -> t }
+        t@(EnvTyCon cN ts) -> case lookup' t alist of
+                                Just t' -> t'
+                                Nothing -> EnvTyCon cN (map (substituteTyVars alist) ts)
+        t@(EnvTyFun t1 t2) -> case lookup' t alist of
+                                Just t' -> t'
+                                Nothing -> EnvTyFun (substituteTyVars alist t1)
+                                                    (substituteTyVars alist t2)
+        t@(EnvTyTuple ts)  -> case lookup' t alist of
+                                Just t' -> t'
+                                Nothing -> EnvTyTuple (map (substituteTyVars alist) ts)
+        t@(EnvTyNone)      -> case lookup' t alist of { Just t' -> t'; Nothing -> t }
+
 
 data LexInfo = LexInfo { 
                         nameOf   :: IdentifierID,
@@ -61,18 +78,25 @@ data LexInfo = LexInfo {
                        }
   deriving (Eq, Ord, Show)
 
+data ClassInfo = ClassInfo {
+                            superclassesOf :: [EnvName],
+                            methodsOf      :: [Identifier],
+                            classVarOf     :: EnvName
+                           }
+  deriving (Eq, Ord, Show)
+
 data Constant = Variable LexInfo
               | Function LexInfo
               | UnaryOp  LexInfo Int
               | InfixOp  LexInfo EnvAssoc Int
-              | Class    LexInfo [EnvName]
+              | Class    LexInfo ClassInfo
               | TypeAnnotation LexInfo
   deriving (Eq, Ord, Show)
 
 data Type = Data LexInfo [Constant] -- Type lexinfo [constructors]
   deriving (Eq, Ord, Show)
 
-data Identifier = Constant Constant 
+data Identifier = Constant Constant
                 | Type Type
   deriving (Eq, Ord, Show)
 
@@ -84,8 +108,15 @@ makeLexInfo moduleID identifierID t
                   typeOf   = t,
                   moduleOf = mID }
 
-isVariable, isFunction, isUnaryOp, isInfixOp :: Identifier -> Bool
-isTypeAnnotation, isData                     :: Identifier -> Bool
+makeClassInfo :: [EnvName] -> [Identifier] -> EnvName -> ClassInfo
+makeClassInfo superclasses methods classVarName
+    = assert (all isTypeAnnotation methods)
+        $ ClassInfo { superclassesOf = superclasses,
+                      methodsOf      = methods,
+                      classVarOf     = classVarName }
+
+isVariable, isFunction, isUnaryOp, isInfixOp  :: Identifier -> Bool
+isTypeAnnotation, isClass, isData :: Identifier -> Bool
 
 isVariable (Constant (Variable _))   = True
 isVariable _                         = False
@@ -101,6 +132,9 @@ isInfixOp _                          = False
 
 isTypeAnnotation (Constant (TypeAnnotation _)) = True
 isTypeAnnotation _                             = False
+
+isClass (Constant (Class _ _))       = True
+isClass _                            = False
 
 isData (Type (Data _ _)) = True
 isData _                 = False
@@ -127,11 +161,12 @@ updateIdentifier identifier lexinfo
         Constant c -> Constant (updateConstant c lexinfo)
         Type t     -> Type     (updateType t lexinfo)
     where 
-      updateConstant (Variable _) lexinfo       = Variable lexinfo
-      updateConstant (Function _) lexinfo       = Function lexinfo
-      updateConstant (UnaryOp _ p) lexinfo      = UnaryOp lexinfo p
-      updateConstant (InfixOp _ a p) lexinfo    = InfixOp lexinfo a p
-      updateConstant (TypeAnnotation _) lexinfo = TypeAnnotation lexinfo
+      updateConstant (Variable _) lexinfo        = Variable lexinfo
+      updateConstant (Function _) lexinfo        = Function lexinfo
+      updateConstant (UnaryOp _ p) lexinfo       = UnaryOp lexinfo p
+      updateConstant (InfixOp _ a p) lexinfo     = InfixOp lexinfo a p
+      updateConstant (TypeAnnotation _) lexinfo  = TypeAnnotation lexinfo
+      updateConstant (Class _ classinfo) lexinfo = Class lexinfo classinfo
 
       updateType (Data _ conNs) lexinfo = Data lexinfo conNs
 
@@ -342,26 +377,27 @@ mergeConstants_OrFail c1 c2
 
 mergeTypes_OrFail :: Type -> Type -> Type
 mergeTypes_OrFail t1 t2
-    = error (Msg.merge_collision "mergeTypes_OrFail" t1 t2)
+    | t1 == t2  = t1
+    | otherwise = error (Msg.merge_collision "mergeTypes_OrFail" t1 t2)
 
 mergeConstants :: Constant -> Constant -> Maybe Constant
 mergeConstants c1 c2
     = assert (constant2name c1 == constant2name c2)
-      $ case (c1, c2) of
-          (Variable i,       TypeAnnotation ann) -> Just $ Variable (update i ann)
-          (Function i,       TypeAnnotation ann) -> Just $ Function (update i ann)
-          (UnaryOp  i p,     TypeAnnotation ann) -> Just $ UnaryOp  (update i ann) p
-          (InfixOp  i a p,   TypeAnnotation ann) -> Just $ InfixOp  (update i ann) a p
-          (TypeAnnotation ann, Variable i)       -> Just $ Variable (update i ann)
-          (TypeAnnotation ann, Function i)       -> Just $ Function (update i ann)
-          (TypeAnnotation ann, UnaryOp  i p)     -> Just $ UnaryOp  (update i ann) p
-          (TypeAnnotation ann, InfixOp  i a p)   -> Just $ InfixOp  (update i ann) a p
-          (_,_) -> Nothing
-    where update lexinfo@(LexInfo { typeOf = EnvTyNone }) (LexInfo { typeOf = typ })
-              = lexinfo { typeOf = typ }
-          update lexinfo typ    -- Cannot merge + internal inconsistency.
-              = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
-                       ++ " and `" ++ show typ ++ "'.")
+      $ let merge c1 c2 
+                = case (c1, c2) of
+                    -- Update saved types from explicit type annotations:
+                    (Variable i,       TypeAnnotation ann) -> Just $ Variable (update i ann)
+                    (Function i,       TypeAnnotation ann) -> Just $ Function (update i ann)
+                    (UnaryOp  i p,     TypeAnnotation ann) -> Just $ UnaryOp  (update i ann) p
+                    (InfixOp  i a p,   TypeAnnotation ann) -> Just $ InfixOp  (update i ann) a p
+                    (_,_) -> Nothing
+        in case merge c1 c2 of { Just c' -> Just c'; Nothing -> merge c2 c1 }
+    where 
+      update lexinfo@(LexInfo { typeOf = EnvTyNone }) (LexInfo { typeOf = typ })
+          = lexinfo { typeOf = typ }
+      update lexinfo typ    -- Cannot merge + internal inconsistency.
+          = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
+                   ++ " and `" ++ show typ ++ "'.")
 
 mergeLexEnvs (LexEnv cmap1 tmap1) (LexEnv cmap2 tmap2)
     = LexEnv (Map.unionWith constant_merger cmap1 cmap2)
@@ -421,12 +457,18 @@ computeConstantMappings modul decl
          let con c          = Constant c
          let typ t          = Type t
          case decl of
-           HsPatBind _ _ _ _         -> [con (Variable defaultLexInfo)]
-           HsFunBind _               -> [con (Function defaultLexInfo)]
-           HsInfixDecl _ a p _       -> [con (InfixOp  defaultLexInfo (fromHsk a) p)]
-           HsTypeSig _ _ typ         -> [con (TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ}))]
-           HsClassDecl _ ctx _ _ _ _ -> [con (Class defaultLexInfo $ map fromHsk (extractSuperclassNs ctx))]
-           HsInstDecl  _ _ _ _ _     -> []
+           HsPatBind _ _ _ _           -> [con (Variable defaultLexInfo)]
+           HsFunBind _                 -> [con (Function defaultLexInfo)]
+           HsInfixDecl _ a p _         -> [con (InfixOp  defaultLexInfo (fromHsk a) p)]
+           HsTypeSig _ _ typ           -> [con (TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ}))]
+           HsClassDecl _ ctx _ ns _ ds -> let sups      = map fromHsk (extractSuperclassNs ctx)
+                                              typesigs  = extractMethodSigs ds
+                                              m         = modul
+                                              methods   = concatMap (computeConstantMappings m) typesigs
+                                              -- If length ns > 1, we will die later in Convert.hs anyway.
+                                              classInfo = makeClassInfo sups methods (fromHsk (head ns))
+                                          in [con (Class defaultLexInfo classInfo)]
+           HsInstDecl  _ _ _ _ _       -> []
            HsDataDecl _ _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
                   let tycon = mkTyCon (fromHsk name) tyvarNs
@@ -509,8 +551,10 @@ makeGlobalEnv_fromHsModules ms
                     | m@(HsModule _ modul _ _ _) <- ms ]
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
-mergeGlobalEnvs :: GlobalE -> GlobalE -> GlobalE
-mergeGlobalEnvs (GlobalEnv map1) (GlobalEnv map2)
+-- Left-prioritized union of Global Environments.
+--
+unionGlobalEnvs :: GlobalE -> GlobalE -> GlobalE
+unionGlobalEnvs (GlobalEnv map1) (GlobalEnv map2)
     = GlobalEnv 
         $ Map.unionWithKey
               (\m moduleEnv1 moduleEnv2
@@ -519,7 +563,6 @@ mergeGlobalEnvs (GlobalEnv map1) (GlobalEnv map2)
                       in -- `env1' contains ModuleE that belongs to `map1'.
                          mergeModuleEnvs env1 env2)
               map1 map2
-
 
 findModuleEnv :: ModuleID -> GlobalE -> Maybe ModuleE
 findModuleEnv mID (GlobalEnv globalmap)
@@ -709,7 +752,6 @@ resolveTypeName globalEnv mID name
         Nothing -> Nothing
         Just c  -> Just (identifier2name c)
 
-
 allIdentifiers :: GlobalE -> [Identifier]
 allIdentifiers (GlobalEnv modulemap)
     = concatMap (\(ModuleEnv _ _ _ (LexEnv cmap tmap)) 
@@ -720,12 +762,13 @@ allIdentifiers (GlobalEnv modulemap)
 updateGlobalEnv :: (EnvName -> [Identifier]) -> GlobalE -> GlobalE
 updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
     = let all_ids     = allIdentifiers globalEnv
-          id_alist    = concatMap (\id -> case update (identifier2name id) of 
-                                            []      -> [(id, id)]
-                                            new_ids -> [ (new, id) | new <- new_ids ]) 
-                                  all_ids
-          mod_alist   = nub [ (moduleOf (lexInfoOf n), moduleOf (lexInfoOf o)) | (n, o) <- id_alist ]
-          id_tbl      = Map.fromListWith (failDups "id_tbl")  id_alist   -- Map from new_id  to old_id
+          id_alist    = groupAlist $ concatMap (\id -> case update (identifier2name id) of 
+                                                         []      -> [(id, id)]
+                                                         new_ids -> [ (new, id) | new <- new_ids ])
+                                         all_ids
+          mod_alist   = nub (concat [ [ (moduleOf (lexInfoOf n), (moduleOf (lexInfoOf o))) | o <- os ] 
+                                          | (n, os) <- id_alist ])
+          id_tbl      = Map.fromListWith (failDups "id_tbl")  id_alist   -- Map from new_id  to [old_id]
           mod_tbl     = Map.fromListWith (failDups "mod_tbl") mod_alist  -- Map from new_mID to old_mID
           rev_mod_tbl = Map.fromListWith (failDups "rev_mod_tbl")        -- Map from old_mID to [new_mID]
                           (groupAlist [ (o,n) | (n,o) <- mod_alist ]) 
@@ -752,16 +795,32 @@ updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
           -- as the exported identifiers in the old ModuleE, and all those that
           -- resulted from updating any such identifier.
           recompute_exports new_id
-              = let old_id  = fromJust (Map.lookup new_id id_tbl)
-                    old_mID = (let oldm = moduleOf (lexInfoOf old_id)
-                                   newm = moduleOf (lexInfoOf new_id)
-                               in assert (oldm == fromJust (Map.lookup newm mod_tbl)) oldm)
-                in isExported old_id old_mID globalEnv
+              = or (do old_id  <- fromJust (Map.lookup new_id id_tbl)
+                       old_mID <- (let oldm = moduleOf (lexInfoOf old_id)
+                                       newm = moduleOf (lexInfoOf new_id)
+                                   in assert (oldm == fromJust (Map.lookup newm mod_tbl))
+                                      $ return oldm)
+                       return (isExported old_id old_mID globalEnv))
+
        in 
          makeGlobalEnv recompute_imports recompute_exports (map fst id_alist)
 
-    where failDups str a b = error ("Found duplicates while computing " 
-                                    ++ str ++ ": " ++ show a ++ ", " ++ show b)
+    where failDups str a b = error (Msg.found_duplicates ("computing " ++ str) a b)
+
+augmentGlobalEnv :: GlobalE -> [Identifier] -> GlobalE
+augmentGlobalEnv globalEnv new_identifiers
+    = let all_identifiers        = allIdentifiers globalEnv
+          really_new_identifiers = filter (`notElem` all_identifiers) new_identifiers
+          env1 = makeGlobalEnv (const []) (const True) really_new_identifiers
+          env2 = updateGlobalEnv (\qn@(EnvQualName mID _) 
+                                      -> let old_ids = lookupIdentifiers_OrLose mID qn globalEnv
+                                             new_ids = filter (\id -> qn == identifier2name id) new_identifiers
+                                         in if null new_ids
+                                            then old_ids 
+                                            else old_ids ++ new_ids)
+                      globalEnv
+      in unionGlobalEnvs env2 env1
+
 
 
 -- check_GlobalEnv_Consistency

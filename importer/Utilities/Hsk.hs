@@ -6,8 +6,8 @@ Auxiliary.
 
 module Importer.Utilities.Hsk ( 
   namesFromHsDecl, bindingsFromDecls, bindingsFromPats, 
-  extractBindingNs, extractFreeVarNs, extractSuperclassNs, letify,
-  Renaming, renameFreeVars, renameHsDecl, renameHsPat,
+  extractBindingNs, extractFreeVarNs, extractSuperclassNs, extractMethodSigs,
+  letify, Renaming, renameFreeVars, renameHsDecl, renameHsPat,
   freshIdentifiers, isFreeVar, string2HsName,
   srcloc2string, module2FilePath, isHaskellSourceFile,
   orderDeclsBySourceLine, getSourceLine,
@@ -48,6 +48,11 @@ extractSuperclassNs :: HsContext -> [HsQName]
 extractSuperclassNs ctx = map extract ctx
     where extract (HsClassA qn _) = qn
 
+extractMethodSigs :: [HsClassDecl] -> [HsDecl]
+extractMethodSigs class_decls
+    = filter isTypeSig (map (\(HsClsDecl d) -> d) class_decls)
+    where isTypeSig (HsTypeSig _ _ _) = True
+          isTypeSig _                 = False
 
 namesFromHsDecl :: HsDecl -> Maybe [HsQName]
 
@@ -280,6 +285,12 @@ renameHsDecl renams (HsFunBind matchs)
 
 renameHsDecl renams (HsPatBind loc pat rhs wbinds)
     = HsPatBind loc (renameHsPat renams pat) rhs wbinds
+
+renameHsDecl renams (HsClassDecl loc ctx classN varNs fundeps class_decls)
+    = HsClassDecl loc ctx (translate renams classN) varNs fundeps class_decls
+
+renameHsDecl renams (HsInstDecl loc ctx classqN tys inst_decls)
+    = HsInstDecl loc ctx (qtranslate renams classqN) tys inst_decls
 
 renameHsDecl _ junk = error ("renameHsDecl: Fall through: " ++ show junk)
 
