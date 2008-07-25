@@ -388,7 +388,8 @@ instance Printer Isa.TypeSig where
 
 instance Printer Isa.Literal where
     pprint' (Isa.Int i)      = integer i
-    pprint' (Isa.String str) = doubleQuotes $ text str
+    pprint' (Isa.Char ch)    = text "CHR " <+> quotes (quotes (char ch))
+    pprint' (Isa.String str) = quotes . quotes . text $ str
 
 instance Printer Isa.Term where
     pprint' (Isa.Var vname)         = pprint' vname

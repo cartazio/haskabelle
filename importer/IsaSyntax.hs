@@ -85,7 +85,7 @@ data Type = TyVar VarName
 data ConSpec = Constructor ConName [Type]
   deriving (Show, Eq, Data, Typeable)
 
-data Literal = Int Integer | String String
+data Literal = Int Integer | Char Char | String String
   deriving (Show, Eq, Data, Typeable)
 
 

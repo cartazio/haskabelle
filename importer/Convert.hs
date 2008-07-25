@@ -236,6 +236,7 @@ instance Convert HsOp Isa.Name where
 
 instance Convert HsLiteral Isa.Literal where
     convert' (HsInt i)      = return (Isa.Int i)
+    convert' (HsChar ch)    = return (Isa.Char ch)
     convert' (HsString str) = return (Isa.String str)
     convert' junk           = pattern_match_exhausted "HsLiteral -> Isa.Literal" junk
 
@@ -437,7 +438,7 @@ instance Convert HsExp Isa.Term where
     convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
     convert' (HsWildCard)      = return (Isa.Var (Isa.Name "_"))
-    convert' (HPNegApp exp)    = convert (negate exp)
+    convert' (HsNegApp exp)    = convert (negate exp)
                                where negate e = HsApp (HsVar (Qual prelude (HsIdent "negate"))) e
                                      prelude  = Module "Prelude"
 
