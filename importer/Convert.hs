@@ -17,8 +17,7 @@ import Maybe
 import Control.Monad.State
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Hsk (extractBindingNs, extractSuperclassNs, 
-                               namesFromHsDecl, renameHsDecl, srcloc2string)
+import Importer.Utilities.Hsk (extractBindingNs, extractSuperclassNs, srcloc2string)
 import Importer.Utilities.Gensym
 import Importer.Preprocess
 import Importer.ConversionUnit
@@ -339,11 +338,9 @@ instance Convert HsDecl Isa.Cmd where
               | not (null fundeps)         = dieWithLoc loc (Msg.no_fundeps_in_class_decl)
               | not (all isTypeSig decls)  = dieWithLoc loc (Msg.no_default_methods_in_class_decl)
               | otherwise                  = cont
-              
           isTypeSig decl = case decl of 
                              HsClsDecl (HsTypeSig _ _ _) -> True
                              _                           -> False
-
           convertToTypeSig (HsClsDecl (HsTypeSig _ names typ))
                   = do names' <- mapM convert names
                        typ'   <- convert typ
@@ -440,6 +437,9 @@ instance Convert HsExp Isa.Term where
     convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
     convert' (HsWildCard)      = return (Isa.Var (Isa.Name "_"))
+    convert' (HPNegApp exp)    = convert (negate exp)
+                               where negate e = HsApp (HsVar (Qual prelude (HsIdent "negate"))) e
+                                     prelude  = Module "Prelude"
 
     convert' (HsList [])       = do list_datacon_name <- convert (Special HsListCon)
                                     return (Isa.Var list_datacon_name)

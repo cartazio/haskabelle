@@ -1,7 +1,5 @@
 BUG / TODO Liste:
 
-* Type classes
-
 * Typen in instantiations, alpha -> "(alpha :: typ)"
 
 * foo :: Context a -> Foo a -> Bar b

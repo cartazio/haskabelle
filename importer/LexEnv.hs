@@ -281,14 +281,22 @@ instance Hsk2Env HsType EnvType where
 
     fromHsk junk = error ("HsType -> EnvType: Fall Through: " ++ prettyShow' "thing" junk)
 
-    toHsk (EnvTyVar n)       = HsTyVar (toHsk n)
-    toHsk (EnvTyTuple types) = HsTyTuple Boxed (map toHsk types)
-    toHsk (EnvTyFun t1 t2)   = HsTyFun (toHsk t1) (toHsk t2)
-    toHsk (EnvTyCon qn [])   = HsTyCon (toHsk qn)
+    toHsk (EnvTyVar n)          = HsTyVar (toHsk n)
+    toHsk (EnvTyTuple types)    = HsTyTuple Boxed (map toHsk types)
+    toHsk (EnvTyFun t1 t2)      = HsTyFun (toHsk t1) (toHsk t2)
+    toHsk (EnvTyCon qn [])      = HsTyCon (toHsk qn)
     toHsk (EnvTyCon qn tyvars)
-        = let tycon'         = toHsk (EnvTyCon qn [])
-              tyvar':tyvars' = map toHsk tyvars
+        = let tycon'            = toHsk (EnvTyCon qn [])
+              tyvar':tyvars'    = map toHsk tyvars
           in foldl HsTyApp (HsTyApp tycon' tyvar') tyvars'
+    toHsk (EnvTyScheme alist t) = HsTyForall Nothing ctx (toHsk t)
+        where
+          revalist = groupAlist 
+                       $ concat [ map (flip (,) tyvarN) classNs | (tyvarN, classNs) <- alist ]
+          ctx      = [ HsClassA (toHsk classN) (map (HsTyVar . toHsk) tyvarNs) 
+                           | (classN, tyvarNs) <- revalist ]
+
+    toHsk junk = error ("EnvType -> HsType: Fall Through: " ++ prettyShow' "thing" junk)
 
 instance Hsk2Env HsExportSpec EnvExport where
     fromHsk (HsEVar qname)        = EnvExportVar   (fromHsk qname)
@@ -339,13 +347,16 @@ instance Isa2Env Isa.Type EnvType where
     fromIsa (Isa.TyTuple types)   = EnvTyTuple (map fromIsa types)
     fromIsa (Isa.TyFun t1 t2)     = EnvTyFun (fromIsa t1) (fromIsa t2)
     fromIsa (Isa.TyCon qn tyvars) = EnvTyCon (fromIsa qn) (map fromIsa tyvars)
+    fromIsa (Isa.TyScheme ctx t)  = EnvTyScheme ctx' (fromIsa t)
+        where ctx' = [ (fromIsa vN, map fromIsa cNs) | (vN, cNs) <- ctx ]
     
     toIsa (EnvTyNone)             = Isa.TyNone
     toIsa (EnvTyVar n)            = Isa.TyVar (toIsa n)
     toIsa (EnvTyTuple types)      = Isa.TyTuple (map toIsa types)
     toIsa (EnvTyFun t1 t2)        = Isa.TyFun (toIsa t1) (toIsa t2)
     toIsa (EnvTyCon qn tyvars)    = Isa.TyCon (toIsa qn) (map toIsa tyvars)
-
+    toIsa (EnvTyScheme ctx t)     = Isa.TyScheme ctx' (toIsa t)
+        where ctx' = [ (toIsa vN, map toIsa cNs) | (vN, cNs) <- ctx ]
 
 data ConKind = DataCon | TypeCon deriving Show
 
@@ -820,11 +831,14 @@ updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
 augmentGlobalEnv :: GlobalE -> [Identifier] -> GlobalE
 augmentGlobalEnv globalEnv new_identifiers
     = let all_identifiers        = allIdentifiers globalEnv
-          really_new_identifiers = filter (`notElem` all_identifiers) new_identifiers
+          tmp                    = partition (`elem` all_identifiers) new_identifiers
+          updated_identifiers    = fst tmp
+          really_new_identifiers = snd tmp
           env1 = makeGlobalEnv (const []) (const True) really_new_identifiers
           env2 = updateGlobalEnv (\qn@(EnvQualName mID _) 
                                       -> let old_ids = lookupIdentifiers_OrLose mID qn globalEnv
-                                             new_ids = filter (\id -> qn == identifier2name id) new_identifiers
+                                             new_ids = filter (\id -> qn == identifier2name id)
+                                                              updated_identifiers
                                          in if null new_ids
                                             then old_ids 
                                             else old_ids ++ new_ids)
