@@ -16,6 +16,7 @@ data OpKind = Type
             | RawHskOp 
             | UnaryOp Int 
             | InfixOp Assoc Int
+            | Class
   deriving Show
 
 data Assoc = RightAssoc | LeftAssoc | NoneAssoc
@@ -48,4 +49,10 @@ hsk_infix_ops = [
   ("Prelude.(++)", InfixOp RightAssoc 5),
   ("Prelude.(+)",  InfixOp LeftAssoc 6),
   ("Prelude.(*)",  InfixOp LeftAssoc 7),
-  ("Prelude.(-)",  InfixOp LeftAssoc 6)]
+  ("Prelude.(-)",  InfixOp LeftAssoc 6)
+  ("Prelude.(==)",  InfixOp NoneAssoc 4),
+  ("Prelude.(<=)",  InfixOp NoneAssoc 4),
+  ("Prelude.(>=)",  InfixOp NoneAssoc 4),
+  ("Prelude.(<)",  InfixOp NoneAssoc 4),
+  ("Prelude.(>)",  InfixOp NoneAssoc 4),
+]

@@ -53,7 +53,7 @@ consts
   "Prelude.(<=)"        "HOL.less_eq"
   "Prelude.(<)"         "HOL.greater"
   "Prelude.(<=)"        "HOL.greater_eq"
-  "Prelude.(=)"         "op ="
+  "Prelude.(==)"        "op ="
   "Prelude.abs"         "HOL.abs"
   "Prelude.sgn"         "HOL.sgn"
   "Prelude.fromInteger" "Int.of_int"

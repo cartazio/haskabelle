@@ -1,11 +1,5 @@
 BUG / TODO Liste:
 
-* Typen in instantiations, alpha -> "(alpha :: typ)"
-
-* foo :: Context a -> Foo a -> Bar b
-    
-    => foo :: Foo (a::Context) -> Bar (b::Context)
-
 * Characters & Strings:
 
 * Adaption OpKind fuer Class mappings
