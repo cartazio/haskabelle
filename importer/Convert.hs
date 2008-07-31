@@ -38,8 +38,11 @@ convertHskUnit :: ConversionUnit -> ConversionUnit
 convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'      = map preprocessHsModule hsmodules
           global_env_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
-
-          defined_names   = concatMap (extractDefNames global_env_hsk) hsmodules'
+          
+          tmp_env         = Env.unionGlobalEnvs (Env.unionGlobalEnvs initialGlobalEnv $
+                                                   makeGlobalEnv_FromAdaptionTable adaptionTable)
+                                                global_env_hsk
+          defined_names   = concatMap (extractDefNames tmp_env) hsmodules'
           adaptionTable'  = filterAdaptionTable 
                               (\(_,to) -> let toN = Env.nameOf (Env.lexInfoOf to)
                                           in toN `notElem` defined_names)
@@ -53,11 +56,11 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 
           hskmodules      = map (toHskModule global_env_hsk') hsmodules'
           (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in -- trace (prettyShow' "global_env_isa" global_env_isa) $
-         let r = adaptIsaUnit global_env_hsk' adaptionTable'
+      in -- trace (prettyShow' "global_env_hsk'" global_env_hsk') $
+         let !r = adaptIsaUnit global_env_hsk' adaptionTable'
                   $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
-           r
+            r
     where 
       toHskModule :: Env.GlobalE -> HsModule -> HskModule
       toHskModule globalEnv (HsModule loc modul _exports _imports decls)
@@ -353,8 +356,8 @@ instance Convert HsDecl Isa.Cmd where
         | otherwise
             = do classqN'   <- convert classqN
                  type'      <- convert (head tys)
-                 identifier <- lookupConstant classqN
-                 let Env.Constant (Env.Class _ classinfo)  
+                 identifier <- lookupIdentifier_Type classqN
+                 let Env.Type (Env.Class _ classinfo)  
                                    = fromJust identifier
                  let methods       = Env.methodsOf classinfo
                  let classVarN     = Env.classVarOf classinfo
@@ -640,15 +643,21 @@ normalizeAssociativity (HsAssocNone) = HsAssocLeft -- as specified in Haskell98.
 normalizeAssociativity etc = etc
 
 
-lookupConstant :: HsQName -> ContextM (Maybe Env.Identifier)
-lookupConstant qname
+lookupIdentifier_Constant :: HsQName -> ContextM (Maybe Env.Identifier)
+lookupIdentifier_Constant qname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
          return (Env.lookupConstant (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
 
+lookupIdentifier_Type :: HsQName -> ContextM (Maybe Env.Identifier)
+lookupIdentifier_Type qname
+    = do globalEnv <- queryContext globalEnv
+         modul     <- queryContext currentModule
+         return (Env.lookupType (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
+
 lookupInfixOp :: HsQOp -> ContextM (HsAssoc, Int)
 lookupInfixOp qop
-    = do identifier <- lookupConstant (qop2name qop)
+    = do identifier <- lookupIdentifier_Constant (qop2name qop)
          case identifier of
            Just (Env.Constant (Env.InfixOp _ envassoc prio)) 
                    -> return (Env.toHsk envassoc, prio)
@@ -660,11 +669,12 @@ lookupInfixOp qop
 
 lookupType :: HsQName -> ContextM (Maybe HsType)
 lookupType fname
-    = do identifier <- lookupConstant fname -- we're interested in the type of a Constant.
+    -- We're interested in the type of a Constant.
+    = do identifier <- lookupIdentifier_Constant fname
          case identifier of
            Nothing -> return Nothing
            Just id -> let typ = Env.typeOf (Env.lexInfoOf id) 
                       in if (typ == Env.EnvTyNone) then return Nothing
-                                                   else return $ Just (Env.toHsk typ)
+                                                    else return $ Just (Env.toHsk typ)
 
 

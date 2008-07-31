@@ -7,14 +7,14 @@ module Importer.Adapt.Mapping
      makeGlobalEnv_FromAdaptionTable, filterAdaptionTable) 
 where
 
-import List (intersperse, groupBy, sortBy)
+import List (intersperse, group, groupBy, sort, sortBy, nub)
 
 import Data.Maybe
 import qualified Data.Map as Map
 
 import Language.Haskell.Exts
 
-import Importer.Utilities.Misc (wordsBy, prettyShow', trace, assert)
+import Importer.Utilities.Misc (wordsBy, hasDuplicates, prettyShow', trace, assert)
 import Importer.Utilities.Hsk (string2HsName)
 
 import qualified Importer.LexEnv as Env
@@ -32,7 +32,33 @@ adaptionTable :: AdaptionTable
 adaptionTable 
     = AdaptionTable 
         $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
-              raw_adaption_table 
+              (check_raw_adaption_table raw_adaption_table)
+
+check_raw_adaption_table :: [(AdaptionEntry, AdaptionEntry)] -> [(AdaptionEntry, AdaptionEntry)]
+check_raw_adaption_table tbl
+    = let (hsk_entries, _) = unzip tbl
+          names            = [ n | Haskell n _ <- hsk_entries ]
+          methods          = concatMap (\(Haskell _ (Class (RawClassInfo { methods = m }))) -> fst (unzip m))
+                              $ filter isClassEntry hsk_entries
+          functions        = [ n | Haskell n Function <- filter isFunctionEntry hsk_entries ]
+      in 
+        if (hasDuplicates names)
+        then error ("Duplicates in Raw Adaption Table found: "
+                    ++ show (filter (flip (>) 1 . length) (group (sort names))))
+        else tbl
+
+-- let missing_fn_entries = filter (`notElem` functions) methods
+--              in if not (null missing_fn_entries)
+--                 then error ("Inconsistency in Raw Adaption Table: The following methods\n" 
+--                             ++ "don't have a Function entry: " ++ show missing_fn_entries)
+--                 else tbl
+                 
+    where
+      isClassEntry (Haskell _ (Class _))   = True
+      isClassEntry _                       = False
+      isFunctionEntry (Haskell _ Function) = True
+      isFunctionEntry _                    = False
+      
 
 makeGlobalEnv_FromAdaptionTable :: AdaptionTable -> Env.GlobalE
 makeGlobalEnv_FromAdaptionTable adaptionTable
@@ -83,8 +109,26 @@ makeIdentifier (UnaryOp prio) m identifier t
     = Env.Constant $ Env.UnaryOp (Env.makeLexInfo m identifier t) prio
 makeIdentifier (InfixOp assoc prio) m identifier t
     = Env.Constant $ Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
+makeIdentifier (Class classinfo) m identifier t
+    = let supers  = map (Env.EnvUnqualName . snd . parseRawIdentifier) (superclasses classinfo)
+          meths   = map (\(n, tstr) -> let t = Env.fromHsk (parseHsType tstr)
+                                       in makeTypeAnnot (Env.makeLexInfo m n t))
+                        (methods classinfo)
+          classV  = Env.EnvUnqualName (classVar classinfo)
+      in 
+        Env.Type $ Env.Class (Env.makeLexInfo m identifier t)
+                             (Env.makeClassInfo supers meths classV)
 makeIdentifier Type m identifier t
     = Env.Type $ Env.Data (Env.makeLexInfo m identifier t) []
+
+makeTypeAnnot :: Env.LexInfo -> Env.Identifier
+makeTypeAnnot lexinfo = Env.Constant (Env.TypeAnnotation lexinfo)
+
+parseHsType :: String -> HsType
+parseHsType string
+    = let (ParseOk (HsModule _ _ _ _ [HsTypeSig _ _ t])) 
+              = parseFileContents ("__foo__ :: " ++ string)
+      in t
 
 transformAssoc :: Assoc -> Env.EnvAssoc
 transformAssoc RightAssoc = Env.EnvAssocRight

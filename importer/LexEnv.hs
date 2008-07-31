@@ -90,11 +90,11 @@ data Constant = Variable LexInfo
               | Function LexInfo
               | UnaryOp  LexInfo Int
               | InfixOp  LexInfo EnvAssoc Int
-              | Class    LexInfo ClassInfo
               | TypeAnnotation LexInfo 
   deriving (Eq, Ord, Show)
 
 data Type = Data LexInfo [Constant] -- Type lexinfo [constructors]
+          | Class    LexInfo ClassInfo
   deriving (Eq, Ord, Show)
 
 data Identifier = Constant Constant
@@ -134,7 +134,7 @@ isInfixOp _                          = False
 isTypeAnnotation (Constant (TypeAnnotation _)) = True
 isTypeAnnotation _                             = False
 
-isClass (Constant (Class _ _))       = True
+isClass (Type (Class _ _))           = True
 isClass _                            = False
 
 isData (Type (Data _ _)) = True
@@ -151,9 +151,9 @@ lexInfoOf identifier
       lexInfoOf_con (Function i)       = i
       lexInfoOf_con (UnaryOp i _)      = i
       lexInfoOf_con (InfixOp i _ _)    = i
-      lexInfoOf_con (Class i _)        = i
       lexInfoOf_con (TypeAnnotation i) = i
 
+      lexInfoOf_typ (Class i _)        = i
       lexInfoOf_typ (Data i _)         = i
 
 updateIdentifier :: Identifier -> LexInfo -> Identifier
@@ -167,9 +167,9 @@ updateIdentifier identifier lexinfo
       updateConstant (UnaryOp _ p) lexinfo       = UnaryOp lexinfo p
       updateConstant (InfixOp _ a p) lexinfo     = InfixOp lexinfo a p
       updateConstant (TypeAnnotation _) lexinfo  = TypeAnnotation lexinfo
-      updateConstant (Class _ classinfo) lexinfo = Class lexinfo classinfo
 
-      updateType (Data _ conNs) lexinfo = Data lexinfo conNs
+      updateType (Data _ conNs) lexinfo          = Data lexinfo conNs
+      updateType (Class _ classinfo) lexinfo     = Class lexinfo classinfo
 
 identifier2name :: Identifier -> EnvName
 identifier2name identifier
@@ -388,6 +388,7 @@ makeLexEnv identifiers
           types_map          = Map.fromListWith mergeTypes_OrFail type_bindings
       in 
         LexEnv constants_map types_map
+                 
 
 mergeConstants_OrFail :: Constant -> Constant -> Constant
 mergeConstants_OrFail c1 c2
@@ -488,7 +489,7 @@ computeConstantMappings modul decl
                                               methods   = concatMap (computeConstantMappings m) typesigs
                                               -- If length ns > 1, we will die later in Convert.hs anyway.
                                               classInfo = makeClassInfo sups methods (fromHsk (head ns))
-                                          in [con (Class defaultLexInfo classInfo)]
+                                          in [typ (Class defaultLexInfo classInfo)]
            HsInstDecl  _ _ _ _ _       -> []
            HsDataDecl _ _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
@@ -724,8 +725,8 @@ lookupIdentifiers_OrLose mID n globalEnv
 lookupConstant :: ModuleID -> EnvName -> GlobalE -> Maybe Identifier
 lookupConstant m n env
     = case Importer.LexEnv.lookup m n env of
-        (Just c, _) -> Just (Constant c)
-        _           -> Nothing
+          (Just c, _) -> Just (Constant c)
+          _           -> Nothing
 
 lookupConstant_OrLose :: ModuleID -> EnvName -> GlobalE -> Identifier
 lookupConstant_OrLose m n env
@@ -843,7 +844,10 @@ augmentGlobalEnv globalEnv new_identifiers
                                             then old_ids 
                                             else old_ids ++ new_ids)
                       globalEnv
-      in unionGlobalEnvs env2 env1
+      in -- trace (prettyShow' "all_identifiers" all_identifiers++ "\n" ++ 
+--                 prettyShow' "updated_identifiers" updated_identifiers ++ "\n" ++
+--                 prettyShow' "really_new_identifiers" really_new_identifiers) 
+         unionGlobalEnvs env2 env1
 
 
 

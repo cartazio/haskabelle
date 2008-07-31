@@ -148,13 +148,19 @@ adapt_type_in_identifier globalEnv tbl n@(Env.EnvQualName mID _)
 
 translateEnvType :: AdaptionTable -> (Env.EnvName -> Env.EnvName) -> Env.EnvType -> Maybe Env.EnvType
 translateEnvType (AdaptionTable mappings) qualify typ
-    = let type_renams  = filter (Env.isData . fst) mappings
-          type_renams' = assert (all (Env.isData . snd) type_renams) 
-                           $ map (\(t1,t2) -> (Env.identifier2name t1, Env.identifier2name t2)) 
-                                 type_renams
-      in case runState (translate type_renams' typ) False of
-           (_, False)       -> Nothing        -- no match found in AdaptionTable. 
-           (new_type, True) -> Just new_type
+    = let type_renams   = filter (Env.isData . fst) mappings
+          type_renams'  = assert (all (Env.isData . snd) type_renams) 
+                            $ map (\(t1,t2) -> (Env.identifier2name t1, Env.identifier2name t2)) 
+                                  type_renams
+          class_renams  = filter (Env.isClass . fst) mappings
+          class_renams' = assert (all (Env.isClass . snd) class_renams)
+                            $ map (\(c1,c2) -> (Env.identifier2name c1, Env.identifier2name c2))
+                                  class_renams
+          renamings     = type_renams' ++ class_renams'
+      in 
+        case runState (translate renamings typ) False of
+          (_, False)       -> Nothing        -- no match found in AdaptionTable. 
+          (new_type, True) -> Just new_type
     where 
       translate :: [(Env.EnvName, Env.EnvName)] -> Env.EnvType -> State Bool Env.EnvType
       translate alist typ
@@ -202,11 +208,17 @@ adaptEnvType t
          return (fromMaybe t (translateEnvType tbl qualify t))
 
 adaptName :: Isa.Name -> AdaptM Isa.Name
-adaptName n = do n' <- adaptEnvName (Env.fromIsa n); return (Env.toIsa n')
+adaptName n = do n' <- adaptEnvName (Env.fromIsa n); 
+                 return (Env.toIsa n')                 
 
 adaptType :: Isa.Type -> AdaptM Isa.Type
 adaptType t = do t' <- adaptEnvType (Env.fromIsa t); return (Env.toIsa t')
 
+adaptClass :: Isa.Name -> AdaptM Isa.Name
+adaptClass classN = do let ignore = Isa.Name "_"
+                       t <- adaptType (Isa.TyScheme [(ignore, [classN])] Isa.TyNone)
+                       let (Isa.TyScheme [(_, [classN'])] _) = t
+                       return classN'
 
 adaptIsaUnit :: Env.GlobalE -> AdaptionTable -> ConversionUnit -> ConversionUnit
 adaptIsaUnit globalEnv adaptionTable (IsaUnit thycmds adaptedGlobalEnv)
@@ -247,15 +259,17 @@ instance Adapt Isa.Cmd where
                        return (Isa.Constructor name types')
                            
     adapt (Isa.FunCmd funNs typesigs defs)
-        = do typesigs' <- mapM adapt typesigs
+        = do funNs' <- mapM adaptName funNs
+             typesigs' <- mapM adapt typesigs
              shadowing funNs $
                do defs' <- mapM (\(funN, pats, body)
-                                     -> assert (funN `elem` funNs) $
-                                        do pats' <- mapM adapt pats
+                                     -> do funN' <- adaptName funN
+                                           assert (funN `elem` funNs && funN' `elem` funNs') $ return ()
+                                           pats' <- mapM adapt pats
                                            shadowing (concatMap extractNames pats') $
-                                             do body' <- adapt body ; return (funN, pats', body'))
+                                             do body' <- adapt body ; return (funN', pats', body'))
                                 defs
-                  return (Isa.FunCmd funNs typesigs' defs')
+                  return (Isa.FunCmd funNs' typesigs' defs')
 
     adapt (Isa.DefinitionCmd name typesig (pat, term))
         = do typesig' <- adapt typesig
@@ -263,13 +277,16 @@ instance Adapt Isa.Cmd where
                do term' <- adapt term ; return (Isa.DefinitionCmd name typesig' (pat, term'))
 
     adapt (Isa.ClassCmd classN supclassNs typesigs)
-        = do typesigs' <- mapM adapt typesigs
-             return (Isa.ClassCmd classN supclassNs typesigs')
+        = do classN'     <- adaptClass classN
+             supclassNs' <- mapM adaptClass supclassNs
+             typesigs'   <- mapM adapt typesigs
+             return (Isa.ClassCmd classN' supclassNs' typesigs')
 
     adapt (Isa.InstanceCmd classN typ cmds)
-        = shadowing [classN] $ do typ'  <- adaptType typ
-                                  cmds' <- mapM adapt cmds
-                                  return (Isa.InstanceCmd classN typ' cmds')
+        = do classN' <- adaptClass classN
+             shadowing [classN'] $ do typ'  <- adaptType typ
+                                      cmds' <- mapM adapt cmds
+                                      return (Isa.InstanceCmd classN' typ' cmds')
 
 instance Adapt Isa.TypeSpec where
     adapt (Isa.TypeSpec tyvarNs tycoN)

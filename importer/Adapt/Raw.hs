@@ -35,14 +35,17 @@ raw_adaption_table = [(Haskell "Prelude.Bool" Type, Isabelle "bool" Type),
   (Haskell "Prelude.(*)" Function, Isabelle "*" (InfixOp LeftAssoc 70)),
   (Haskell "Prelude.negate" Function, Isabelle "HOL.uminus_class.uminus" Function),
   (Haskell "Prelude.(-)" Function, Isabelle "-" (InfixOp LeftAssoc 65)),
-  (Haskell "Prelude.(<)" Function, Isabelle "<" (InfixOp NoneAssoc 50)),
-  (Haskell "Prelude.(<=)" Function, Isabelle "<=" (InfixOp NoneAssoc 50)),
   (Haskell "Prelude.(<)" Function, Isabelle ">" (InfixOp NoneAssoc 50)),
   (Haskell "Prelude.(<=)" Function, Isabelle ">=" (InfixOp NoneAssoc 50)),
-  (Haskell "Prelude.(==)" Function, Isabelle "=" (InfixOp LeftAssoc 50)),
   (Haskell "Prelude.abs" Function, Isabelle "HOL.abs_class.abs" Function),
   (Haskell "Prelude.sgn" Function, Isabelle "HOL.sgn_class.sgn" Function),
-  (Haskell "Prelude.fromInteger" Function, Isabelle "Int.ring_1_class.of_int" Function)]
+  (Haskell "Prelude.fromInteger" Function, Isabelle "Int.ring_1_class.of_int" Function),
+  (Haskell "Prelude.Eq" (Class (RawClassInfo { superclasses = [], classVar = "a", 
+                                               methods = [("Prelude.(==)", "a -> a -> Bool")] })), 
+   Isabelle "Prelude.heq" (Class (RawClassInfo { superclasses = [], classVar = "a", 
+                                                       methods = [("Prelude.heq", "a -> a -> bool")] }))),
+  (Haskell "Prelude.(==)" (InfixOp NoneAssoc 4), Isabelle "Prelude.heq" Function)
+  ]
 
 reserved_keywords = ["!", "!!", "%", "(", ")", "+", ",", "--", ".", "..", ":", "::", ";", "<",
   "<=", "=", "==", "=>", "?", "Isabelle.command", "Isar.command",

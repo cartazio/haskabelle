@@ -4,27 +4,34 @@
 Basic data structures for adaption table.
 -}
 
-module Importer.Adapt.Common (OpKind(..), Assoc(..), AdaptionEntry(..),
+module Importer.Adapt.Common (OpKind(..), RawClassInfo(..), Assoc(..), AdaptionEntry(..),
                               primitive_tycon_table, primitive_datacon_table,
                               hsk_infix_ops) where
 
 import Language.Haskell.Exts
 
+data RawClassInfo = RawClassInfo 
+    { superclasses :: [String],
+      methods      :: [(String, String)],
+      classVar     :: String
+    }
+  deriving (Eq, Show)
+
 data OpKind = Type 
             | Variable 
-            | Function 
+            | Function
             | RawHskOp 
             | UnaryOp Int 
             | InfixOp Assoc Int
-            | Class
-  deriving Show
+            | Class RawClassInfo
+  deriving (Eq, Show)
 
 data Assoc = RightAssoc | LeftAssoc | NoneAssoc
-  deriving Show
+  deriving (Eq, Show)
 
 data AdaptionEntry = Haskell String OpKind
                    | Isabelle String OpKind
-  deriving Show
+  deriving (Eq, Show)
 
 
 primitive_tycon_table, primitive_datacon_table :: [(HsSpecialCon, HsQName)]
@@ -49,10 +56,10 @@ hsk_infix_ops = [
   ("Prelude.(++)", InfixOp RightAssoc 5),
   ("Prelude.(+)",  InfixOp LeftAssoc 6),
   ("Prelude.(*)",  InfixOp LeftAssoc 7),
-  ("Prelude.(-)",  InfixOp LeftAssoc 6)
-  ("Prelude.(==)",  InfixOp NoneAssoc 4),
-  ("Prelude.(<=)",  InfixOp NoneAssoc 4),
-  ("Prelude.(>=)",  InfixOp NoneAssoc 4),
+  ("Prelude.(-)",  InfixOp LeftAssoc 6),
+  ("Prelude.(==)", InfixOp NoneAssoc 4),
+  ("Prelude.(<=)", InfixOp NoneAssoc 4),
+  ("Prelude.(>=)", InfixOp NoneAssoc 4),
   ("Prelude.(<)",  InfixOp NoneAssoc 4),
-  ("Prelude.(>)",  InfixOp NoneAssoc 4),
-]
+  ("Prelude.(>)",  InfixOp NoneAssoc 4)
+  ]
