@@ -68,7 +68,7 @@ shadowing names body
          return r
 
 -- nested_binding [(a, computeA), (b, computeB), (c, computeC)] $
---  \([a', b', c']) -> body
+--   \([a', b', c']) -> body
 --
 --     with appropriate a, b, c 
 -- and with a', b', c' being the results of computeA, computeB, computeC.
@@ -331,6 +331,18 @@ instance Adapt Isa.Term where
                                patterns
              return (Isa.Case term' patterns')
 
+    adapt (Isa.ListComp body stmts) = adpt body stmts []
+      where 
+        adpt e [] stmts' = do e' <- adapt e; return (Isa.ListComp e' (reverse stmts'))
+        adpt e (Isa.Guard b : rest) stmts'
+            = adapt b >>= (\b' -> adpt e rest (Isa.Guard b':stmts'))
+        adpt e (Isa.Generator (pat, exp) : rest) stmts'
+            = do pat' <- adapt pat
+                 exp' <- adapt exp
+                 shadowing (extractNames pat') $ 
+                   adpt e rest (Isa.Generator (pat', exp') : stmts')
+
+               
 extractNames :: Isa.Term -> [Isa.Name]
 extractNames (Isa.Var n)                   = [n]
 extractNames (Isa.App t1 t2)               = extractNames t1 ++ extractNames t2

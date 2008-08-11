@@ -20,6 +20,7 @@ genHsName (HsSymbol prefix) = liftM HsSymbol (gensym prefix)
 
 genHsQName (Qual m prefix)  = liftM (Qual m) (genHsName prefix)
 genHsQName (UnQual prefix)  = liftM UnQual   (genHsName prefix)
+genHsQName junk = error ("junk = " ++ show junk)
 
 genIsaName (QName t prefix) = liftM (QName t) (gensym prefix)
 genIsaName (Name prefix)    = liftM Name      (gensym prefix)

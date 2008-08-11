@@ -41,6 +41,12 @@ consts
   "Prelude.(++)"        "List.append"
   "Prelude.reverse"     "List.rev"
   "Prelude.elem"        "List.member"
+  "Prelude.concat"      "List.concat"
+  "Prelude.any"         "List.list_ex"
+  "Prelude.all"         "List.list_all"
+  "Prelude.filter"      "List.filter"
+  "Prelude.length"      "List.length"
+  "Prelude.foldl"       "List.foldl"
 
   "Prelude.Nothing"     "None"
   "Prelude.Just"        "Some"

@@ -448,6 +448,15 @@ instance Printer Isa.Term where
           where ppBinding (pat, term)
                     = pprint' pat <+> equals <+> pprint' term
 
+    pprint' (Isa.ListComp body stmts)
+        = brackets $ pprint' body <+> text "." <+>
+                       (vcat (punctuate comma (map ppStmt stmts)))
+        where
+          ppStmt (Isa.Guard b)
+              = pprint' b
+          ppStmt (Isa.Generator (p, e)) 
+              = pprint' p <+> text "<-" <+> pprint' e
+
 
 reAdaptEnvName :: Env.EnvName -> Maybe Env.EnvName
 reAdaptEnvName name

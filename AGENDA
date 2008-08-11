@@ -1,18 +1,13 @@
 BUG / TODO Liste:
 
-* Characters & Strings:
+* "op" als parameter name
 
-* Adaption OpKind fuer Class mappings
+* Prelude.foldr vs. List.foldr
 
+* zipWith
 
-definition foo :: string
-where
-  "foo = ''asdf''"
+* enums
 
-definition bar :: char
-where
-  "bar = CHR ''a''"
-
-
+* look at adaption & comprehensions
 
 $Id$

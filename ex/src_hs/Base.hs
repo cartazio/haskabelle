@@ -1,6 +1,10 @@
 module Base where
 
 
+foldr :: forall b a. (b -> a -> a) -> a -> [b] -> a;
+foldr f a (x : xs) = f x (foldr f a xs);
+foldr f a [] = a;
+
 -- General stuff
 fold f [] y = y
 fold f (x:xs) y = fold f xs (f x y)
@@ -17,28 +21,24 @@ fold_map f (x:xs) y =
 cprod [] = [[]]
 cprod (xs:xss) = [ y : ys | y <- xs, ys <- cprod xss ]
 
-distinct [] = [] -- FIXME: make tail recursive
-distinct (x:xs) | elem x xs' = xs'
+distincts [] = [] -- FIXME: make tail recursive
+distincts (x:xs) | elem x xs' = xs'
                 | otherwise  = x : xs'
-    where xs' = distinct xs
+    where xs' = distincts xs
 
+suplist_ins f x [] = [x]
+suplist_ins f x ys 
+      | any (f x) ys = ys 
+      | otherwise     = x : filter (\y -> not (f y x)) ys
 
-
-suplist_ins :: (a -> a -> Bool) ->  a -> [a] -> [a]
-
-suplist_ins (<<=) x [] = [x]
-suplist_ins (<<=) x ys 
-    | any (x <<=) ys = ys 
-    | otherwise     = x : [ y | y <- ys, not (y <<= x) ]
-
-sups (<<=) = foldr (suplist_ins (<<=)) []
+sups f = foldr (suplist_ins f) []
 
 unordered_pairs [] = []
 unordered_pairs (x:xs) = map ((,) x) (x:xs) ++ unordered_pairs xs
 
-pos_neg_filter p xs = pnf xs ([], [])
-    where pnf [] (pos, neg) = (reverse pos, reverse neg)
-          pnf (x:xs) (pos, neg)
-              | p x       = pnf xs (x:pos, neg)
-              | otherwise = pnf xs (pos, x:neg)
+pos_neg_filter p xs = pnf p xs ([], [])
+    where pnf p [] (pos, neg) = (reverse pos, reverse neg)
+          pnf p (x:xs) (pos, neg)
+              | p x       = pnf p xs (x:pos, neg)
+              | otherwise = pnf p xs (pos, x:neg)
 

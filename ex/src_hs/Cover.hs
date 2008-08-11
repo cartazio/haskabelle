@@ -1,7 +1,14 @@
 module Cover where
 
 import Base
-import Data.Array -- Use immutable arrays
+-- import Data.Array -- Use immutable arrays
+
+array dims init_elems = init_elems
+
+zipWith          :: (a->b->c) -> [a]->[b]->[c]
+zipWith z (a:as) (b:bs)
+                 =  z a b : zipWith z as bs
+zipWith _ _ _    =  []
 
 
 -- ordered powerset
@@ -18,10 +25,10 @@ naive_cover c xs ys = head [ zs | zs <- pw' xs, all (covered zs) ys ]
     where covered zs y = any (`c` y) zs
 -- Essential covering elements
 
-essential c xs ys = distinct (fold (++) (map unique_cover ys) [])
-    where unique_cover y = case filter (`c` y) xs of
-                             [x] -> [x]
-                             _ -> []
+essential c xs ys = distincts (fold (++) (map unique_cover xs ys) [])
+    where unique_cover xs y = case filter (`c` y) xs of
+                                [x] -> [x]
+                                _ -> []
 
 -- Turn an arbitrary covering problem into one over the integer, given a covering matrix
 matrix_cover f c xs ys =
@@ -33,11 +40,11 @@ matrix_cover f c xs ys =
     in map (xs !!) (f (\i j -> a ! (i, j)) is js)
 
 
-remove_dom_rows c xs ys = sups dom xs
-    where dom x x' = all (\y -> c x' y || not (c x y)) ys
+remove_dom_rows c xs ys = sups (dom c ys) xs
+    where dom c ys x x' = all (\y -> c x' y || not (c x y)) ys
 
-remove_dom_cols c xs ys = sups dom ys
-    where dom y y' = all (\x -> c x y || not (c x y')) xs
+remove_dom_cols c xs ys = sups (dom c xs) ys
+    where dom c xs y y' = all (\x -> c x y || not (c x y')) xs
 
 -- Filter until we reach a fixed-point
 filter_dominance c (xs, ys) = 

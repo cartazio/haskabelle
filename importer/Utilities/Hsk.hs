@@ -4,14 +4,7 @@
 Auxiliary.
 -}
 
-module Importer.Utilities.Hsk ( 
-  namesFromHsDecl, bindingsFromDecls, bindingsFromPats, 
-  extractBindingNs, extractFreeVarNs, extractSuperclassNs, extractMethodSigs,
-  letify, Renaming, renameFreeVars, renameHsDecl, renameHsPat,
-  freshIdentifiers, isFreeVar, string2HsName,
-  srcloc2string, module2FilePath, isHaskellSourceFile,
-  orderDeclsBySourceLine, getSourceLine,
-) where
+module Importer.Utilities.Hsk (module Importer.Utilities.Hsk) where
   
 import Maybe
 import List (sort)
@@ -25,6 +18,26 @@ import Language.Haskell.Exts
 
 import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates, wordsBy, trace, prettyShow')
 import Importer.Utilities.Gensym
+
+
+hsk_prelude         = Module "Prelude"
+prelude_fn :: String -> HsExp
+prelude_fn fn_name = HsVar (Qual hsk_prelude (HsIdent fn_name))
+hsk_apply fn_expr args
+    = foldl HsApp fn_expr args
+
+hsk_nil             = HsList []
+hsk_cons x y        = HsApp (HsApp (HsCon (Special HsCons)) x) y
+hsk_pair x y        = HsApp (HsApp (HsCon (Special (HsTupleCon 2))) x) y
+hsk_negate e        = hsk_apply (prelude_fn "negate") [e]
+
+hsk_if b t e        = HsIf b t e
+hsk_lambda loc ps e = HsLambda loc ps e
+
+hsk_case :: SrcLoc -> HsExp -> [(HsPat, HsExp)] -> HsExp
+hsk_case loc e cases
+    = HsCase e [ HsAlt loc pat (HsUnGuardedAlt exp) (HsBDecls []) | (pat, exp) <- cases ]
+
 
 string2HsName :: String -> HsName
 string2HsName string = case isSymbol string of
@@ -83,6 +96,10 @@ instance HasBindings HsDecl where
 instance HasBindings HsBinds where
     extractBindingNs (HsBDecls decls) = extractBindingNs decls
 
+instance HasBindings HsStmt where
+    extractBindingNs (HsQualifier b)         = []
+    extractBindingNs (HsGenerator _ pat exp) = extractBindingNs pat
+    extractBindingNs (HsLetStmt binds)       = extractBindingNs binds
 
 bindingsFromPats          :: [HsPat] -> [HsQName]
 bindingsFromPats pattern  = [ UnQual n | HsPVar n <- universeBi pattern ] 
@@ -187,6 +204,13 @@ instance AlphaConvertable HsExp where
                 -> HsRecConstr qname updates
             HsRecUpdate exp updates
                 -> HsRecUpdate (renameFreeVars renams exp) updates
+            HsListComp e stmts
+                -> HsListComp e' stmts'
+                   where stmts'  = renameFreeVars renams stmts
+                         boundNs = concatMap extractBindingNs stmts
+                         renams' = shadow boundNs renams
+                         e'      = renameFreeVars renams' e
+
             exp -> assert (isTriviallyDescendable exp)
                      $ descend (renameFreeVars renams :: HsExp -> HsExp) exp
 
@@ -263,6 +287,20 @@ instance AlphaConvertable HsRhs where
         = HsUnGuardedRhs (renameFreeVars renams exp)
     renameFreeVars _ junk = not_supported_conversion "HsBinds" junk
 
+instance AlphaConvertable [HsStmt] where
+    renameFreeVars renams [] = []
+    renameFreeVars renams (HsQualifier b : rest)
+        = HsQualifier (renameFreeVars renams b) : renameFreeVars renams rest
+    renameFreeVars renams (HsGenerator loc pat exp : rest)
+        = let exp'    = renameFreeVars renams exp
+              renams' = shadow (extractBindingNs pat) renams
+              rest'   = renameFreeVars renams' rest
+          in HsGenerator loc pat exp' : rest'
+    renameFreeVars renams (HsLetStmt binds : rest)
+        = let (HsLet binds' _)  =  renameFreeVars renams (HsLet binds (HsLit (HsInt 42)))
+              renams'           =  shadow (extractBindingNs binds') renams
+              rest'             =  renameFreeVars renams' rest
+          in HsLetStmt binds' : rest'
 
 renameHsDecl :: [Renaming] -> HsDecl -> HsDecl
 
@@ -317,6 +355,7 @@ renameHsPat renams pat
 
 -- Kludge.
 --
+isFreeVar (Special _) _ = False
 isFreeVar qname body
     = occurs qname body && let body' = renameFreeVars (evalGensym 9999 (freshIdentifiers [qname])) body
                            in not (occurs qname body')

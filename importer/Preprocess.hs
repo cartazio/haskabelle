@@ -24,13 +24,15 @@ import Importer.Adapt.Raw (used_const_names, used_thy_names)
 preprocessHsModule :: HsModule -> HsModule
 
 preprocessHsModule (HsModule loc modul exports imports topdecls)
-    = HsModule loc modul exports imports topdecls''''
-      where topdecls'    = map deguardify_HsDecl topdecls
-            (topdecls'', gensymcount) 
-                         = runGensym 0 (runDelocalizer (concatMapM delocalize_topdecl topdecls'))
-            topdecls'''  = map normalizePatterns_HsDecl topdecls''
-            topdecls'''' = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls''')
---            modul'      = (let (Module n) = modul in Module (normalizeModuleName n))
+    = HsModule loc modul exports imports topdecls5
+      where topdecls1    = map deguardify_HsDecl topdecls
+            topdecls2    = topdecls1
+--          topdecls2    = map expandListComprehensions_HsDecl topdecls1
+            (topdecls3, gensymcount) 
+                         = runGensym 0 (runDelocalizer (concatMapM delocalize_topdecl topdecls2))
+            topdecls4    = map normalizePatterns_HsDecl topdecls3
+            topdecls5    = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls4)            
+--          modul'      = (let (Module n) = modul in Module (normalizeModuleName n))
 
 
 
@@ -387,3 +389,30 @@ deguardify_HsGuardedRhss guards
                  (guards', (HsGuardedRhs _ _ last_expr):_) -> (guards', last_expr)
                  (guards', [])                             -> (guards', bottom)
 
+
+-- expandListComprehensions_HsDecl :: HsDecl -> HsDecl
+-- expandListComprehensions_HsDecl decl
+--     = descendBi expandListComprehensions_HsExp decl
+
+-- expandListComprehensions_HsExp :: HsExp -> HsExp
+-- expandListComprehensions_HsExp expr
+--     = case expr of
+--         HsListComp e stmts -> descend expandListComprehensions_HsExp 
+--                                 (expandListCompr e stmts)
+--         _ -> descend expandListComprehensions_HsExp expr
+
+-- expandListCompr e stmts = expand e stmts
+--     where
+--       expand e [] = e
+--       expand e (HsQualifier b : rest)
+--           = hsk_if b (expand e rest) hsk_nil
+--       expand e (HsGenerator loc pat exp : rest)
+--           = let argN  = (HsIdent "arg")
+--                 argqN = UnQual argN
+--                 fn    = hsk_lambda loc [HsPVar argN]
+--                          $ hsk_case loc (HsVar argqN) 
+--                                [(pat,         (expand e rest)), 
+--                                 (HsPWildCard, hsk_nil)]
+--             in hsk_concatMap fn exp
+--       expand e (HsLetStmt _ : _) 
+--           = error "Let statements not supported in List Comprehensions."

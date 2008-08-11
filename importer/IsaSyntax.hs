@@ -99,6 +99,11 @@ data Term = Literal Literal
           | Let [(Pat, Term)] Term
           | Case Term [(Pat, Term)]
           | Parenthesized Term
+          | ListComp Term [ListCompStmt]
           | RecConstr VarName [(Name, Term)]
           | RecUpdate Term [(Name, Term)]
+  deriving (Show, Data, Typeable)
+
+data ListCompStmt = Generator (Pat, Term)
+                  | Guard Term
   deriving (Show, Data, Typeable)

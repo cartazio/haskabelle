@@ -17,7 +17,9 @@ import Maybe
 import Control.Monad.State
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Hsk (extractBindingNs, extractSuperclassNs, srcloc2string)
+import Importer.Utilities.Hsk 
+    (hsk_nil, hsk_cons, hsk_pair, hsk_negate,
+     extractBindingNs, extractSuperclassNs, srcloc2string)
 import Importer.Utilities.Gensym
 import Importer.Preprocess
 import Importer.ConversionUnit
@@ -39,10 +41,10 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'      = map preprocessHsModule hsmodules
           global_env_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
           
-          tmp_env         = Env.unionGlobalEnvs (Env.unionGlobalEnvs initialGlobalEnv $
-                                                   makeGlobalEnv_FromAdaptionTable adaptionTable)
-                                                global_env_hsk
-          defined_names   = concatMap (extractDefNames tmp_env) hsmodules'
+          -- tmp_env         = Env.unionGlobalEnvs (Env.unionGlobalEnvs initialGlobalEnv $
+          --                                          makeGlobalEnv_FromAdaptionTable adaptionTable)
+          --                                       global_env_hsk
+          defined_names   = concatMap (extractDefNames global_env_hsk) hsmodules'
           adaptionTable'  = filterAdaptionTable 
                               (\(_,to) -> let toN = Env.nameOf (Env.lexInfoOf to)
                                           in toN `notElem` defined_names)
@@ -410,12 +412,15 @@ convertHsPat (HsPInfixApp pat1 qname pat2)
          pat2' <- convertHsPat pat2
          return $ HsInfixApp pat1' (HsQConOp qname) pat2'
 
-convertHsPat (HsPApp qname pats)
-    = do pats' <- mapM convertHsPat pats
-         return $ foldl HsApp (HsCon qname) pats'
+convertHsPat (HsPApp qname []) = return (HsCon qname)
+convertHsPat (HsPApp qname (pat1:pats))
+    = do pat1' <- convertHsPat pat1
+         pats' <- mapM convertHsPat pats
+         return $ foldl HsApp (HsApp (HsCon qname) pat1') pats'
 
-convertHsPat junk = pattern_match_exhausted "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" junk
-
+convertHsPat junk = pattern_match_exhausted 
+                         "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" 
+                         junk
 
 instance Convert HsRhs Isa.Term where
     convert' (HsUnGuardedRhs exp) = convert exp
@@ -441,28 +446,22 @@ instance Convert HsExp Isa.Term where
     convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
     convert' (HsWildCard)      = return (Isa.Var (Isa.Name "_"))
-    convert' (HsNegApp exp)    = convert (negate exp)
-                               where negate e = HsApp (HsVar (Qual prelude (HsIdent "negate"))) e
-                                     prelude  = Module "Prelude"
+    convert' (HsNegApp exp)    = convert (hsk_negate exp)
 
     convert' (HsList [])       = do list_datacon_name <- convert (Special HsListCon)
                                     return (Isa.Var list_datacon_name)
     convert' (HsList exps)
-        = convert $ foldr cons nil exps
-          where cons x y = HsApp (HsApp (HsCon (Special HsCons)) x) y
-                nil = HsList []
+        = convert $ foldr hsk_cons hsk_nil exps
 
     -- We have to wrap the last expression in an explicit HsParen as that last
     -- expression may itself be a pair. If we didn't, we couldn't distinguish
     -- between "((1,2), (3,4))" and "((1,2), 3, 4)" afterwards anymore.
-    convert' (HsTuple exps)    = convert (foldr pair (HsParen (last exps)) (init exps))
-        where pair x y 
-                  = HsApp (HsApp (HsCon (Special (HsTupleCon 2))) x) y
+    convert' (HsTuple exps)    = convert (foldr hsk_pair (HsParen (last exps)) (init exps))
 
     convert' (HsApp exp1 exp2)
         = do exp1' <- cnv exp1 ; exp2' <- cnv exp2
              return (Isa.App exp1' exp2')
-          where cnv app@(HsCon (Special (HsTupleCon n))) 
+          where cnv app@(HsCon (Special (HsTupleCon n)))
                     | n < 2  = die ("Internal Error, (HsTupleCon " ++ show n ++ ")")
                     | n == 2 = convert app         -- pairs can be dealt with the usual way. 
                     | n > 2  = makeTupleDataCon n
@@ -529,7 +528,20 @@ instance Convert HsExp Isa.Term where
                 isPatBinding (HsPatBind _ _ _ (HsBDecls [])) = True
                 isPatBinding _                   = False
                 
+    convert' (HsListComp e stmts) 
+        = do e'     <- convert e
+             stmts' <- mapM convertListCompStmt stmts
+             return (Isa.ListComp e' stmts')
+
     convert' junk = pattern_match_exhausted "HsExp -> Isa.Term" junk
+
+convertListCompStmt (HsQualifier b)     = convert b >>= (return . Isa.Guard)
+convertListCompStmt (HsGenerator _ p e) = do p' <- convert p
+                                             e' <- convert e
+                                             return (Isa.Generator (p', e'))
+convertListCompStmt (HsLetStmt _)
+    = die "Let statements not supported in List Comprehensions."
+
 
 -- We desugare lambda expressions to true unary functions, i.e. to
 -- lambda expressions binding only one argument.
@@ -568,7 +580,6 @@ makePatternMatchingLambda patterns theBody
       where mkMatchingLambda body pat
                 = do g <- lift (genIsaName (Isa.Name "arg"))
                      return $ Isa.Lambda g (Isa.Case (Isa.Var g) [(pat, body)])
-
 
 isRecDecls :: [HsConDecl] -> Bool
 isRecDecls decls
