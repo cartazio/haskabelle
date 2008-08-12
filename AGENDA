@@ -10,4 +10,18 @@ BUG / TODO Liste:
 
 * ($)
 
+Presentation:
+
+  * Beschreibung der Mappings
+
+  * Probleme in der Praxis
+
+  * Parse Tree, keine Typ inferenz
+
+  * Guards, List Comprehensions, Modules
+
+  * Usage.
+
+  * pers. Erfahrung.
+
 $Id$
