@@ -360,7 +360,10 @@ isFreeVar qname body
     = occurs qname body && let body' = renameFreeVars (evalGensym 9999 (freshIdentifiers [qname])) body
                            in not (occurs qname body')
     where occurs qname body 
-              = not (null [ qn | HsVar qn <- universeBi body, qn == qname ])
+              = let varNs   = [ qn | HsVar qn <- universeBi body ]
+                    varopNs = [ qn | HsQVarOp qn <- universeBi body ] 
+                              ++ [ qn | HsQConOp qn <- universeBi body ]
+                in qname `elem` varNs || qname `elem` varopNs
 
 extractFreeVarNs thing
     = filter (flip isFreeVar thing) (universeBi thing :: [HsQName])

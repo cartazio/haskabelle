@@ -61,5 +61,6 @@ hsk_infix_ops = [
   ("Prelude.(<=)", InfixOp NoneAssoc 4),
   ("Prelude.(>=)", InfixOp NoneAssoc 4),
   ("Prelude.(<)",  InfixOp NoneAssoc 4),
-  ("Prelude.(>)",  InfixOp NoneAssoc 4)
+  ("Prelude.(>)",  InfixOp NoneAssoc 4),
+  ("Prelude.(!!)", InfixOp LeftAssoc 9)
   ]

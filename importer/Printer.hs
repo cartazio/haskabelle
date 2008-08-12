@@ -295,8 +295,8 @@ instance Printer Isa.Cmd where
         = blankline $
           text "class" <+> pprint' classN 
                        <+> equals 
-                       <+> hsep (punctuate plus (map pprint' superclassNs)) 
-                       <+> plus $$
+                       <+> hsep (punctuate plus (map pprint' superclassNs))
+                       <+> (if null typesigs then empty else plus) $$
           space <> space <> vcat (zipWith (<+>) (repeat (text "fixes"))
                                                 (map ppSig typesigs))
         where ppSig (Isa.TypeSig n t)
@@ -387,7 +387,12 @@ instance Printer Isa.TypeSig where
     pprint' (Isa.TypeSig _name typ) = pprint' typ
 
 instance Printer Isa.Literal where
-    pprint' (Isa.Int i)      = integer i
+    -- We annotate Integer literals explicitly to be of our sort "num"
+    -- (cf. Prelude.thy), because otherwise Isabelle's type inference
+    -- would come up with a too general type, resulting in
+    -- non-workingness.
+    pprint' (Isa.Int i)      = let cc = colon <> colon in
+                               parens $ integer i <> cc <> text "_" <> cc <> text "num"
     pprint' (Isa.Char ch)    = text "CHR " <+> quotes (quotes (char ch))
     pprint' (Isa.String str) = quotes . quotes . text $ str
 

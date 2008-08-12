@@ -1,10 +1,5 @@
 module Base where
 
-
-foldr :: forall b a. (b -> a -> a) -> a -> [b] -> a;
-foldr f a (x : xs) = f x (foldr f a xs);
-foldr f a [] = a;
-
 -- General stuff
 fold f [] y = y
 fold f (x:xs) y = fold f xs (f x y)

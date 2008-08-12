@@ -41,13 +41,18 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'      = map preprocessHsModule hsmodules
           global_env_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
           
-          -- tmp_env         = Env.unionGlobalEnvs (Env.unionGlobalEnvs initialGlobalEnv $
-          --                                          makeGlobalEnv_FromAdaptionTable adaptionTable)
-          --                                       global_env_hsk
-          defined_names   = concatMap (extractDefNames global_env_hsk) hsmodules'
+          -- 
+          initial_class_env = Env.unionGlobalEnvs initialGlobalEnv $
+                                makeGlobalEnv_FromAdaptionTable
+                                  (filterAdaptionTable (Env.isClass . fst) adaptionTable)
+          tmp_env         = Env.unionGlobalEnvs initial_class_env global_env_hsk                                
+          defined_names   = concatMap (extractDefNames tmp_env) hsmodules'
+
           adaptionTable'  = filterAdaptionTable 
-                              (\(_,to) -> let toN = Env.nameOf (Env.lexInfoOf to)
-                                          in toN `notElem` defined_names)
+                              (\(from,to) -> let fromN = Env.nameOf (Env.lexInfoOf from)
+                                                 toN = Env.nameOf (Env.lexInfoOf to)
+                                             in fromN `notElem` defined_names &&
+                                                toN `notElem` defined_names)
                               adaptionTable
           
           table_env       = makeGlobalEnv_FromAdaptionTable adaptionTable'
@@ -58,7 +63,7 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 
           hskmodules      = map (toHskModule global_env_hsk') hsmodules'
           (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in -- trace (prettyShow' "global_env_hsk'" global_env_hsk') $
+      in -- trace (prettyShow' "adaptionTable'" adaptionTable') $
          let !r = adaptIsaUnit global_env_hsk' adaptionTable'
                   $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
@@ -77,7 +82,8 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
                        in case Env.resolveEnvName_OrLose globalEnv m' n' of
                             Env.EnvQualName _ s -> s
                             Env.EnvUnqualName s -> s)
-              $ concatMap extractBindingNs decls
+              $ (let !r = concatMap extractBindingNs decls
+                 in r) -- trace (prettyShow' "raw_defined_names" r) r)
 
 
 -- The naming scheme "HsFoo" is treated as being owned by the parser

@@ -12,9 +12,34 @@ begin
 class print = type +
   fixes print :: "'a \<Rightarrow> string"
 
-class eq = type +
-  fixes eq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+class heq = type +
+  fixes heq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
 
-class num = number_ring + eq + print + abs + sgn
+class num = number_ring + heq + print + abs + sgn
+
+(* FIXME: TODO. *)
+(*
+class enum = num +
+  fixes succ :: "'a => 'a"
+  fixes pred :: "'a => 'a"
+  (* [n..]
+     [n,n'..]
+     [n..m]
+     [n,n'..m] *)
+  fixes enumFrom       :: "'a => 'a list" 
+  fixes enumFromThen   :: "'a => 'a => 'a list"
+  fixes enumFromTo     :: "'a => 'a => 'a list"
+  fixes enumFromThenTo :: "'a => 'a => 'a => 'a list"
+*)
+
+fun hsk_foldr :: "('b => 'a => 'a) => 'a => 'b list => 'a"
+where
+  "hsk_foldr f a (x # xs) = f x (hsk_foldr f a xs)"
+| "hsk_foldr f a Nil = a"
+
+fun zipWith :: "('a => 'b => 'c) => 'a list => 'b list => 'c list"
+where
+  "zipWith z (a # as) (b # bs) = (z a b # zipWith z as bs)"
+| "zipWith _ _ _ = Nil"
 
 end

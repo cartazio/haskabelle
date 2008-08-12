@@ -34,6 +34,7 @@ consts
 
   "Prelude.([])"        "List.Nil"
   "Prelude.(:)"         "List.Cons"
+  "Prelude.(!!)"        "op !"
 
   "Prelude.head"        "List.hd"
   "Prelude.tail"        "List.tl"
@@ -47,6 +48,8 @@ consts
   "Prelude.filter"      "List.filter"
   "Prelude.length"      "List.length"
   "Prelude.foldl"       "List.foldl"
+  "Prelude.foldr"       "Prelude.hsk_foldr"
+  "Prelude.zipWith"     "Prelude.zipWith"
 
   "Prelude.Nothing"     "None"
   "Prelude.Just"        "Some"
@@ -57,9 +60,11 @@ consts
   "Prelude.(-)"         "HOL.minus"
   "Prelude.(<)"         "HOL.less"
   "Prelude.(<=)"        "HOL.less_eq"
-  "Prelude.(<)"         "HOL.greater"
+  "Prelude.(>)"         "HOL.greater"
   "Prelude.(<=)"        "HOL.greater_eq"
   "Prelude.(==)"        "op ="
   "Prelude.abs"         "HOL.abs"
   "Prelude.sgn"         "HOL.sgn"
   "Prelude.fromInteger" "Int.of_int"
+
+  "Prelude._|_"         "undefined"

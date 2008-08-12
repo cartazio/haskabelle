@@ -199,9 +199,9 @@ map_upds :: forall b. (Nat -> Maybe b) -> [Nat] -> [b] -> Nat -> Maybe b;
 map_upds m xs ys =
   Lists.map_add m (Lists.map_of (Lists.rev (Lists.zipa xs ys)));
 
-distinct :: [Nat] -> Bool;
-distinct (x : xs) = not (Lists.member x xs) && Lists.distinct xs;
-distinct [] = True;
+distincts :: [Nat] -> Bool;
+distincts (x : xs) = not (Lists.member x xs) && Lists.distincts xs;
+distincts [] = True;
 
 list_all :: forall a. (a -> Bool) -> [a] -> Bool;
 list_all p (x : xs) = p x && Lists.list_all p xs;

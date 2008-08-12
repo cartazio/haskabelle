@@ -78,8 +78,9 @@ less_nat :: Nat -> Nat -> Bool;
 less_nat m (Suc n) = less_eq_nat m n;
 less_nat n Zero_nat = False;
 
-upt :: Nat -> Nat -> [Nat];
-upt i j = (if less_nat i j then i : upt (Suc i) j else []);
+-- No Termination order
+-- upt :: Nat -> Nat -> [Nat];
+-- upt i j = (if less_nat i j then i : upt (Suc i) j else []);
 
 list_case :: forall t a. t -> (a -> [a] -> t) -> [a] -> t;
 list_case f1 f2 [] = f1;
@@ -131,8 +132,9 @@ class (Linorder a) => Finite_intvl_succ a where {
   successor :: a -> a;
 };
 
-upto :: forall a. (Finite_intvl_succ a) => a -> a -> [a];
-upto i j = (if less_eq i j then i : upto (successor i) j else []);
+-- No Termination order
+-- upto :: forall a. (Finite_intvl_succ a) => a -> a -> [a];
+-- upto i j = (if less_eq i j then i : upto (successor i) j else []);
 
 data Itself a = Type;
 

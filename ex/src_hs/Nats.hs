@@ -17,6 +17,9 @@ less_nat :: Nat -> Nat -> Bool;
 less_nat m (Suc n) = less_eq_nat m n;
 less_nat n Zero_nat = False;
 
+greater_nat :: Nat -> Nat -> Bool;
+greater_nat m n = not (less_eq_nat m n);
+
 mina :: Nat -> Nat -> Nat;
 mina a b = (if less_eq_nat a b then a else b);
 

@@ -3,13 +3,8 @@ module Cover where
 import Base
 -- import Data.Array -- Use immutable arrays
 
+array :: a -> [(Int, b)] -> [(Int, b)]
 array dims init_elems = init_elems
-
-zipWith          :: (a->b->c) -> [a]->[b]->[c]
-zipWith z (a:as) (b:bs)
-                 =  z a b : zipWith z as bs
-zipWith _ _ _    =  []
-
 
 -- ordered powerset
 pw :: [a] -> [[[a]]]
@@ -21,23 +16,29 @@ pw' = map reverse . foldl (++) [] . pw . reverse
 
 
 -- Simple covering algorithm
-naive_cover c xs ys = head [ zs | zs <- pw' xs, all (covered zs) ys ]
-    where covered zs y = any (`c` y) zs
+naive_cover c xs ys = head [ zs | zs <- pw' xs, all (covered c zs) ys ]
+    where covered c zs y = any (`c` y) zs
 -- Essential covering elements
 
-essential c xs ys = distincts (fold (++) (map unique_cover xs ys) [])
-    where unique_cover xs y = case filter (`c` y) xs of
-                                [x] -> [x]
-                                _ -> []
+essential c xs ys = distincts (fold (++) (map unique_cover c xs ys) [])
+    where unique_cover c xs y = case filter (`c` y) xs of
+                                  [x] -> [x]
+                                  _ -> []
+
+fromto :: Int -> Int -> [Int]
+fromto a b
+    | a < b     = a : fromto (a+1) b
+    | a == b    = [a]
+    | otherwise = []
 
 -- Turn an arbitrary covering problem into one over the integer, given a covering matrix
 matrix_cover f c xs ys =
     let maxi = length xs - 1
         maxj = length ys - 1
-        is = [0 .. maxi]
-        js = [0 .. maxj]
+        is = fromto 0 maxi -- FIXME: [0 .. maxi]
+        js = fromto 0 maxj -- FIXME: [0 .. maxj]
         a = array ((0,0), (maxi, maxj)) [ ((i,j), c (xs !! i) (ys !! j)) | i <- is, j <- js ]
-    in map (xs !!) (f (\i j -> a ! (i, j)) is js)
+    in map (xs !!) (f (\i j -> a !! (i, j)) is js)
 
 
 remove_dom_rows c xs ys = sups (dom c ys) xs

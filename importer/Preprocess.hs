@@ -2,7 +2,7 @@
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
 
-module Importer.Preprocess (preprocessHsModule) where
+module Importer.Preprocess where -- (preprocessHsModule) where
 
 import Maybe
 import List
@@ -210,12 +210,12 @@ flattenHsTypeSig (HsTypeSig loc names typ)
 --
 
 checkForClosures :: [HsQName] -> [HsDecl] -> [HsDecl]
-checkForClosures closedNs decls = map check decls
+checkForClosures closedNs decls 
+    = map check decls
     where check decl = let loc:_  = childrenBi decl :: [SrcLoc]
                            freeNs = filter (flip isFreeVar decl) closedNs
                        in if (null freeNs) then decl 
                                            else error (Msg.free_vars_found loc freeNs)
-
 
 ---- Normalization of As-patterns
 

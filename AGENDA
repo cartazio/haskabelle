@@ -2,12 +2,12 @@ BUG / TODO Liste:
 
 * "op" als parameter name
 
-* Prelude.foldr vs. List.foldr
-
-* zipWith
-
 * enums
 
-* look at adaption & comprehensions
+* divmod
+
+* cover0 
+
+* ($)
 
 $Id$
