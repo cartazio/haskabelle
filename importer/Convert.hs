@@ -40,8 +40,7 @@ convertHskUnit :: ConversionUnit -> ConversionUnit
 convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'      = map preprocessHsModule hsmodules
           global_env_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
-          
-          -- 
+
           initial_class_env = Env.unionGlobalEnvs initialGlobalEnv $
                                 makeGlobalEnv_FromAdaptionTable
                                   (filterAdaptionTable (Env.isClass . fst) adaptionTable)
@@ -63,7 +62,7 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 
           hskmodules      = map (toHskModule global_env_hsk') hsmodules'
           (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in -- trace (prettyShow' "adaptionTable'" adaptionTable') $
+      in trace (prettyShow' "defined_names" defined_names) $
          let !r = adaptIsaUnit global_env_hsk' adaptionTable'
                   $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
@@ -77,11 +76,14 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 
       extractDefNames :: Env.GlobalE -> HsModule -> [String]
       extractDefNames globalEnv (HsModule _ m _ _ decls)
-          = map (\n -> let m' = Env.fromHsk m
-                           n' = Env.fromHsk n
-                       in case Env.resolveEnvName_OrLose globalEnv m' n' of
-                            Env.EnvQualName _ s -> s
-                            Env.EnvUnqualName s -> s)
+          = mapMaybe (\n -> let m'   = Env.fromHsk m
+                                n'   = Env.fromHsk n
+                                ids  = Env.lookupIdentifiers_OrLose m' n' globalEnv
+                                name = Env.nameOf . Env.lexInfoOf
+                            in case filter Env.isType ids of
+                                         []                       -> Just $ name (head ids)
+                                         [id] | Env.isInstance id -> Just $ name id
+                                              | otherwise         -> Nothing)
               $ (let !r = concatMap extractBindingNs decls
                  in r) -- trace (prettyShow' "raw_defined_names" r) r)
 

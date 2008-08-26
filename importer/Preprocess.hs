@@ -24,14 +24,12 @@ import Importer.Adapt.Raw (used_const_names, used_thy_names)
 preprocessHsModule :: HsModule -> HsModule
 
 preprocessHsModule (HsModule loc modul exports imports topdecls)
-    = HsModule loc modul exports imports topdecls5
+    = HsModule loc modul exports imports topdecls4
       where topdecls1    = map deguardify_HsDecl topdecls
-            topdecls2    = topdecls1
---          topdecls2    = map expandListComprehensions_HsDecl topdecls1
-            (topdecls3, gensymcount) 
-                         = runGensym 0 (runDelocalizer (concatMapM delocalize_topdecl topdecls2))
-            topdecls4    = map normalizePatterns_HsDecl topdecls3
-            topdecls5    = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls4)            
+            (topdecls2, gensymcount) 
+                         = runGensym 0 (runDelocalizer (concatMapM delocalize_topdecl topdecls1))
+            topdecls3    = map normalizePatterns_HsDecl topdecls2
+            topdecls4    = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls3) 
 --          modul'      = (let (Module n) = modul in Module (normalizeModuleName n))
 
 

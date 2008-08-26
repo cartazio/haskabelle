@@ -82,8 +82,12 @@ data LexInfo = LexInfo {
 data ClassInfo = ClassInfo {
                             superclassesOf :: [EnvName],
                             methodsOf      :: [Identifier],
-                            classVarOf     :: EnvName
+                            classVarOf     :: EnvName,
+                            instancesOf    :: [InstanceInfo]
                            }
+  deriving (Eq, Ord, Show)
+
+data InstanceInfo = InstanceInfo { specializedTypeOf :: EnvType }
   deriving (Eq, Ord, Show)
 
 data Constant = Variable LexInfo
@@ -93,8 +97,9 @@ data Constant = Variable LexInfo
               | TypeAnnotation LexInfo 
   deriving (Eq, Ord, Show)
 
-data Type = Data LexInfo [Constant] -- Type lexinfo [constructors]
-          | Class    LexInfo ClassInfo
+data Type = Data  LexInfo [Constant] -- Data lexinfo [constructors]
+          | Class LexInfo ClassInfo
+          | Instance LexInfo [InstanceInfo]
   deriving (Eq, Ord, Show)
 
 data Identifier = Constant Constant
@@ -114,7 +119,20 @@ makeClassInfo superclasses methods classVarName
     = assert (all isTypeAnnotation methods)
         $ ClassInfo { superclassesOf = superclasses,
                       methodsOf      = methods,
-                      classVarOf     = classVarName }
+                      classVarOf     = classVarName,
+                      instancesOf    = [] }
+
+makeInstanceInfo :: EnvType -> InstanceInfo
+makeInstanceInfo t 
+    = InstanceInfo { specializedTypeOf = t }
+
+isConstant, isType :: Identifier -> Bool
+
+isConstant (Constant _)              = True
+isConstant _                         = False
+
+isType (Type _)                      = True
+isType _                             = False
 
 isVariable, isFunction, isUnaryOp, isInfixOp  :: Identifier -> Bool
 isTypeAnnotation, isClass, isData :: Identifier -> Bool
@@ -137,6 +155,9 @@ isTypeAnnotation _                             = False
 isClass (Type (Class _ _))           = True
 isClass _                            = False
 
+isInstance (Type (Instance _ _))     = True
+isInstance _                         = False
+
 isData (Type (Data _ _)) = True
 isData _                 = False
 
@@ -154,6 +175,7 @@ lexInfoOf identifier
       lexInfoOf_con (TypeAnnotation i) = i
 
       lexInfoOf_typ (Class i _)        = i
+      lexInfoOf_typ (Instance i _)     = i
       lexInfoOf_typ (Data i _)         = i
 
 updateIdentifier :: Identifier -> LexInfo -> Identifier
@@ -170,6 +192,7 @@ updateIdentifier identifier lexinfo
 
       updateType (Data _ conNs) lexinfo          = Data lexinfo conNs
       updateType (Class _ classinfo) lexinfo     = Class lexinfo classinfo
+      updateType (Instance _ instinfo) lexinfo   = Instance lexinfo instinfo
 
 identifier2name :: Identifier -> EnvName
 identifier2name identifier
@@ -398,8 +421,23 @@ mergeConstants_OrFail c1 c2
 
 mergeTypes_OrFail :: Type -> Type -> Type
 mergeTypes_OrFail t1 t2
-    | t1 == t2  = t1
-    | otherwise = error (Msg.merge_collision "mergeTypes_OrFail" t1 t2)
+    = case mergeTypes t1 t2 of
+        Just result -> result
+        Nothing     -> error (Msg.merge_collision "mergeTypes_OrFail" t1 t2)
+
+mergeTypes :: Type -> Type -> Maybe Type
+mergeTypes t1 t2
+    = assert (nameOf (lexInfoOf (Type t1)) == nameOf (lexInfoOf (Type t2)))
+      $ case (t1, t2) of
+          (Class lexinfo classinfo@(ClassInfo { instancesOf = old_insts }), Instance _ instinfos)
+              -> Just $ Class lexinfo (classinfo { instancesOf = instinfos ++ old_insts})
+          (Instance _ instinfos, Class lexinfo classinfo@(ClassInfo { instancesOf = old_insts }))
+              -> Just $ Class lexinfo (classinfo { instancesOf = instinfos ++ old_insts})
+          (Instance lexinfo instinfos1, Instance _ instinfos2)
+              -> Just $ Instance lexinfo (instinfos1 ++ instinfos2)
+          (_,_) | t1 == t2  -> Just t1
+                | otherwise -> Nothing
+
 
 mergeConstants :: Constant -> Constant -> Maybe Constant
 mergeConstants c1 c2
@@ -423,10 +461,13 @@ mergeConstants c1 c2
 
 mergeLexEnvs (LexEnv cmap1 tmap1) (LexEnv cmap2 tmap2)
     = LexEnv (Map.unionWith constant_merger cmap1 cmap2)
-             (Map.union tmap1 tmap2)
+             (Map.unionWith type_merger tmap1 tmap2)
     where 
       constant_merger c1 c2 = case mergeConstants c1 c2 of
                                 Nothing  -> c2  -- favorize second argument.
+                                Just res -> res
+      type_merger t1 t2     = case mergeTypes t1 t2 of
+                                Nothing  -> t2
                                 Just res -> res
 
 --
@@ -490,7 +531,8 @@ computeConstantMappings modul decl
                                               -- If length ns > 1, we will die later in Convert.hs anyway.
                                               classInfo = makeClassInfo sups methods (fromHsk (head ns))
                                           in [typ (Class defaultLexInfo classInfo)]
-           HsInstDecl  _ _ _ _ _       -> []
+                                          -- If length ts > 1, we will die later in Convert.hs anyway.
+           HsInstDecl _ _ _ ts _       -> [typ (Instance defaultLexInfo $ [makeInstanceInfo (fromHsk (head ts))])]
            HsDataDecl _ _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
                   let tycon = mkTyCon (fromHsk name) tyvarNs
@@ -557,9 +599,25 @@ makeGlobalEnv :: (ModuleID -> [EnvImport]) -> (Identifier -> Bool) -> [Identifie
 makeGlobalEnv compute_imports shall_export_p identifiers
      = GlobalEnv
          $ Map.fromListWith failDups
-               (do (moduleID, ids) <- groupIdentifiers identifiers
-                   return (moduleID, makeModuleEnv (compute_imports moduleID) shall_export_p ids))
-    where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
+              $ do let (constants, types) = splitIdentifiers identifiers
+                   let types'             = mergeInstancesWithClasses types
+                   (moduleID, ids) <- groupIdentifiers (map Constant constants ++ map Type types')
+                   return (moduleID, makeModuleEnv (compute_imports moduleID) shall_export_p ids)
+    where 
+      failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
+
+mergeInstancesWithClasses :: [Type] -> [Type]
+mergeInstancesWithClasses ts
+    = let map = Map.fromListWith (++) [ (nameOf (lexInfoOf (Type t)), [t]) | t <- ts ]
+          instances = filter (isInstance . Type) ts
+          map' = foldl (\map i -> Map.adjust (\ts -> case ts of
+                                                       [t] -> [t]
+                                                       ts  -> [foldl1 mergeTypes_OrFail ts])
+                                             (nameOf (lexInfoOf (Type i)))
+                                             map)
+                        map
+                        instances
+      in concat $ Map.elems map'
 
 groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]
 groupIdentifiers identifiers
@@ -576,15 +634,31 @@ makeGlobalEnv_fromHsModules ms
 -- Left-prioritized union of Global Environments.
 --
 unionGlobalEnvs :: GlobalE -> GlobalE -> GlobalE
-unionGlobalEnvs (GlobalEnv map1) (GlobalEnv map2)
-    = GlobalEnv 
-        $ Map.unionWithKey
-              (\m moduleEnv1 moduleEnv2
-                   -> let env1 = if Map.member m map1 then moduleEnv1 else moduleEnv2
-                          env2 = if Map.member m map1 then moduleEnv2 else moduleEnv1
-                      in -- `env1' contains ModuleE that belongs to `map1'.
-                         mergeModuleEnvs env1 env2)
-              map1 map2
+unionGlobalEnvs globalEnv1 globalEnv2
+    = let compute_old_imports mID 
+              = let get_imports (ModuleEnv _ is _ _) = is
+                in case mapMaybe (findModuleEnv mID) [globalEnv1, globalEnv2] of
+                     []      -> error "FOOF"
+                     [m]     -> get_imports m
+                     [m1,m2] -> get_imports m1 ++ get_imports m2
+          was_exported_p id
+              = isExported id (moduleOf (lexInfoOf id)) globalEnv1 ||
+                isExported id (moduleOf (lexInfoOf id)) globalEnv2
+      in 
+        makeGlobalEnv compute_old_imports was_exported_p
+           $ allIdentifiers (simple_union globalEnv1 globalEnv2)
+    where 
+      simple_union (GlobalEnv map1) (GlobalEnv map2)
+          = GlobalEnv 
+              $ Map.unionWithKey
+                    (\m moduleEnv1 moduleEnv2
+                         -> let env1 = if Map.member m map1 then moduleEnv1 else moduleEnv2
+                                env2 = if Map.member m map1 then moduleEnv2 else moduleEnv1
+                            in -- `env1' contains ModuleE that belongs to `map1'.
+                              mergeModuleEnvs env1 env2)
+                    map1 map2
+
+
 
 findModuleEnv :: ModuleID -> GlobalE -> Maybe ModuleE
 findModuleEnv mID (GlobalEnv globalmap)
@@ -597,22 +671,24 @@ findModuleEnv_OrLose m globalEnv
           
 computeExportedNames :: ModuleID -> GlobalE -> [IdentifierID]
 computeExportedNames moduleID globalEnv
-    = do let ModuleEnv moduleID' _ exports (LexEnv constants_map types_map)
-                 = findModuleEnv_OrLose moduleID globalEnv
-         assert (moduleID == moduleID') $ return ()
-         export <- exports   -- List Monad concats implicitly for us.
-         case export of         
-           EnvExportVar   qn -> [idOf (unqualifyEnvName moduleID qn)]
-           EnvExportAbstr qn -> [idOf (unqualifyEnvName moduleID qn)]
-           EnvExportAll qn 
-             -> case Importer.LexEnv.lookupType moduleID qn globalEnv of
-                  Just t@(Type (Data _ constructors))
-                      -> let id_of i = nameOf (lexInfoOf i)
-                         in id_of t : map (id_of . Constant) constructors
-                  etc -> error ("Internal error (computeExportedNames): " ++ show etc)
-           EnvExportMod m
-             | m == moduleID -> Map.keys constants_map ++ Map.keys types_map -- export everything
-             | otherwise     -> computeExportedNames m globalEnv
+    = case findModuleEnv moduleID globalEnv of
+        Nothing -> []
+        Just (ModuleEnv moduleID' _ exports (LexEnv constants_map types_map))
+            -> do assert (moduleID == moduleID') $ return ()
+                  export <- exports   -- List Monad concats implicitly for us.
+                  case export of         
+                    EnvExportVar   qn -> [idOf (unqualifyEnvName moduleID qn)]
+                    EnvExportAbstr qn -> [idOf (unqualifyEnvName moduleID qn)]
+                    EnvExportAll qn 
+                        -> case Importer.LexEnv.lookupType moduleID qn globalEnv of
+                             Just t@(Type (Data _ constructors))
+                                 -> let id_of i = nameOf (lexInfoOf i)
+                                    in id_of t : map (id_of . Constant) constructors
+                             etc -> error ("Internal error (computeExportedNames): " ++ show etc)
+                    EnvExportMod m
+                                           -- export everything:
+                        | m == moduleID -> Map.keys constants_map ++ Map.keys types_map 
+                        | otherwise     -> computeExportedNames m globalEnv
     where idOf :: EnvName -> IdentifierID
           idOf (EnvUnqualName id) = id
 
@@ -709,7 +785,7 @@ lookup currentModule qname globalEnv
                        consider Nothing  []  = []
                        consider (Just x) []  = [x]
                        consider Nothing  [x] = [x]
-                       consider Nothing  xs  
+                       consider Nothing  xs 
                            = error (Msg.identifier_collision_in_lookup currentModule qname xs)
                        consider (Just x) xs  
                            = error (Msg.identifier_collision_in_lookup currentModule qname (x:xs))
