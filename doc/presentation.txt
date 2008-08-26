@@ -1,7 +1,16 @@
 
+*** Motivation
+
+*** grobe fktweise.
+
+
 *** Subset of Haskell 98:
 
+ * Module -> Theory
+
  * Toplevel Function Declarations
+
+       auf Listen
 
      fib 0 = 0
      fib 1 = 1
@@ -33,7 +42,8 @@
 
    But NO closures:
 
-      scale_list n xs = map (\x -> n * x) xs
+      scale_list n xs = map scale xs
+        where scale x = n * x
 
           ==> error
 
@@ -153,7 +163,7 @@
       - documentation (in progress..)
 
 
-*** Short Overview over the Implementation of Hsimp:
+*** Short Overview over the Architecture of Hsimp:
 
   5 Phases:
 
@@ -209,3 +219,5 @@
            - outputs the Isar/HOL AST in actual Isar/HOL syntax.
 
            - formats the output human-readably.
+
+*** Adaption Layer
