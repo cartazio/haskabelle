@@ -37,6 +37,12 @@ adaptionTable
 extractHskEntries (AdaptionTable mapping) = map fst mapping
 extractIsaEntries (AdaptionTable mapping) = map snd mapping
 
+-- Our predefined `adaptionTable' contains entries for all things that
+-- may possibly get adapted; a haskell source file may, however, define
+-- their own variants of the Prelude stuff (e.g. define its own `map'.)
+-- 
+-- Hence, we have to remove entries from `adaptionTable' which are
+-- defined in one of the source files.
 makeAdaptionTable_FromHsModules :: [HsModule] -> AdaptionTable
 makeAdaptionTable_FromHsModules hsmodules
     = let initial_class_env = makeGlobalEnv_FromAdaptionTable
@@ -57,10 +63,11 @@ makeAdaptionTable_FromHsModules hsmodules
                                 n'   = Env.fromHsk n
                                 ids  = Env.lookupIdentifiers_OrLose m' n' globalEnv
                                 name = Env.nameOf . Env.lexInfoOf
-                            in case filter Env.isType ids of
-                                         []                       -> Just $ name (head ids)
-                                         [id] | Env.isInstance id -> Just $ name id
-                                              | otherwise         -> Nothing)
+                            in 
+                              case filter Env.isType ids of
+                                []                       -> Just $ name (head ids)
+                                [id] | Env.isInstance id -> Just $ name id
+                                     | otherwise         -> Nothing)
               $ concatMap extractBindingNs decls
 
 makeGlobalEnv_FromAdaptionTable :: AdaptionTable -> Env.GlobalE
@@ -74,7 +81,10 @@ filterAdaptionTable predicate (AdaptionTable entries)
     = AdaptionTable (filter predicate entries)
 
 
-
+-- Check the Raw Adaption Table for consistency; prohibit duplicate
+-- entries, and ensure that class methods have their own entry as
+-- function or op.
+--
 check_raw_adaption_table :: [(AdaptionEntry, AdaptionEntry)] -> [(AdaptionEntry, AdaptionEntry)]
 check_raw_adaption_table tbl
     = let (hsk_entries, _)   = unzip tbl

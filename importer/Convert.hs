@@ -37,12 +37,14 @@ import qualified Data.Map as Map
 
 -- Main function of the conversion process; converts a Unit of Haskell
 -- ASTs into a Unit of Isar/HOL ASTs.
+--
 convertHskUnit :: HskUnit -> IsaUnit
 convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'     = map preprocessHsModule hsmodules
           adaptionTable  = makeAdaptionTable_FromHsModules hsmodules'
           global_env_hsk = Env.unionGlobalEnvs
                              (Env.makeGlobalEnv_FromHsModules hsmodules') 
+                             -- Make initial Global Environment:
                              (Env.augmentGlobalEnv initialGlobalEnv
                                  $ extractHskEntries adaptionTable)
           hskmodules     = map (toHskModule global_env_hsk) hsmodules'
