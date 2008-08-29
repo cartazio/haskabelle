@@ -3,8 +3,8 @@
 -}
 
 module Importer.Adapt.Mapping 
-    (AdaptionTable(..), adaptionTable, 
-     makeGlobalEnv_FromAdaptionTable, filterAdaptionTable) 
+    (AdaptionTable(..), extractHskEntries, extractIsaEntries,
+     makeAdaptionTable_FromHsModules, adaptionTable)
 where
 
 import List (intersperse, group, groupBy, sort, sortBy, nub)
@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 import Language.Haskell.Exts
 
 import Importer.Utilities.Misc (wordsBy, hasDuplicates, prettyShow', trace, assert)
-import Importer.Utilities.Hsk (string2HsName)
+import Importer.Utilities.Hsk (string2HsName, extractBindingNs)
 
 import qualified Importer.LexEnv as Env
 
@@ -33,6 +33,47 @@ adaptionTable
     = AdaptionTable 
         $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
               (check_raw_adaption_table raw_adaption_table)
+
+extractHskEntries (AdaptionTable mapping) = map fst mapping
+extractIsaEntries (AdaptionTable mapping) = map snd mapping
+
+makeAdaptionTable_FromHsModules :: [HsModule] -> AdaptionTable
+makeAdaptionTable_FromHsModules hsmodules
+    = let initial_class_env = makeGlobalEnv_FromAdaptionTable
+                                  (filterAdaptionTable (Env.isClass . fst) adaptionTable)
+          tmp_env           = Env.unionGlobalEnvs initial_class_env
+                                                  (Env.makeGlobalEnv_FromHsModules hsmodules)
+          defined_names     = concatMap (extractDefNames tmp_env) hsmodules
+      in 
+        filterAdaptionTable 
+          (\(from,to) -> let fromN = Env.nameOf (Env.lexInfoOf from)
+                             toN = Env.nameOf (Env.lexInfoOf to)
+                         in fromN `notElem` defined_names && toN `notElem` defined_names)
+          adaptionTable
+    where
+      extractDefNames :: Env.GlobalE -> HsModule -> [String]
+      extractDefNames globalEnv (HsModule _ m _ _ decls)
+          = mapMaybe (\n -> let m'   = Env.fromHsk m
+                                n'   = Env.fromHsk n
+                                ids  = Env.lookupIdentifiers_OrLose m' n' globalEnv
+                                name = Env.nameOf . Env.lexInfoOf
+                            in case filter Env.isType ids of
+                                         []                       -> Just $ name (head ids)
+                                         [id] | Env.isInstance id -> Just $ name id
+                                              | otherwise         -> Nothing)
+              $ concatMap extractBindingNs decls
+
+makeGlobalEnv_FromAdaptionTable :: AdaptionTable -> Env.GlobalE
+makeGlobalEnv_FromAdaptionTable adaptionTable
+    = Env.makeGlobalEnv importNothing exportAll (extractHskEntries adaptionTable)
+    where importNothing = const []
+          exportAll     = const True
+
+filterAdaptionTable :: ((Env.Identifier, Env.Identifier) -> Bool) -> AdaptionTable -> AdaptionTable
+filterAdaptionTable predicate (AdaptionTable entries)
+    = AdaptionTable (filter predicate entries)
+
+
 
 check_raw_adaption_table :: [(AdaptionEntry, AdaptionEntry)] -> [(AdaptionEntry, AdaptionEntry)]
 check_raw_adaption_table tbl
@@ -63,19 +104,6 @@ check_raw_adaption_table tbl
 
       isClassEntry (Haskell _ (Class _))   = True
       isClassEntry _                       = False
-
-      
-
-makeGlobalEnv_FromAdaptionTable :: AdaptionTable -> Env.GlobalE
-makeGlobalEnv_FromAdaptionTable adaptionTable
-    = Env.makeGlobalEnv importNothing exportAll (hskIdentifiers adaptionTable)
-    where importNothing = const []
-          exportAll     = const True
-          hskIdentifiers (AdaptionTable mapping) = map fst mapping
-
-filterAdaptionTable :: ((Env.Identifier, Env.Identifier) -> Bool) -> AdaptionTable -> AdaptionTable
-filterAdaptionTable predicate (AdaptionTable entries)
-    = AdaptionTable (filter predicate entries)
 
 parseEntry :: AdaptionEntry -> Env.Identifier
 

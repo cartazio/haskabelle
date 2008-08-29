@@ -503,8 +503,8 @@ makeModuleEnv imports shall_export_p identifiers
       export id@(Type (Data _ _)) = EnvExportAll (identifier2name id) 
       export id                   = EnvExportVar (identifier2name id)
 
-makeModuleEnv_fromHsModule :: HsModule -> ModuleE
-makeModuleEnv_fromHsModule (HsModule loc modul exports imports topdecls)
+makeModuleEnv_FromHsModule :: HsModule -> ModuleE
+makeModuleEnv_FromHsModule (HsModule loc modul exports imports topdecls)
     = let lexenv   = makeLexEnv (concatMap (computeConstantMappings modul) topdecls)
           imports' = map fromHsk imports ++ defaultImports
           exports' = if isNothing exports then [EnvExportMod (fromHsk modul)] 
@@ -623,11 +623,11 @@ groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]
 groupIdentifiers identifiers
     = groupAlist [ (moduleOf (lexInfoOf id), id) | id <- identifiers ]
 
-makeGlobalEnv_fromHsModules :: [HsModule] -> GlobalE
-makeGlobalEnv_fromHsModules ms 
+makeGlobalEnv_FromHsModules :: [HsModule] -> GlobalE
+makeGlobalEnv_FromHsModules ms 
     = GlobalEnv 
         $ Map.fromListWith failDups 
-              [ (fromHsk modul, makeModuleEnv_fromHsModule m) 
+              [ (fromHsk modul, makeModuleEnv_FromHsModule m) 
                     | m@(HsModule _ modul _ _ _) <- ms ]
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
@@ -920,10 +920,7 @@ augmentGlobalEnv globalEnv new_identifiers
                                             then old_ids 
                                             else old_ids ++ new_ids)
                       globalEnv
-      in -- trace (prettyShow' "all_identifiers" all_identifiers++ "\n" ++ 
---                 prettyShow' "updated_identifiers" updated_identifiers ++ "\n" ++
---                 prettyShow' "really_new_identifiers" really_new_identifiers) 
-         unionGlobalEnvs env2 env1
+      in unionGlobalEnvs env2 env1
 
 
 

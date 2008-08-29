@@ -25,8 +25,7 @@ import Importer.Preprocess
 import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
 import Importer.DeclDependencyGraph
 
-import Importer.Adapt.Mapping (adaptionTable, makeGlobalEnv_FromAdaptionTable, 
-                               filterAdaptionTable)
+import Importer.Adapt.Mapping (makeAdaptionTable_FromHsModules, extractHskEntries)
 import Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit)
 
 import qualified Importer.IsaSyntax as Isa
@@ -36,56 +35,28 @@ import qualified Importer.LexEnv as Env
 
 import qualified Data.Map as Map
 
+-- Main function of the conversion process; converts a Unit of Haskell
+-- ASTs into a Unit of Isar/HOL ASTs.
 convertHskUnit :: HskUnit -> IsaUnit
 convertHskUnit (HskUnit hsmodules initialGlobalEnv)
-    = let hsmodules'      = map preprocessHsModule hsmodules
-          global_env_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
-
-          initial_class_env = Env.unionGlobalEnvs initialGlobalEnv $
-                                makeGlobalEnv_FromAdaptionTable
-                                  (filterAdaptionTable (Env.isClass . fst) adaptionTable)
-          tmp_env         = Env.unionGlobalEnvs initial_class_env global_env_hsk                                
-          defined_names   = concatMap (extractDefNames tmp_env) hsmodules'
-
-          adaptionTable'  = filterAdaptionTable 
-                              (\(from,to) -> let fromN = Env.nameOf (Env.lexInfoOf from)
-                                                 toN = Env.nameOf (Env.lexInfoOf to)
-                                             in fromN `notElem` defined_names &&
-                                                toN `notElem` defined_names)
-                              adaptionTable
+    = let hsmodules'     = map preprocessHsModule hsmodules
+          adaptionTable  = makeAdaptionTable_FromHsModules hsmodules'
+          global_env_hsk = Env.unionGlobalEnvs
+                             (Env.makeGlobalEnv_FromHsModules hsmodules') 
+                             (Env.augmentGlobalEnv initialGlobalEnv
+                                 $ extractHskEntries adaptionTable)
+          hskmodules     = map (toHskModule global_env_hsk) hsmodules'
           
-          table_env       = makeGlobalEnv_FromAdaptionTable adaptionTable'
-          initial_env     = Env.unionGlobalEnvs initialGlobalEnv table_env
-
-          global_env_hsk' = Env.unionGlobalEnvs global_env_hsk initial_env
-          global_env_isa  = adaptGlobalEnv global_env_hsk' adaptionTable'
-
-          hskmodules      = map (toHskModule global_env_hsk') hsmodules'
-          (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in -- trace (prettyShow' "adaptionTable" adaptionTable) $
-         let !r = adaptIsaUnit global_env_hsk' adaptionTable'
-                  $ IsaUnit isathys global_env_isa 
-         in -- trace (prettyShow' "adaptedIsaUnits" r) r
-            r
+          isathys = fst $ runConversion global_env_hsk $ mapM convert hskmodules 
+          isaunit = IsaUnit isathys (adaptGlobalEnv global_env_hsk adaptionTable)
+      in
+        adaptIsaUnit global_env_hsk adaptionTable isaunit
     where 
       toHskModule :: Env.GlobalE -> HsModule -> HskModule
       toHskModule globalEnv (HsModule loc modul _exports _imports decls)
           = let declDepGraph = makeDeclDepGraph globalEnv modul decls 
             in HskModule loc modul 
                 $ map HskDependentDecls (flattenDeclDepGraph declDepGraph)
-
-      extractDefNames :: Env.GlobalE -> HsModule -> [String]
-      extractDefNames globalEnv (HsModule _ m _ _ decls)
-          = mapMaybe (\n -> let m'   = Env.fromHsk m
-                                n'   = Env.fromHsk n
-                                ids  = Env.lookupIdentifiers_OrLose m' n' globalEnv
-                                name = Env.nameOf . Env.lexInfoOf
-                            in case filter Env.isType ids of
-                                         []                       -> Just $ name (head ids)
-                                         [id] | Env.isInstance id -> Just $ name id
-                                              | otherwise         -> Nothing)
-              $ (let !r = concatMap extractBindingNs decls
-                 in r) -- trace (prettyShow' "raw_defined_names" r) r)
 
 
 -- The naming scheme "HsFoo" is treated as being owned by the parser
