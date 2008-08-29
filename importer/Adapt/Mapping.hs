@@ -36,28 +36,34 @@ adaptionTable
 
 check_raw_adaption_table :: [(AdaptionEntry, AdaptionEntry)] -> [(AdaptionEntry, AdaptionEntry)]
 check_raw_adaption_table tbl
-    = let (hsk_entries, _) = unzip tbl
-          names            = [ n | Haskell n _ <- hsk_entries ]
-          methods          = concatMap (\(Haskell _ (Class (RawClassInfo { methods = m }))) -> fst (unzip m))
-                              $ filter isClassEntry hsk_entries
-          functions        = [ n | Haskell n Function <- filter isFunctionEntry hsk_entries ]
+    = let (hsk_entries, _)   = unzip tbl
+          names              = [ n | Haskell n _ <- hsk_entries ]
+          methods            = concatMap (\(Haskell _ (Class (RawClassInfo { methods = m }))) -> fst (unzip m))
+                                 $ filter isClassEntry hsk_entries
+          functions          = extract_functionoid_names hsk_entries
+          missing_fn_entries = filter (`notElem` functions) methods
       in 
         if (hasDuplicates names)
         then error ("Duplicates in Raw Adaption Table found: "
                     ++ show (filter (flip (>) 1 . length) (group (sort names))))
-        else tbl
-
--- let missing_fn_entries = filter (`notElem` functions) methods
---              in if not (null missing_fn_entries)
---                 then error ("Inconsistency in Raw Adaption Table: The following methods\n" 
---                             ++ "don't have a Function entry: " ++ show missing_fn_entries)
---                 else tbl
+        else if not (null missing_fn_entries)
+             then error ("Inconsistency in Raw Adaption Table: The following methods\n" 
+                         ++ "don't have a Function entry: " ++ show missing_fn_entries)
+             else tbl
                  
     where
+      extract_functionoid_names [] = []
+      extract_functionoid_names (e:rest_entries)
+          = case e of
+              Haskell n Function      -> n : extract_functionoid_names rest_entries
+              Haskell n RawHskOp      -> n : extract_functionoid_names rest_entries
+              Haskell n (UnaryOp _)   -> n : extract_functionoid_names rest_entries
+              Haskell n (InfixOp _ _) -> n : extract_functionoid_names rest_entries
+              _                       -> extract_functionoid_names rest_entries
+
       isClassEntry (Haskell _ (Class _))   = True
       isClassEntry _                       = False
-      isFunctionEntry (Haskell _ Function) = True
-      isFunctionEntry _                    = False
+
       
 
 makeGlobalEnv_FromAdaptionTable :: AdaptionTable -> Env.GlobalE

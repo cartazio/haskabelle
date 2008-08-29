@@ -20,7 +20,7 @@ data RawClassInfo = RawClassInfo
 data OpKind = Type 
             | Variable 
             | Function
-            | RawHskOp 
+            | RawHskOp          -- placeholder
             | UnaryOp Int 
             | InfixOp Assoc Int
             | Class RawClassInfo
