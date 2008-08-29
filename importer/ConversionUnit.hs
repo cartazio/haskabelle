@@ -3,7 +3,7 @@
 -}
 
 module Importer.ConversionUnit 
-    (ConversionUnit(..), makeConversionUnitFromFile) where
+    (HskUnit(..), IsaUnit(..), makeHskUnitFromFile) where
 
 import Maybe
 import IO
@@ -22,21 +22,23 @@ import Importer.Utilities.Hsk
 
 -- A Conversion Unit
 
-data ConversionUnit = HskUnit [HsModule] Env.GlobalE
-                    | IsaUnit [Isa.Cmd] Env.GlobalE
+data HskUnit = HskUnit [HsModule] Env.GlobalE
   deriving (Show)
 
-makeConversionUnitFromFile :: FilePath -> IO ConversionUnit
-makeConversionUnitFromFile fp
-    = parseFileOrLose fp >>= makeConversionUnit                     
+data IsaUnit = IsaUnit [Isa.Cmd] Env.GlobalE
+  deriving (Show)
+
+makeHskUnitFromFile :: FilePath -> IO HskUnit
+makeHskUnitFromFile fp
+    = parseFileOrLose fp >>= makeHskUnit                     
       where parseFileOrLose fp 
                 = do result <- parseFile fp
                      case result of
                        ParseOk hsm         -> return hsm
                        ParseFailed loc msg -> error (Msg.failed_parsing loc msg)
 
-makeConversionUnit :: HsModule -> IO ConversionUnit
-makeConversionUnit hsmodule
+makeHskUnit :: HsModule -> IO HskUnit
+makeHskUnit hsmodule
     = do (depGraph, fromVertex, _) <- makeDependencyGraph hsmodule
          let cycles = cyclesFromGraph depGraph
          when (not (null cycles)) -- not a DAG?

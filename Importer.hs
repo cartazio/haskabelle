@@ -41,20 +41,20 @@ import Importer.Printer (pprint)
 -- E.g.
 --
 --    do unit <- convertFile "/path/foo.hs"
---       return (pprintConversionUnit unit)
+--       return (pprintIsaUnit unit)
 --
 
-convertFile :: FilePath -> IO ConversionUnit
+convertFile :: FilePath -> IO IsaUnit
 convertFile fp = do [unit] <- convertFiles [fp]; return unit
 
-convertFiles :: [FilePath] -> IO [ConversionUnit]
+convertFiles :: [FilePath] -> IO [IsaUnit]
 convertFiles []   = return []
 convertFiles (fp:fps)
     = let dir      = dirname fp
           filename = basename fp
       -- We have to do this to find the source files of imported modules.
       in withCurrentDirectory (if dir == "" then "./" else dir)
-          $ do unit@(HskUnit hsmodules _) <- makeConversionUnitFromFile filename
+          $ do unit@(HskUnit hsmodules _) <- makeHskUnitFromFile filename
                let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
                let dependentFiles    = map module2FilePath dependentModuleNs
                units <- convertFiles (filter (`notElem` dependentFiles) fps) 
@@ -80,18 +80,18 @@ getFilesRecursively dirpath
               = Node { rootLabel = cwd ++ filename, 
                        subForest = map (absolutify (cwd ++ filename ++ "/")) children }
 
-convertDir :: FilePath -> IO [ConversionUnit]
+convertDir :: FilePath -> IO [IsaUnit]
 convertDir dirpath
     = do fps   <- getFilesRecursively dirpath
          units <- convertFiles (filter isHaskellSourceFile fps)
          return units
 
 
-pprintConversionUnit (IsaUnit thys env)
+pprintIsaUnit (IsaUnit thys env)
     = vcat (map (dashes . flip pprint env) thys)
     where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
 
-printAST (IsaUnit thys env)
+printIsaUnit_asAST (IsaUnit thys env)
     = vcat (map (dashes . text . prettyShow) thys)
     where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
 

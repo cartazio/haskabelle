@@ -22,7 +22,7 @@ import Importer.Utilities.Hsk
      extractBindingNs, extractSuperclassNs, srcloc2string)
 import Importer.Utilities.Gensym
 import Importer.Preprocess
-import Importer.ConversionUnit
+import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
 import Importer.DeclDependencyGraph
 
 import Importer.Adapt.Mapping (adaptionTable, makeGlobalEnv_FromAdaptionTable, 
@@ -36,7 +36,7 @@ import qualified Importer.LexEnv as Env
 
 import qualified Data.Map as Map
 
-convertHskUnit :: ConversionUnit -> ConversionUnit
+convertHskUnit :: HskUnit -> IsaUnit
 convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'      = map preprocessHsModule hsmodules
           global_env_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'
@@ -62,7 +62,7 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 
           hskmodules      = map (toHskModule global_env_hsk') hsmodules'
           (isathys, _)    = runConversion global_env_hsk' $ mapM convert hskmodules 
-      in trace (prettyShow' "defined_names" defined_names) $
+      in -- trace (prettyShow' "adaptionTable" adaptionTable) $
          let !r = adaptIsaUnit global_env_hsk' adaptionTable'
                   $ IsaUnit isathys global_env_isa 
          in -- trace (prettyShow' "adaptedIsaUnits" r) r
