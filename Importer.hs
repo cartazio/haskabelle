@@ -4,16 +4,15 @@
 Toplevel interface to importer.
 -}
 
-module Main (
+module Importer (
   module Importer.Convert,
   module Importer.IsaSyntax,
   module Importer.Printer,
-  convertFile, convertDir, convertFiles, importFiles, importDir -- , cnvFile
+  convertFile, convertDir, convertFiles, importFiles, importDir
 ) where
 
 import IO
 import Directory
-import System.Environment (getArgs, getProgName)
 
 import List (intersperse)
 import Control.Monad
@@ -22,8 +21,12 @@ import Data.Tree
 import Text.PrettyPrint (render, vcat, text, (<>))
 
 import Language.Haskell.Exts (ParseResult(..), parseFile, HsModule(..))
+import Language.Haskell.Exts.Pretty 
+import Language.Haskell.Exts.Syntax 
+---import Language.Haskell.Pretty
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
+import Importer.Preprocess
 import Importer.Utilities.Hsk (srcloc2string, module2FilePath, isHaskellSourceFile)
 import Importer.Utilities.Misc (assert, wordsBy, prettyShow)
 import Importer.ConversionUnit
@@ -125,19 +128,28 @@ writeTheory thy@(TheoryCmd (Theory thyname) _) env
          let dstName = content `seq` map (\c -> if c == '.' then '_' else c) thyname ++ ".thy"
          writeFile dstName content
 
-main :: IO ()
-main = do
-  progname <- getProgName
-  args     <- getArgs
-  case args of
-    []   -> ioError $ userError ("Usage: " ++ progname ++ " [[source_file | source_dir]]* destination_dir")
-    args -> let destdir = last args 
-                fps     = init args
-            in do dirs  <- filterM doesDirectoryExist fps
-                  files <- filterM doesFileExist fps
-                  assert (all (`elem` dirs ++ files) fps)
-                    $ sequence_ ([importFiles files destdir] 
-                                 ++ map (\srcdir -> importDir srcdir destdir) dirs)
-                                  
-            
-            
+
+----------------------------------------------------------
+------------ Preprocessing Only --------------------------
+----------------------------------------------------------
+
+writeHskUnit :: HskUnit -> FilePath -> IO ()
+writeHskUnit (HskUnit modules _) outDir
+    = mapM_ (`writeHskModule` outDir) modules
+
+writeHskModule :: HsModule -> FilePath -> IO ()
+writeHskModule mod@(HsModule _ (Module modName) _ _ _) dir = do
+  let modCont = prettyPrint mod
+  let dstName = map (\c -> if c == '.' then '_' else c) modName ++ ".hs"
+  withCurrentDirectory dir $
+                       writeFile dstName modCont
+
+preprocessFile :: FilePath -> FilePath -> IO ()
+preprocessFile inFile outDir = do
+  hskUnit <- makeHskUnitFromFile inFile
+  let HskUnit modules env = hskUnit
+  let ppModules = map preprocessHsModule modules
+  let ppUnit = HskUnit ppModules env
+  writeHskUnit ppUnit outDir
+
+exPP = preprocessFile "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/src_hs/AsPatterns.hs" "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/dst_hs"
