@@ -220,7 +220,7 @@ adaptClass classN = do let ignore = Isa.Name "_"
                        let (Isa.TyScheme [(_, [classN'])] _) = t
                        return classN'
 
-adaptIsaUnit :: Env.GlobalE -> AdaptionTable -> ConversionUnit -> ConversionUnit
+adaptIsaUnit :: Env.GlobalE -> AdaptionTable -> IsaUnit -> IsaUnit
 adaptIsaUnit globalEnv adaptionTable (IsaUnit thycmds adaptedGlobalEnv)
     = let run thunk = runAdaption globalEnv adaptedGlobalEnv adaptionTable thunk
           thycmds'  = run (mapM adapt thycmds)

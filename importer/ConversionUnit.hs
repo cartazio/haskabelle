@@ -3,7 +3,7 @@
 -}
 
 module Importer.ConversionUnit 
-    (ConversionUnit(..), makeConversionUnitFromFile) where
+    (IsaUnit(..), HskUnit(..), makeConversionUnitFromFile) where
 
 import Maybe
 import IO
@@ -22,11 +22,13 @@ import Importer.Utilities.Hsk
 
 -- A Conversion Unit
 
-data ConversionUnit = HskUnit [HsModule] Env.GlobalE
-                    | IsaUnit [Isa.Cmd] Env.GlobalE
-  deriving (Show)
+data HskUnit = HskUnit [HsModule] Env.GlobalE
+               deriving (Show)
 
-makeConversionUnitFromFile :: FilePath -> IO ConversionUnit
+data IsaUnit = IsaUnit [Isa.Cmd] Env.GlobalE
+               deriving (Show)
+
+makeConversionUnitFromFile :: FilePath -> IO HskUnit
 makeConversionUnitFromFile fp
     = parseFileOrLose fp >>= makeConversionUnit                     
       where parseFileOrLose fp 
@@ -35,7 +37,7 @@ makeConversionUnitFromFile fp
                        ParseOk hsm         -> return hsm
                        ParseFailed loc msg -> error (Msg.failed_parsing loc msg)
 
-makeConversionUnit :: HsModule -> IO ConversionUnit
+makeConversionUnit :: HsModule -> IO HskUnit
 makeConversionUnit hsmodule
     = do (depGraph, fromVertex, _) <- makeDependencyGraph hsmodule
          let cycles = cyclesFromGraph depGraph
@@ -56,7 +58,7 @@ makeDependencyGraph hsmodule
     where makeEdge hsmodule@(HsModule _loc modul _exports imports _decls)
               = let imported_modules = map importModule imports
                 in (hsmodule, modul, imported_modules)
-
+ 
 transitiveClosure :: HsModule -> IO [HsModule]
 transitiveClosure hsmodule = grovelHsModules [] hsmodule
 

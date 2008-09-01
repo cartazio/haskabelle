@@ -36,7 +36,7 @@ import qualified Importer.LexEnv as Env
 
 import qualified Data.Map as Map
 
-convertHskUnit :: ConversionUnit -> ConversionUnit
+convertHskUnit :: HskUnit -> IsaUnit
 convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'      = map preprocessHsModule hsmodules
           global_env_hsk  = Env.makeGlobalEnv_fromHsModules hsmodules'

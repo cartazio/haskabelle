@@ -21,8 +21,12 @@ import Data.Tree
 import Text.PrettyPrint (render, vcat, text, (<>))
 
 import Language.Haskell.Exts (ParseResult(..), parseFile, HsModule(..))
+import Language.Haskell.Exts.Pretty 
+import Language.Haskell.Exts.Syntax 
+---import Language.Haskell.Pretty
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
+import Importer.Preprocess
 import Importer.Utilities.Hsk (srcloc2string, module2FilePath, isHaskellSourceFile)
 import Importer.Utilities.Misc (assert, wordsBy, prettyShow)
 import Importer.ConversionUnit
@@ -43,10 +47,10 @@ import Importer.Printer (pprint)
 --       return (pprintConversionUnit unit)
 --
 
-convertFile :: FilePath -> IO ConversionUnit
+convertFile :: FilePath -> IO IsaUnit
 convertFile fp = do [unit] <- convertFiles [fp]; return unit
 
-convertFiles :: [FilePath] -> IO [ConversionUnit]
+convertFiles :: [FilePath] -> IO [IsaUnit]
 convertFiles []   = return []
 convertFiles (fp:fps)
     = let dir      = dirname fp
@@ -79,7 +83,7 @@ getFilesRecursively dirpath
               = Node { rootLabel = cwd ++ filename, 
                        subForest = map (absolutify (cwd ++ filename ++ "/")) children }
 
-convertDir :: FilePath -> IO [ConversionUnit]
+convertDir :: FilePath -> IO [IsaUnit]
 convertDir dirpath
     = do fps   <- getFilesRecursively dirpath
          units <- convertFiles (filter isHaskellSourceFile fps)
@@ -123,3 +127,29 @@ writeTheory thy@(TheoryCmd (Theory thyname) _) env
     = do let content = render (pprint thy env)
          let dstName = content `seq` map (\c -> if c == '.' then '_' else c) thyname ++ ".thy"
          writeFile dstName content
+
+
+----------------------------------------------------------
+------------ Preprocessing Only --------------------------
+----------------------------------------------------------
+
+writeHskUnit :: HskUnit -> FilePath -> IO ()
+writeHskUnit (HskUnit modules _) outDir
+    = mapM_ (`writeHskModule` outDir) modules
+
+writeHskModule :: HsModule -> FilePath -> IO ()
+writeHskModule mod@(HsModule _ (Module modName) _ _ _) dir = do
+  let modCont = prettyPrint mod
+  let dstName = map (\c -> if c == '.' then '_' else c) modName ++ ".hs"
+  withCurrentDirectory dir $
+                       writeFile dstName modCont
+
+preprocessFile :: FilePath -> FilePath -> IO ()
+preprocessFile inFile outDir = do
+  hskUnit <- makeConversionUnitFromFile inFile
+  let HskUnit modules env = hskUnit
+  let ppModules = map preprocessHsModule modules
+  let ppUnit = HskUnit ppModules env
+  writeHskUnit ppUnit outDir
+
+exPP = preprocessFile "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/src_hs/AsPatterns.hs" "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/dst_hs"
