@@ -21,8 +21,9 @@ cd "$EXECPATH"
 
 SRC="$EXECPATH/misc/adapt.txt"
 DST="$EXECPATH/Importer/Adapt/Raw.hs"
-PRELUDE="$EXECPATH/misc/Prelude"
+PRELUDE_NAME="Prelude"
+PRELUDE="$EXECPATH/misc/$PRELUDE_NAME"
 CONV="$EXECPATH/misc/mk_adapt.ML"
-CMD="use_thy \"$PRELUDE\"; use \"$CONV\"; MkAdapt.run (theory \"Main\") \"$SRC\" \"$DST\";"
+CMD="use_thy \"$PRELUDE\"; use \"$CONV\"; MkAdapt.run (theory \"$PRELUDE_NAME\") \"$SRC\" \"$DST\";"
 
 "$ISABELLE" -q -e "$CMD" HOL || exit 1

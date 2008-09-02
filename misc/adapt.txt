@@ -2,10 +2,13 @@
     Author:     Florian Haftmann, TU Muenchen
 *)
 
-(*classes
+classes
   "Prelude.Show"        "Prelude.print"
+    parameter "Prelude.show"    "a -> String"
   "Prelude.Eq"          "Prelude.eq"
-  "Prelude.Num"         "Prelude.num"*)
+    parameter "Prelude.(==)"    "a -> a -> bool"
+    parameter "Prelude.(/=)"    "a -> a -> bool"
+  "Prelude.Num"         "Prelude.num"
 
 types
   "Prelude.Bool"        "bool"
@@ -17,6 +20,8 @@ types
   "Prelude.Integer"     "int"
 
 consts
+  "Prelude.show"        "Prelude.print"
+
   "Prelude.id"          "id"
   "Prelude.(.)"         "Fun.comp"
 
@@ -34,7 +39,7 @@ consts
 
   "Prelude.([])"        "List.Nil"
   "Prelude.(:)"         "List.Cons"
-  "Prelude.(!!)"        "op !"
+  "Prelude.(!!)"        "List.nth"
 
   "Prelude.head"        "List.hd"
   "Prelude.tail"        "List.tl"
@@ -62,9 +67,10 @@ consts
   "Prelude.(<=)"        "HOL.less_eq"
   "Prelude.(>)"         "HOL.greater"
   "Prelude.(<=)"        "HOL.greater_eq"
-  "Prelude.(==)"        "op ="
+  "Prelude.(==)"        "Prelude.heq"
+  "Prelude.(/=)"        "Prelude.hneq"
   "Prelude.abs"         "HOL.abs"
   "Prelude.sgn"         "HOL.sgn"
   "Prelude.fromInteger" "Int.of_int"
 
-  "Prelude._|_"         "undefined"
+  "Prelude._|_"         "HOL.undefined"
