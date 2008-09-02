@@ -565,17 +565,9 @@ importedModuleIDs (ModuleEnv _ imports _ _)
                         -> error ("<importedModules> Internal Error: bogus import:" ++ show imp))
           imports
 
--- isImportedModule_aux :: ModuleID -> [EnvImport] -> Bool
--- isImportedModule_aux moduleID imports
---     = case filter (== moduleID) (importedModules imports) of
---         []     -> False
---         [name] -> True
---         etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
-
 isImportedModule :: ModuleID -> ModuleE -> Bool
 isImportedModule moduleID moduleEnv
-    = -- trace ("isImportedModule " ++ moduleID ++ " " ++ prettyShow' "moduleEnv" moduleEnv) $
-      case filter (== moduleID) (importedModuleIDs moduleEnv) of
+    = case filter (== moduleID) (importedModuleIDs moduleEnv) of
         []     -> False
         [name] -> True
         etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
@@ -595,6 +587,11 @@ initialGlobalEnv = GlobalEnv
                      $ Map.singleton prelude 
                            (ModuleEnv prelude [] [] (LexEnv (Map.empty) (Map.empty)))
 
+-- Create a new GlobalE from a list of Identifiers. This list of
+-- Identifiers is normalized, i.e. Instances and Classes are possibly
+-- merged, and Identifiers may get annotated by the type information
+-- of explicit TypeAnnotations. 
+--
 makeGlobalEnv :: (ModuleID -> [EnvImport]) -> (Identifier -> Bool) -> [Identifier] -> GlobalE
 makeGlobalEnv compute_imports shall_export_p identifiers
      = GlobalEnv
@@ -606,23 +603,26 @@ makeGlobalEnv compute_imports shall_export_p identifiers
     where 
       failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
+
 mergeInstancesWithClasses :: [Type] -> [Type]
 mergeInstancesWithClasses ts
-    = let map = Map.fromListWith (++) [ (nameOf (lexInfoOf (Type t)), [t]) | t <- ts ]
+    = let type_map  = Map.fromListWith (++) [ (nameOf (lexInfoOf (Type t)), [t]) | t <- ts ]
           instances = filter (isInstance . Type) ts
-          map' = foldl (\map i -> Map.adjust (\ts -> case ts of
-                                                       [t] -> [t]
-                                                       ts  -> [foldl1 mergeTypes_OrFail ts])
-                                             (nameOf (lexInfoOf (Type i)))
-                                             map)
-                        map
+          type_map' = foldl (\map i -> Map.adjust (\ts -> case ts of
+                                                            [t] -> [t]
+                                                            ts  -> [foldl1 mergeTypes_OrFail ts])
+                                                  (nameOf (lexInfoOf (Type i)))
+                                                  type_map)
+                        type_map
                         instances
-      in concat $ Map.elems map'
+      in concat $ Map.elems type_map'
 
 groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]
 groupIdentifiers identifiers
     = groupAlist [ (moduleOf (lexInfoOf id), id) | id <- identifiers ]
 
+-- Create a new GlobalE from a list of HsModules.
+--
 makeGlobalEnv_FromHsModules :: [HsModule] -> GlobalE
 makeGlobalEnv_FromHsModules ms 
     = GlobalEnv 
@@ -631,31 +631,36 @@ makeGlobalEnv_FromHsModules ms
                     | m@(HsModule _ modul _ _ _) <- ms ]
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
--- Left-prioritized union of Global Environments.
+-- Left-prioritized union of Global Environments. Instances are merged
+-- with Classes between the two enviornments.
 --
 unionGlobalEnvs :: GlobalE -> GlobalE -> GlobalE
 unionGlobalEnvs globalEnv1 globalEnv2
     = let compute_old_imports mID 
               = let get_imports (ModuleEnv _ is _ _) = is
                 in case mapMaybe (findModuleEnv mID) [globalEnv1, globalEnv2] of
-                     []      -> error "FOOF"
+                     []      -> error ("unionGlobalEnvs: Internal error during computation of imports.")
                      [m]     -> get_imports m
                      [m1,m2] -> get_imports m1 ++ get_imports m2
           was_exported_p id
               = isExported id (moduleOf (lexInfoOf id)) globalEnv1 ||
                 isExported id (moduleOf (lexInfoOf id)) globalEnv2
-      in 
+      in
+        -- We explicitly recreate a GlobalE from new to merge Instances with Classes
+        -- across all modules.
         makeGlobalEnv compute_old_imports was_exported_p
            $ allIdentifiers (simple_union globalEnv1 globalEnv2)
     where 
+      -- This will merge the two envs module-wise; it'll especially merge Instances
+      -- with Classes within the boundaries of one module only.
       simple_union (GlobalEnv map1) (GlobalEnv map2)
           = GlobalEnv 
               $ Map.unionWithKey
                     (\m moduleEnv1 moduleEnv2
                          -> let env1 = if Map.member m map1 then moduleEnv1 else moduleEnv2
                                 env2 = if Map.member m map1 then moduleEnv2 else moduleEnv1
-                            in -- `env1' contains ModuleE that belongs to `map1'.
-                              mergeModuleEnvs env1 env2)
+                            in
+                               mergeModuleEnvs env1 env2)
                     map1 map2
 
 
@@ -921,36 +926,3 @@ augmentGlobalEnv globalEnv new_identifiers
                                             else old_ids ++ new_ids)
                       globalEnv
       in unionGlobalEnvs env2 env1
-
-
-
--- check_GlobalEnv_Consistency
-
---       check_duplicates :: Eq a => ([a] -> String) -> [a] -> [a]
---       check_duplicates failure_str xs 
---           | hasDuplicates xs = error (failure_str xs)
---           | otherwise = xs 
-
---              (check_duplicates Msg.duplicate_import (importedModules imports'))
---              (check_duplicates Msg.export (importedModules exports')) 
-
---     where 
-
---       checkExports :: [HsExportSpec] -> [HsImportDecl] -> [HsExportSpec]
---       checkExports exports imports 
---           = do export <- checkForDuplicateExport exports
---                let [(qname, restoreExport)] = contextsBi export :: [(HsQName, HsQName -> HsExportSpec)]
---                case qname of 
---                  UnQual _ -> return (restoreExport qname)
---                  Qual m _ 
---                    | isImportedModule_aux (fromHsk m) imports  
---                        -> return (restoreExport qname)
---                    | otherwise 
---                        -> error ("Module of `" ++ show qname ++ "'"
---                                  ++ " is not in import list, but in export list.")
-
---       checkForDuplicateExport :: [HsExportSpec] -> [HsExportSpec]
---       checkForDuplicateExport exports 
---           = if hasDuplicates (universeBi exports :: [HsName]) -- strip off qualifiers
---             then error ("Duplicates found in export list: " ++ show exports)
---             else exports
