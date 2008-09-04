@@ -27,6 +27,8 @@ import Importer.Adapt.Common (primitive_tycon_table, primitive_datacon_table)
 type ModuleID     = String
 type IdentifierID = String
 
+
+
 data EnvType = EnvTyVar EnvName
              | EnvTyCon EnvName [EnvType]
              | EnvTyFun EnvType EnvType
@@ -42,35 +44,65 @@ data EnvName = EnvQualName ModuleID IdentifierID
              | EnvUnqualName IdentifierID
   deriving (Eq, Ord, Show)
 
+{-|
+  Checks whether an environment name is qualified by a module.
+-}
+
 isQualified :: EnvName -> Bool
 isQualified (EnvQualName _ _) = True
 isQualified (EnvUnqualName _) = False
+
+{-|
+  Qualifies an existing environment name with a module.
+  If the name is already qualified nothing is changed.
+-}
 
 qualifyEnvName :: ModuleID -> EnvName -> EnvName
 qualifyEnvName mID qn@(EnvQualName mID' _) = qn
 qualifyEnvName mID (EnvUnqualName n)       = EnvQualName mID n
 
+{-|
+  If the given environment name is qualified with the given
+  module the qualification is removed and the corresponding
+  unqualified name is returned. If the modules do not match an exception
+  is thrown.
+  Unqualified environment names are left untouched.
+-}
+
 unqualifyEnvName :: ModuleID -> EnvName -> EnvName
 unqualifyEnvName mID (EnvQualName mID' id) = assert (mID == mID') $ EnvUnqualName id
 unqualifyEnvName mID n@(EnvUnqualName _)   = n
 
-substituteTyVars :: [(EnvType, EnvType)] -> EnvType -> EnvType
+
+{-|
+  This function substitutes types (not only type variables) by types
+  as given by the substitution argument.
+-}
+substituteTyVars :: [(EnvType, EnvType)] -- ^the substitution to use
+                 -> EnvType -- ^the type to apply the substitution to
+                 -> EnvType -- ^the resulting type
 substituteTyVars alist typ
     = let lookup' = Prelude.lookup in
       case typ of
-        t@(EnvTyVar _)     -> case lookup' t alist of { Just t' -> t'; Nothing -> t }
+        t@(EnvTyVar _)     -> case lookup' t alist of
+                               Just t' -> t'
+                               Nothing -> t
         t@(EnvTyCon cN ts) -> case lookup' t alist of
-                                Just t' -> t'
-                                Nothing -> EnvTyCon cN (map (substituteTyVars alist) ts)
+                               Just t' -> t'
+                               Nothing -> EnvTyCon cN (map (substituteTyVars alist) ts)
         t@(EnvTyFun t1 t2) -> case lookup' t alist of
-                                Just t' -> t'
-                                Nothing -> EnvTyFun (substituteTyVars alist t1)
+                               Just t' -> t'
+                               Nothing -> EnvTyFun (substituteTyVars alist t1)
                                                     (substituteTyVars alist t2)
         t@(EnvTyTuple ts)  -> case lookup' t alist of
-                                Just t' -> t'
-                                Nothing -> EnvTyTuple (map (substituteTyVars alist) ts)
+                               Just t' -> t'
+                               Nothing -> EnvTyTuple (map (substituteTyVars alist) ts)
         t@(EnvTyNone)      -> case lookup' t alist of { Just t' -> t'; Nothing -> t }
 
+{-|
+  This data type collects lexical information attached to
+  an identifier
+-}
 
 data LexInfo = LexInfo { 
                         nameOf   :: IdentifierID,
@@ -79,6 +111,11 @@ data LexInfo = LexInfo {
                        }
   deriving (Eq, Ord, Show)
 
+
+{-| 
+  This data type collects information that is
+  attached to a class.
+-}
 data ClassInfo = ClassInfo {
                             superclassesOf :: [EnvName],
                             methodsOf      :: [Identifier],
@@ -87,8 +124,17 @@ data ClassInfo = ClassInfo {
                            }
   deriving (Eq, Ord, Show)
 
+{-|
+  This data type collects information about 
+-}
+
 data InstanceInfo = InstanceInfo { specializedTypeOf :: EnvType }
   deriving (Eq, Ord, Show)
+
+{-|
+  This data structure represents lexical information for
+  different kinds of constants.
+-}
 
 data Constant = Variable LexInfo
               | Function LexInfo
@@ -97,15 +143,26 @@ data Constant = Variable LexInfo
               | TypeAnnotation LexInfo 
   deriving (Eq, Ord, Show)
 
+{-|
+  This data structure represents lexical information for 
+  different kinds of type declaration.
+-}
 data Type = Data  LexInfo [Constant] -- Data lexinfo [constructors]
           | Class LexInfo ClassInfo
           | Instance LexInfo [InstanceInfo]
   deriving (Eq, Ord, Show)
 
+{-| 
+  This forms the union of the 'Type' and 'Constant' type.
+-}
 data Identifier = Constant Constant
                 | Type Type
   deriving (Eq, Ord, Show)
 
+{-| 
+  This function constructs a lexical information structure, given a module
+  the identifier and the type of the identifier.
+-}
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
 makeLexInfo moduleID identifierID t
     = let mID = (if moduleID == "" then prelude else moduleID)
@@ -114,6 +171,11 @@ makeLexInfo moduleID identifierID t
                   typeOf   = t,
                   moduleOf = mID }
 
+{-|
+  This function constructs a class information structure, given a list of its
+  super classes, a list of the methods defined in the class and the variable 
+  that is declared to be in the class.
+-}
 makeClassInfo :: [EnvName] -> [Identifier] -> EnvName -> ClassInfo
 makeClassInfo superclasses methods classVarName
     = assert (all isTypeAnnotation methods)
@@ -121,47 +183,88 @@ makeClassInfo superclasses methods classVarName
                       methodsOf      = methods,
                       classVarOf     = classVarName,
                       instancesOf    = [] }
-
+{-|
+ ???
+-}
 makeInstanceInfo :: EnvType -> InstanceInfo
 makeInstanceInfo t 
     = InstanceInfo { specializedTypeOf = t }
 
-isConstant, isType :: Identifier -> Bool
-
+{-|
+  Returns true for identifiers being a constant.
+-}
+isConstant :: Identifier -> Bool
 isConstant (Constant _)              = True
 isConstant _                         = False
 
+{-|
+  Returns true for identifiers being a type.
+-}
+isType :: Identifier -> Bool
 isType (Type _)                      = True
 isType _                             = False
 
-isVariable, isFunction, isUnaryOp, isInfixOp  :: Identifier -> Bool
-isTypeAnnotation, isClass, isData :: Identifier -> Bool
-
+{-|
+  Returns true for identifiers being a variable.
+-}
+isVariable :: Identifier -> Bool
 isVariable (Constant (Variable _))   = True
 isVariable _                         = False
 
+{-|
+  Returns true for identifiers being a function.
+-}
+isFunction :: Identifier -> Bool
 isFunction (Constant (Function _))   = True
 isFunction _                         = False
 
+{-|
+  Returns true for identifiers being unary operators.
+-}
+isUnaryOp :: Identifier -> Bool
 isUnaryOp (Constant (UnaryOp _ _))   = True
 isUnaryOp _                          = False
 
+{-|
+  Returns true for identifiers being infix operators.
+-}
+isInfixOp :: Identifier -> Bool
 isInfixOp (Constant (InfixOp _ _ _)) = True
 isInfixOp _                          = False
 
+{-|
+  Returns true for identifiers being type annotations.
+-}
+isTypeAnnotation :: Identifier -> Bool
 isTypeAnnotation (Constant (TypeAnnotation _)) = True
 isTypeAnnotation _                             = False
 
+
+{-|
+  Returns true for identifiers being classes.
+-}
+isClass :: Identifier -> Bool
 isClass (Type (Class _ _))           = True
 isClass _                            = False
 
+{-|
+  Returns true for identifiers being instance declarations.
+-}
+isInstance :: Identifier -> Bool
 isInstance (Type (Instance _ _))     = True
 isInstance _                         = False
 
+{-|
+  Returns true for identifiers being data types.
+-}
+isData :: Identifier -> Bool
 isData (Type (Data _ _)) = True
 isData _                 = False
 
-
+{-|
+  This function provides the lexical information attached to the
+  given identifier.
+-}
 lexInfoOf :: Identifier -> LexInfo
 lexInfoOf identifier
     = case identifier of
@@ -178,6 +281,11 @@ lexInfoOf identifier
       lexInfoOf_typ (Instance i _)     = i
       lexInfoOf_typ (Data i _)         = i
 
+
+{-|
+  This function updates the lexical information attached to the
+  given identifier.
+-}
 updateIdentifier :: Identifier -> LexInfo -> Identifier
 updateIdentifier identifier lexinfo
     = case identifier of
@@ -193,7 +301,9 @@ updateIdentifier identifier lexinfo
       updateType (Data _ conNs) lexinfo          = Data lexinfo conNs
       updateType (Class _ classinfo) lexinfo     = Class lexinfo classinfo
       updateType (Instance _ instinfo) lexinfo   = Instance lexinfo instinfo
-
+{-|
+  This function provides the environment name for the given identifier
+-}
 identifier2name :: Identifier -> EnvName
 identifier2name identifier
     = let lexinfo  = lexInfoOf identifier
@@ -201,11 +311,22 @@ identifier2name identifier
           modul    = moduleOf lexinfo
       in assert (modul /= "") $ EnvQualName modul name
 
+{-|
+  This function provides the environment name for the given constant.
+-}
 constant2name :: Constant -> EnvName
-type2name     :: Type     -> EnvName
 constant2name c = identifier2name (Constant c)
+
+{-|
+  This function provides the environment name for the given type.
+-}
+type2name     :: Type     -> EnvName
 type2name t     = identifier2name (Type t)
 
+{-|
+  This function splits the given list into a list of constants and
+  a list of types.
+-}
 splitIdentifiers :: [Identifier] -> ([Constant], [Type])
 splitIdentifiers ids
     = let (c_ids, t_ids) 
@@ -214,11 +335,15 @@ splitIdentifiers ids
         ([ c | Constant c <- c_ids ], [ t | Type t <- t_ids ])
 
 
-
+{-|
+  Instances of this class are pairs of at the one hand a Haskell entity and on the
+  other and an environment entity that can be translated into each other.
+-}
 class Hsk2Env a b where
     fromHsk :: (Show a, Hsk2Env a b) => a -> b
     toHsk   :: (Show b, Hsk2Env a b) => b -> a
     toHsk b = error ("(toHsk) Internal Error: Don't know how to lift " ++ show b)
+
 
 instance Hsk2Env Module ModuleID where
     fromHsk (Module id) = id
@@ -338,7 +463,10 @@ instance Hsk2Env HsImportDecl EnvImport where
                                        else Just (fromHsk (fromJust nick)))
     fromHsk etc = error ("Not supported yet: " ++ show etc)
 
-
+{-|
+  Instances of this class are two types, on the one hand side Isabelle entities and on the other
+  hand side environment entities, that can be converted into each other.
+-}
 class Isa2Env a b where
     fromIsa :: (Show a, Isa2Env a b) => a -> b
     toIsa   :: (Show b, Isa2Env a b) => b -> a
@@ -381,12 +509,25 @@ instance Isa2Env Isa.Type EnvType where
     toIsa (EnvTyScheme ctx t)     = Isa.TyScheme ctx' (toIsa t)
         where ctx' = [ (toIsa vN, map toIsa cNs) | (vN, cNs) <- ctx ]
 
+{-|
+  This data type represents which kind a particular constructor is of. 
+  I.e. a data or a type constructor.
+-}
 data ConKind = DataCon | TypeCon deriving Show
 
-translateSpecialCon :: ConKind -> HsSpecialCon -> HsQName
+{-|
+  This function translates special constructors to primitive qualified names.
+-}
+translateSpecialCon :: ConKind -- ^the kind of the constructor
+                    -> HsSpecialCon -- ^the constructor to translate
+                    -> HsQName -- ^the translated constructor
 translateSpecialCon DataCon con = fromJust $ Prelude.lookup con primitive_datacon_table
 translateSpecialCon TypeCon con = fromJust $ Prelude.lookup con primitive_tycon_table
 
+{-|
+  This is the \"reverse\" of 'translateSpecialCon'. It translates qualified names into
+  special syntax constructors if possible.
+-}
 retranslateSpecialCon :: ConKind -> HsQName -> Maybe HsSpecialCon
 retranslateSpecialCon DataCon qname 
     = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_datacon_table ]
@@ -399,9 +540,16 @@ retranslateSpecialCon TypeCon qname
 -- LexEnv
 --
 
+{-|
+  This data structure provides lexical information for constants and types.
+-}
 data LexE = LexEnv (Map.Map IdentifierID Constant) (Map.Map IdentifierID Type)
   deriving (Show)
 
+{-|
+  This function takes a list of identifiers (that contain lexical information) and collects the
+  lexical information in a lexical environment.
+-}
 makeLexEnv :: [Identifier] -> LexE
 makeLexEnv identifiers
     = let (constants, types) = splitIdentifiers identifiers
@@ -412,19 +560,28 @@ makeLexEnv identifiers
       in 
         LexEnv constants_map types_map
                  
-
+{-|
+  Same as 'mergeConstants' but throws an exception if it was not successful.
+-}
 mergeConstants_OrFail :: Constant -> Constant -> Constant
 mergeConstants_OrFail c1 c2
     = case mergeConstants c1 c2 of
         Just result -> result
         Nothing     -> error (Msg.merge_collision "mergeConstants_OrFail" c1 c2)
 
+{-|
+  Same as 'mergeTypes' but throws an exception if it was not successful.
+-}
 mergeTypes_OrFail :: Type -> Type -> Type
 mergeTypes_OrFail t1 t2
     = case mergeTypes t1 t2 of
         Just result -> result
         Nothing     -> error (Msg.merge_collision "mergeTypes_OrFail" t1 t2)
 
+{-|
+  This function merges two lexical information blocks involving classes (i.e., also instance declarations for
+  a particular class). It throws an exception if the arguments have different names.
+-}
 mergeTypes :: Type -> Type -> Maybe Type
 mergeTypes t1 t2
     = assert (nameOf (lexInfoOf (Type t1)) == nameOf (lexInfoOf (Type t2)))
@@ -438,7 +595,9 @@ mergeTypes t1 t2
           (_,_) | t1 == t2  -> Just t1
                 | otherwise -> Nothing
 
-
+{-|
+  This function merges type annotations with lexical information for constants.
+-}
 mergeConstants :: Constant -> Constant -> Maybe Constant
 mergeConstants c1 c2
     = assert (constant2name c1 == constant2name c2)
@@ -458,7 +617,11 @@ mergeConstants c1 c2
           = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
                    ++ " and `" ++ show typ ++ "'.")
 
-
+{-|
+  This function merges two lexical environments by merging constants and types
+  separately. If two identifiers cannot be merged the identifier from the first
+  environment is discarded!
+-}
 mergeLexEnvs (LexEnv cmap1 tmap1) (LexEnv cmap2 tmap2)
     = LexEnv (Map.unionWith constant_merger cmap1 cmap2)
              (Map.unionWith type_merger tmap1 tmap2)
@@ -474,26 +637,55 @@ mergeLexEnvs (LexEnv cmap1 tmap1) (LexEnv cmap2 tmap2)
 -- ModuleEnv 
 --
 
-data ModuleE = ModuleEnv ModuleID [EnvImport] [EnvExport] LexE
+{-|
+  This data structure represents the environment of a complete module.
+-}
+data ModuleE = ModuleEnv
+               ModuleID -- ^name of the module
+               [EnvImport] -- ^imports of the module 
+               [EnvExport] -- ^exports of the module
+               LexE -- ^lexical environment of the module
   deriving (Show)
 
-
-data EnvImport = EnvImport ModuleID Bool (Maybe ModuleID)
+{-|
+  This data structure represents import declarations.
+-}
+data EnvImport = EnvImport
+                 ModuleID -- ^module name
+                 Bool -- ^is the module used qualified
+                 (Maybe ModuleID) -- ^possible alias for the module
   deriving (Show, Eq)
 
+{-|
+  The default import.
+-}
 defaultImports = [EnvImport prelude False Nothing]
 
+
+{-|
+  This function checks whether the import is declared to be
+  qualified.
+-}
 isQualifiedImport :: EnvImport -> Bool
 isQualifiedImport (EnvImport _ isQual _) = isQual
 
-data EnvExport = EnvExportVar   EnvName
-               | EnvExportAbstr EnvName
-               | EnvExportAll   EnvName
-               | EnvExportMod   ModuleID
+{-|
+  This data structure represents export declarations.
+-}
+data EnvExport = EnvExportVar   EnvName -- ^exporting a variable
+               | EnvExportAbstr EnvName -- ^exporting a class or data type abstractly
+               | EnvExportAll   EnvName -- ^exporting a class or data type completely
+               | EnvExportMod   ModuleID -- ^re-exporting a module
   deriving (Show, Eq)
                  
-
-makeModuleEnv :: [EnvImport] -> (Identifier -> Bool) -> [Identifier] -> ModuleE
+{-|
+  This function constructs a module environment from a list of imports, a predicate
+  indicating which identifier to export and a list of declared identifiers.
+-}
+makeModuleEnv :: [EnvImport] -- ^import declarations
+              -> (Identifier -> Bool) -- ^predicate indicating which identifiers to export
+              -> [Identifier] -- ^declared identifiers
+              -> ModuleE -- ^constructed environment
 makeModuleEnv imports shall_export_p identifiers
     = let m = moduleOf (lexInfoOf (head identifiers))
       in assert (all (== m) $ map (moduleOf . lexInfoOf) (tail identifiers))
@@ -503,6 +695,9 @@ makeModuleEnv imports shall_export_p identifiers
       export id@(Type (Data _ _)) = EnvExportAll (identifier2name id) 
       export id                   = EnvExportVar (identifier2name id)
 
+{-|
+  This function constructs a module environment from a Haskell module.
+-}
 makeModuleEnv_FromHsModule :: HsModule -> ModuleE
 makeModuleEnv_FromHsModule (HsModule loc modul exports imports topdecls)
     = let lexenv   = makeLexEnv (concatMap (computeConstantMappings modul) topdecls)
@@ -511,34 +706,36 @@ makeModuleEnv_FromHsModule (HsModule loc modul exports imports topdecls)
                                           else map fromHsk (fromJust exports)
       in ModuleEnv (fromHsk modul) imports' exports' lexenv
 
+{-|
+  This function infers lexical information for the identifiers mentioned in the given Haskell 
+  declaration.
+-}
 computeConstantMappings :: Module -> HsDecl -> [Identifier]
 computeConstantMappings modul decl 
     = do name <- fromJust (namesFromHsDecl decl)
          let nameID         = fromHsk name
          let moduleID       = fromHsk modul
          let defaultLexInfo = LexInfo { nameOf=nameID, typeOf=EnvTyNone, moduleOf=moduleID}
-         let con c          = Constant c
-         let typ t          = Type t
          case decl of
-           HsPatBind _ _ _ _           -> [con (Variable defaultLexInfo)]
-           HsFunBind _                 -> [con (Function defaultLexInfo)]
-           HsInfixDecl _ a p _         -> [con (InfixOp  defaultLexInfo (fromHsk a) p)]
-           HsTypeSig _ _ typ           -> [con (TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ}))]
+           HsPatBind _ _ _ _           -> [Constant (Variable defaultLexInfo)]
+           HsFunBind _                 -> [Constant (Function defaultLexInfo)]
+           HsInfixDecl _ a p _         -> [Constant (InfixOp  defaultLexInfo (fromHsk a) p)]
+           HsTypeSig _ _ typ           -> [Constant (TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ}))]
            HsClassDecl _ ctx _ ns _ ds -> let sups      = map fromHsk (extractSuperclassNs ctx)
                                               typesigs  = extractMethodSigs ds
                                               m         = modul
                                               methods   = concatMap (computeConstantMappings m) typesigs
                                               -- If length ns > 1, we will die later in Convert.hs anyway.
                                               classInfo = makeClassInfo sups methods (fromHsk (head ns))
-                                          in [typ (Class defaultLexInfo classInfo)]
+                                          in [Type (Class defaultLexInfo classInfo)]
                                           -- If length ts > 1, we will die later in Convert.hs anyway.
-           HsInstDecl _ _ _ ts _       -> [typ (Instance defaultLexInfo $ [makeInstanceInfo (fromHsk (head ts))])]
+           HsInstDecl _ _ _ ts _       -> [Type (Instance defaultLexInfo $ [makeInstanceInfo (fromHsk (head ts))])]
            HsDataDecl _ _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
                   let tycon = mkTyCon (fromHsk name) tyvarNs
                       constructors  = map (mkDataCon tycon) condecls
                       constructors' = map Constant constructors
-                  in [typ (Data (defaultLexInfo { typeOf = tycon }) constructors)] ++ constructors'
+                  in [Type (Data (defaultLexInfo { typeOf = tycon }) constructors)] ++ constructors'
                where 
                  mkTyCon name tyvarNs 
                    = EnvTyCon name $ map (EnvTyVar . fromHsk) tyvarNs
@@ -548,10 +745,20 @@ computeConstantMappings modul decl
                  mkDataCon nameID etc
                    = error ("mkDataCon: " ++ show nameID ++ "; " ++ show etc)
       
+{-|
+  This function merges two module environments provided they have the same name (otherwise,
+  an exception is thrown). Duplicates in the resulting imports and exports are removed, and 
+  the lexical environment is merged by 'mergeLexEnvs'.
+-}
 
 mergeModuleEnvs (ModuleEnv m1 is1 es1 lex1) (ModuleEnv m2 is2 es2 lex2)
     = assert (m1 == m2)
         $ ModuleEnv m1 (nub $ is1 ++ is2) (nub $ es1 ++ es2) (mergeLexEnvs lex1 lex2)
+
+
+{-|
+  This function provides a list of all module names that are imported in fully qualified form.
+-}
 
 importedModuleIDs :: ModuleE -> [ModuleID]
 importedModuleIDs (ModuleEnv _ imports _ _)
@@ -564,17 +771,12 @@ importedModuleIDs (ModuleEnv _ imports _ _)
                     (False, True)  
                         -> error ("<importedModules> Internal Error: bogus import:" ++ show imp))
           imports
-
--- isImportedModule_aux :: ModuleID -> [EnvImport] -> Bool
--- isImportedModule_aux moduleID imports
---     = case filter (== moduleID) (importedModules imports) of
---         []     -> False
---         [name] -> True
---         etc    -> error ("Internal error (isImportedModule): Fall through. [" ++ show etc ++ "]")
-
+{-|
+  This function checks whether the module identified by the given name is imported in the 
+  given module environment.
+-}
 isImportedModule :: ModuleID -> ModuleE -> Bool
-isImportedModule moduleID moduleEnv
-    = -- trace ("isImportedModule " ++ moduleID ++ " " ++ prettyShow' "moduleEnv" moduleEnv) $
+isImportedModule moduleID moduleEnv = 
       case filter (== moduleID) (importedModuleIDs moduleEnv) of
         []     -> False
         [name] -> True
@@ -586,26 +788,45 @@ isImportedModule moduleID moduleEnv
 -- GlobalEnv
 --
 
+{-|
+  This data structure represents a global environment.
+-}
 data GlobalE = GlobalEnv (Map.Map ModuleID ModuleE)
   deriving (Show)
 
+{-|
+  Name of the prelude module.
+-}
+prelude :: ModuleID
 prelude = "Prelude"
 
+{-|
+  The initial global environment.
+-}
+initialGlobalEnv :: GlobalE
 initialGlobalEnv = GlobalEnv 
                      $ Map.singleton prelude 
                            (ModuleEnv prelude [] [] (LexEnv (Map.empty) (Map.empty)))
-
+{-|
+  This function constructs a global environment from a function generating the imports for a
+  module name, a predicate identifying identifiers that should be exported, and a list of
+  identifiers.
+-}
 makeGlobalEnv :: (ModuleID -> [EnvImport]) -> (Identifier -> Bool) -> [Identifier] -> GlobalE
 makeGlobalEnv compute_imports shall_export_p identifiers
-     = GlobalEnv
-         $ Map.fromListWith failDups
-              $ do let (constants, types) = splitIdentifiers identifiers
-                   let types'             = mergeInstancesWithClasses types
-                   (moduleID, ids) <- groupIdentifiers (map Constant constants ++ map Type types')
-                   return (moduleID, makeModuleEnv (compute_imports moduleID) shall_export_p ids)
+    = GlobalEnv
+      $ Map.fromListWith failDups
+            $ do let (constants, types) = splitIdentifiers identifiers
+                 let types'             = mergeInstancesWithClasses types
+                 (moduleID, ids) <- groupIdentifiers (map Constant constants ++ map Type types')
+                 return (moduleID, makeModuleEnv (compute_imports moduleID) shall_export_p ids)
     where 
       failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
+{-|
+  Merges instance and corresponding class declarations using 'mergeTypes_OrFail'.
+  TODO: The code looks a bit cumbersome!
+-}
 mergeInstancesWithClasses :: [Type] -> [Type]
 mergeInstancesWithClasses ts
     = let map = Map.fromListWith (++) [ (nameOf (lexInfoOf (Type t)), [t]) | t <- ts ]
@@ -619,10 +840,16 @@ mergeInstancesWithClasses ts
                         instances
       in concat $ Map.elems map'
 
+{-|
+  This function groups the given identifier by the respective module they are declared in.
+-}
 groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]
 groupIdentifiers identifiers
     = groupAlist [ (moduleOf (lexInfoOf id), id) | id <- identifiers ]
 
+{-|
+  This function constructs a global environment given a list of Haskell modules.
+-}
 makeGlobalEnv_FromHsModules :: [HsModule] -> GlobalE
 makeGlobalEnv_FromHsModules ms 
     = GlobalEnv 
@@ -631,8 +858,9 @@ makeGlobalEnv_FromHsModules ms
                     | m@(HsModule _ modul _ _ _) <- ms ]
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
--- Left-prioritized union of Global Environments.
---
+{-|
+  This method builds the union of two global environments, prioritising the first one.
+-}
 unionGlobalEnvs :: GlobalE -> GlobalE -> GlobalE
 unionGlobalEnvs globalEnv1 globalEnv2
     = let compute_old_imports mID 
@@ -659,16 +887,22 @@ unionGlobalEnvs globalEnv1 globalEnv2
                     map1 map2
 
 
-
+{-|
+  This method looks up the module environment in the given global environment using
+  the given module name.
+-}
 findModuleEnv :: ModuleID -> GlobalE -> Maybe ModuleE
 findModuleEnv mID (GlobalEnv globalmap)
     = Map.lookup mID globalmap
-
+{-|
+  Same as 'findModuleEnv' but throws an exception on failure.
+-}
 findModuleEnv_OrLose m globalEnv
     = case findModuleEnv m globalEnv of
         Just env -> env
         Nothing  -> error ("Couldn't find module `" ++ show m ++ "'.")
-          
+
+
 computeExportedNames :: ModuleID -> GlobalE -> [IdentifierID]
 computeExportedNames moduleID globalEnv
     = case findModuleEnv moduleID globalEnv of

@@ -152,4 +152,4 @@ preprocessFile inFile outDir = do
   let ppUnit = HskUnit ppModules env
   writeHskUnit ppUnit outDir
 
-exPP = preprocessFile "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/src_hs/AsPatterns.hs" "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/dst_hs"
+exPP = withCurrentDirectory "/home/paba/studies/NICTA/hsimp/ref/refine/haskell/src/" $ preprocessFile "/home/paba/studies/NICTA/hsimp/ref/refine/haskell/src/SEL4/Kernel.hs" "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/dst_hs"
