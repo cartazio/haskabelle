@@ -23,7 +23,6 @@ import Text.PrettyPrint (render, vcat, text, (<>))
 import Language.Haskell.Exts (ParseResult(..), parseFile, HsModule(..))
 import Language.Haskell.Exts.Pretty 
 import Language.Haskell.Exts.Syntax 
----import Language.Haskell.Pretty
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
 import Importer.Preprocess

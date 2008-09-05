@@ -2,7 +2,9 @@
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
 
-module Importer.Preprocess where -- (preprocessHsModule) where
+module Importer.Preprocess
+    ( preprocessHsModule
+    )where
 
 import Maybe
 import List

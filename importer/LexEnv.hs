@@ -2,7 +2,54 @@
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
 
-module Importer.LexEnv where
+module Importer.LexEnv
+    ( GlobalE,
+      EnvAssoc(..),
+      Identifier(..),
+      Constant(..),
+      Type(..),
+      EnvType(..),
+      EnvName(..),
+      LexInfo(..),
+      EnvImport(..),
+      ModuleID,
+      IdentifierID,
+      identifier2name,
+      fromHsk,
+      toHsk,
+      fromIsa,
+      toIsa,
+      resolveEnvName_OrLose,
+      makeLexInfo,
+      makeClassInfo,
+      initialGlobalEnv,
+      isInfixOp,
+      isUnaryOp,
+      isClass,
+      isType,
+      isInstance,
+      isFunction,
+      isData,
+      isTypeAnnotation,
+      qualifyEnvName,
+      resolveConstantName,
+      resolveTypeName,
+      unionGlobalEnvs,
+      augmentGlobalEnv,
+      updateGlobalEnv,
+      updateIdentifier,
+      makeGlobalEnv_FromHsModules,
+      makeGlobalEnv,
+      lookupConstant,
+      lookupType,
+      substituteTyVars,
+      lookupIdentifiers_OrLose,
+      lookupImports_OrLose,
+      lexInfoOf,
+      methodsOf,
+      classVarOf,
+      prelude
+    ) where
 
 import Maybe
 import List (nub, partition)
@@ -28,7 +75,10 @@ type ModuleID     = String
 type IdentifierID = String
 
 
-
+{-|
+  This data structure represents types. NB: It also contains an 'EnvTyNone' type to
+  indicate that no type information is present.
+-}
 data EnvType = EnvTyVar EnvName
              | EnvTyCon EnvName [EnvType]
              | EnvTyFun EnvType EnvType
@@ -37,9 +87,15 @@ data EnvType = EnvTyVar EnvName
              | EnvTyNone
   deriving (Eq, Ord, Show)
 
+{-|
+  This data structure represents the associativity declaration of binary operators.
+-}
 data EnvAssoc = EnvAssocRight | EnvAssocLeft | EnvAssocNone
   deriving (Eq, Ord, Show)
 
+{-|
+  This data structure represents identifier name in either unqualified or qualified form.
+-}
 data EnvName = EnvQualName ModuleID IdentifierID
              | EnvUnqualName IdentifierID
   deriving (Eq, Ord, Show)
@@ -637,24 +693,41 @@ mergeLexEnvs (LexEnv cmap1 tmap1) (LexEnv cmap2 tmap2)
 -- ModuleEnv 
 --
 
+
 {-|
-  This data structure represents the environment of a complete module.
+  This data structure represents export declarations.
 -}
-data ModuleE = ModuleEnv
-               ModuleID -- ^name of the module
-               [EnvImport] -- ^imports of the module 
-               [EnvExport] -- ^exports of the module
-               LexE -- ^lexical environment of the module
-  deriving (Show)
+data EnvExport = EnvExportVar   EnvName -- ^exporting a variable
+               | EnvExportAbstr EnvName -- ^exporting a class or data type abstractly
+               | EnvExportAll   EnvName -- ^exporting a class or data type completely
+               | EnvExportMod   ModuleID -- ^re-exporting a module
+  deriving (Show, Eq)
 
 {-|
   This data structure represents import declarations.
+  This includes
+
+    * the name of the imported module,
+
+    * a flag indicating whether the import is qualified, and
+
+    * possibly an alias name.
 -}
-data EnvImport = EnvImport
-                 ModuleID -- ^module name
-                 Bool -- ^is the module used qualified
-                 (Maybe ModuleID) -- ^possible alias for the module
-  deriving (Show, Eq)
+data EnvImport = EnvImport ModuleID Bool (Maybe ModuleID)
+                 deriving (Show, Eq)
+
+
+{-|
+  This data structure represents the environment of a complete module.
+  This includes the name of the module, a list of its imports, a list of its exports
+  and its lexical environment.
+-}
+data ModuleE = ModuleEnv
+               ModuleID
+               [EnvImport]
+               [EnvExport]
+               LexE
+  deriving (Show)
 
 {-|
   The default import.
@@ -668,15 +741,6 @@ defaultImports = [EnvImport prelude False Nothing]
 -}
 isQualifiedImport :: EnvImport -> Bool
 isQualifiedImport (EnvImport _ isQual _) = isQual
-
-{-|
-  This data structure represents export declarations.
--}
-data EnvExport = EnvExportVar   EnvName -- ^exporting a variable
-               | EnvExportAbstr EnvName -- ^exporting a class or data type abstractly
-               | EnvExportAll   EnvName -- ^exporting a class or data type completely
-               | EnvExportMod   ModuleID -- ^re-exporting a module
-  deriving (Show, Eq)
                  
 {-|
   This function constructs a module environment from a list of imports, a predicate
@@ -902,13 +966,16 @@ findModuleEnv_OrLose m globalEnv
         Just env -> env
         Nothing  -> error ("Couldn't find module `" ++ show m ++ "'.")
 
-
+{-|
+  This function provides a list of all identifier names that are exported by the
+  module identified by the given module name in the given global environment.
+-}
 computeExportedNames :: ModuleID -> GlobalE -> [IdentifierID]
 computeExportedNames moduleID globalEnv
     = case findModuleEnv moduleID globalEnv of
         Nothing -> []
         Just (ModuleEnv moduleID' _ exports (LexEnv constants_map types_map))
-            -> do assert (moduleID == moduleID') $ return ()
+            -> assert (moduleID == moduleID') $ do
                   export <- exports   -- List Monad concats implicitly for us.
                   case export of         
                     EnvExportVar   qn -> [idOf (unqualifyEnvName moduleID qn)]
@@ -926,12 +993,21 @@ computeExportedNames moduleID globalEnv
     where idOf :: EnvName -> IdentifierID
           idOf (EnvUnqualName id) = id
 
+{-|
+  This is a predicate deciding whether the given identifier is exported by the 
+  module, given by the module name, in the given global environment
+-}
 isExported :: Identifier -> ModuleID -> GlobalE -> Bool
 isExported identifier moduleID globalEnv
     = nameOf (lexInfoOf identifier) `elem` (computeExportedNames moduleID globalEnv)
 
--- If the given ModuleID is a mere nickname of the ModuleE,
--- return the actual name.
+{-|
+  This function looks up the given module name in the imports of the
+  given module environment and provides the full-qualified name of it.
+  In case the module name cannot be found the input name is just returned.
+  This function is supposed to be used to get the full-qualified name for a alias of
+  a module name.
+-}
 resolveModuleID :: ModuleID -> ModuleE -> ModuleID
 resolveModuleID moduleID (ModuleEnv _ imps _ _)
     = fromMaybe moduleID (lookfor moduleID imps)
@@ -980,6 +1056,11 @@ resolveModuleID moduleID (ModuleEnv _ imps _ _)
 -- lookup "Foo" "Imp3.StuffC"   => Just ...
 -- lookup "Foo" "Imp1.beta"     => Nothing
 
+{-|
+  This function looks up the given name in the import list of the given module.
+  Note that types and constants have different namespaces. Hence the result can be a type
+  and a constant.
+-}
 lookup :: ModuleID -> EnvName -> GlobalE -> (Maybe Constant, Maybe Type)
 lookup currentModule qname globalEnv 
     = case lookup' currentModule qname globalEnv of
@@ -1024,6 +1105,12 @@ lookup currentModule qname globalEnv
                        consider (Just x) xs  
                            = error (Msg.identifier_collision_in_lookup currentModule qname (x:xs))
 
+{-|
+  Looks up the given identifier name in the given module's import list.
+  Note that types and constants have different namespaces hence the result can
+  be a list of length two (at most), containing a type and a constructor with
+  the same name.
+-}
 lookupIdentifiers_OrLose :: ModuleID -> EnvName -> GlobalE -> [Identifier]
 lookupIdentifiers_OrLose mID n globalEnv
     = case Importer.LexEnv.lookup mID n globalEnv of
@@ -1032,36 +1119,55 @@ lookupIdentifiers_OrLose mID n globalEnv
          (Just c, Just t)   -> [Constant c, Type t]
          (Nothing, Nothing) -> error (Msg.failed_lookup "Identifier" mID n globalEnv)
 
+{-|
+  This function looks up the given identifier name, which is supposed to identify a constant, in the
+  import list of the given module.
+-}
 lookupConstant :: ModuleID -> EnvName -> GlobalE -> Maybe Identifier
 lookupConstant m n env
     = case Importer.LexEnv.lookup m n env of
           (Just c, _) -> Just (Constant c)
           _           -> Nothing
 
+{-|
+  Same as 'lookupConstant' but throws an exception on failure.
+-}
 lookupConstant_OrLose :: ModuleID -> EnvName -> GlobalE -> Identifier
 lookupConstant_OrLose m n env
     = case lookupConstant m n env of
         Just c -> c
         _      -> error (Msg.failed_lookup "Constant" m n env)
 
+{-|
+  This function looks up the given identifier name, which is supposed to identify a type, in the
+  import list of the given module.
+-}
 lookupType :: ModuleID -> EnvName -> GlobalE -> Maybe Identifier
 lookupType m n env
     = case Importer.LexEnv.lookup m n env of
         (_, Just t) -> Just (Type t)
         _           -> Nothing
 
+{-|
+  Same as 'lookupType' but throws an exception on failure.
+-}
 lookupType_OrLose :: ModuleID -> EnvName -> GlobalE -> Identifier
 lookupType_OrLose m n env
     = case lookupType m n env of
         Just t -> t
         _      -> error (Msg.failed_lookup "Type" m n env)
-
+{-|
+  This function looks up the import list of the given module.
+-}
 lookupImports_OrLose :: ModuleID -> GlobalE -> [EnvImport]
 lookupImports_OrLose moduleID globalEnv
     = let (ModuleEnv _ imps _ _) = findModuleEnv_OrLose moduleID globalEnv 
       in imps
 
--- 
+{-|
+  This function looks up the given name in the given module's import list to get
+  a qualified name.
+-}
 resolveEnvName_OrLose :: GlobalE -> ModuleID -> EnvName -> EnvName
 resolveEnvName_OrLose globalEnv mID name
     = case Importer.LexEnv.lookup mID name globalEnv of
@@ -1071,19 +1177,29 @@ resolveEnvName_OrLose globalEnv mID name
         (Just c, Just t)   -> assert (constant2name c == type2name t) 
                                 $ constant2name c
 
+{-|
+  This function looks up the given name, which is supposed to identify a constant, in the
+  given module's import list to get a qualified name.
+-}
 resolveConstantName :: GlobalE -> ModuleID -> EnvName -> Maybe EnvName
 resolveConstantName globalEnv mID name
     = case lookupConstant mID name globalEnv of
         Nothing -> Nothing
         Just c  -> Just (identifier2name c)
 
-
+{-|
+  This function looks up the given name, which is supposed to identify a type, in the given
+  module's import list to get a qualified name.
+-}
 resolveTypeName :: GlobalE -> ModuleID -> EnvName -> Maybe EnvName
 resolveTypeName globalEnv mID name
     = case lookupType mID name globalEnv of
         Nothing -> Nothing
         Just c  -> Just (identifier2name c)
 
+{-|
+  This function provides a list of all identifiers declared in the given global environment.
+-}
 allIdentifiers :: GlobalE -> [Identifier]
 allIdentifiers (GlobalEnv modulemap)
     = concatMap (\(ModuleEnv _ _ _ (LexEnv cmap tmap)) 
@@ -1091,6 +1207,9 @@ allIdentifiers (GlobalEnv modulemap)
                         map Type (Map.elems tmap))
         $ Map.elems modulemap
 
+{-|
+  ???
+-}
 updateGlobalEnv :: (EnvName -> [Identifier]) -> GlobalE -> GlobalE
 updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
     = let all_ids     = allIdentifiers globalEnv
@@ -1138,7 +1257,9 @@ updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
          makeGlobalEnv recompute_imports recompute_exports (map fst id_alist)
 
     where failDups str a b = error (Msg.found_duplicates ("computing " ++ str) a b)
-
+{-|
+  ???
+-}
 augmentGlobalEnv :: GlobalE -> [Identifier] -> GlobalE
 augmentGlobalEnv globalEnv new_identifiers
     = let all_identifiers        = allIdentifiers globalEnv

@@ -27,9 +27,9 @@ PACKAGES = uniplate base haskell-src-exts
 # this is used as a command line argument for ghc to include the 
 # packages as stated in the variable PACKAGES
 PKGS = $(foreach pkg,$(PACKAGES),-package $(pkg))
+USE_PKGS = $(foreach pkg,$(PACKAGES),--use-package=$(pkg))
 
-
-.PHONY : clean depend all rebuild
+.PHONY : clean depend all rebuild haddock
 .SUFFIXES : .o .hs .hi .lhs .hc .s
 
 all : build/importer
@@ -47,6 +47,13 @@ clean :
 rebuild : clean all
 	@:
 
+# Build haddock documentation
+
+haddock : 
+	haddock -o haddock -h -t "Hsimp" $(USE_PKGS) $(filter-out %Raw.hs , $(SRCS))
+
+doc : haddock
+	@:
 
 
 # Standard suffix rules
