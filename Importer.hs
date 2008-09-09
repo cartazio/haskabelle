@@ -8,14 +8,18 @@ module Importer (
   module Importer.Convert,
   module Importer.IsaSyntax,
   module Importer.Printer,
-  convertFile, convertDir, convertFiles, importFiles, importDir
+  convertFile, convertDir, convertFiles, importFiles, importDir,
+  makeAbsolute, convertSingleFile
 ) where
 
-import IO
+import Prelude hiding (catch)
+import System.FilePath
+import IO hiding (catch,bracket_)
 import Directory
 
 import List (intersperse)
 import Control.Monad
+import Control.Exception
 
 import Data.Tree
 import Text.PrettyPrint (render, vcat, text, (<>))
@@ -47,20 +51,43 @@ import Importer.Printer (pprint)
 --
 
 convertFile :: FilePath -> IO IsaUnit
-convertFile fp = do [unit] <- convertFiles [fp]; return unit
+convertFile fp = do
+  (unit,files) <- convertSingleFile fp
+  return unit
+
+{-|
+  Converts a Haskell unit identified by the given file path (i.e., the module defined
+  therein and all imported modules) to a Isabelle unit. Furthermore a list of all 
+  Haskell files that were converted is returned.
+-}
+convertSingleFile :: FilePath -> IO (IsaUnit, [FilePath])
+convertSingleFile fp =
+    let dir      = dirname fp
+        filename = basename fp
+    in withCurrentDirectory (if dir == "" then "./" else dir) $
+       do unit@(HskUnit hsmodules _) <- makeHskUnitFromFile filename 
+          let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
+          let dependentFiles    = map module2FilePath dependentModuleNs
+          let isaUnit = convertHskUnit unit
+          return (isaUnit,dependentFiles)
+
+
 
 convertFiles :: [FilePath] -> IO [IsaUnit]
 convertFiles []   = return []
-convertFiles (fp:fps)
-    = let dir      = dirname fp
-          filename = basename fp
-      -- We have to do this to find the source files of imported modules.
-      in withCurrentDirectory (if dir == "" then "./" else dir)
-          $ do unit@(HskUnit hsmodules _) <- makeHskUnitFromFile filename
-               let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
-               let dependentFiles    = map module2FilePath dependentModuleNs
-               units <- convertFiles (filter (`notElem` dependentFiles) fps) 
-               return (convertHskUnit unit : units)
+convertFiles (fp:fps) = do
+  (isaUnit,dependentFiles) <-
+      do
+        putStr $ "converting " ++ (basename fp) ++ " ...\n"
+        (unit,files) <- convertSingleFile fp
+        return ([unit],files)        
+      `catch` (\ exc -> do
+                 print exc
+                 return ([],[]))
+--  units <- convertFiles fps
+  units <- convertFiles (filter (`notElem` dependentFiles) fps) 
+  return  (isaUnit ++ units)
+                
 
 dirname :: FilePath -> FilePath
 dirname fp = reverse $ dropWhile (/= '/') (reverse fp)
@@ -75,6 +102,9 @@ getDirectoryTree dirpath
          subtrees <- mapM getDirectoryTree fps'
          return (Node { rootLabel = dirpath, subForest = subtrees })
      
+{-|
+  This function recursively searches the given directory for Haskell source files.
+-}
 getFilesRecursively :: FilePath -> IO [FilePath]
 getFilesRecursively dirpath 
     = getDirectoryTree dirpath >>= filterM doesFileExist . flatten . absolutify ""
@@ -82,6 +112,10 @@ getFilesRecursively dirpath
               = Node { rootLabel = cwd ++ filename, 
                        subForest = map (absolutify (cwd ++ filename ++ "/")) children }
 
+{-|
+  This function searches recursively in the given directory for
+  Haskell source files (using 'getFilesRecursively') and converts them using 'convertFiles'.
+-}
 convertDir :: FilePath -> IO [IsaUnit]
 convertDir dirpath
     = do fps   <- getFilesRecursively dirpath
@@ -101,7 +135,7 @@ printIsaUnit_asAST (IsaUnit thys env)
 withCurrentDirectory :: FilePath -> IO a -> IO a
 withCurrentDirectory fp body
     = do oldcwd <- getCurrentDirectory
-         bracket_ (setCurrentDirectory fp) (const (setCurrentDirectory oldcwd)) body
+         bracket_ (setCurrentDirectory fp) (setCurrentDirectory oldcwd) body
 
 importFiles :: [FilePath] -> FilePath -> IO ()
 importFiles sources dstdir
@@ -111,6 +145,9 @@ importFiles sources dstdir
             withCurrentDirectory dstdir
               $ sequence_ (map writeIsaUnit convertedUnits)
 
+{-|
+  
+-}
 importDir :: FilePath -> FilePath -> IO ()
 importDir srcdir dstdir
     = do exists <- doesDirectoryExist dstdir
@@ -125,7 +162,16 @@ writeIsaUnit (IsaUnit thys env)
 writeTheory thy@(TheoryCmd (Theory thyname) _) env 
     = do let content = render (pprint thy env)
          let dstName = content `seq` map (\c -> if c == '.' then '_' else c) thyname ++ ".thy"
+         putStr $ "writing " ++ dstName ++ "...\n"
          writeFile dstName content
+
+{-|
+  This function turns a relative path into an absolute path using
+  the current directory as provided by 'getCurrentDirectory'.
+-}
+
+makeAbsolute :: FilePath -> IO FilePath
+makeAbsolute fp = liftM2 combine getCurrentDirectory (return fp)
 
 
 ----------------------------------------------------------

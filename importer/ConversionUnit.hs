@@ -72,7 +72,8 @@ grovelHsModules visited hsmodule@(HsModule _loc modul _exports imports _decls)
 
 parseImportOrFail :: HsImportDecl -> IO HsModule
 parseImportOrFail (HsImportDecl { importLoc=importloc, importModule=m })
-    = do result <- try (parseFile (module2FilePath m))
+    = do putStr $ "importing module " ++ (show m) ++" ...\n"
+         result <- try (parseFile (module2FilePath m))
          case result of
            Left ioerror                -> fail (Msg.failed_import importloc m (show ioerror))
            Right (ParseFailed loc msg) -> fail (Msg.failed_import importloc m 
