@@ -25,12 +25,24 @@ import Importer.Utilities.Hsk
 
 -- A Conversion Unit
 
+{-|
+  This data structure combines several Haskell modules and the corresponding environment.
+  into one coherent unit.
+-}
 data HskUnit = HskUnit [HsModule] Env.GlobalE
   deriving (Show)
 
+{-|
+  This data structure combines several Isabelle theories and the corresponding environment
+  into one coherent unit.
+-}
 data IsaUnit = IsaUnit [Isa.Cmd] Env.GlobalE
   deriving (Show)
 
+{-|
+  This function takes a file path to a Haskell module and parses it to
+  a unit, i.e. also parsing all its dependencies as well.
+-}
 makeHskUnitFromFile :: FilePath -> IO HskUnit
 makeHskUnitFromFile fp
     = parseFileOrLose fp >>= makeHskUnit                     
@@ -40,6 +52,11 @@ makeHskUnitFromFile fp
                        ParseOk hsm         -> return hsm
                        ParseFailed loc msg -> error (Msg.failed_parsing loc msg)
 
+{-|
+  This function takes a parsed Haskell module and produces a Haskell unit by parsing
+  all module imported by the given module and add including the initial global environment
+  as given by 'Env.initialGlobalEnv'.
+-}
 makeHskUnit :: HsModule -> IO HskUnit
 makeHskUnit hsmodule
     = do (depGraph, fromVertex, _) <- makeDependencyGraph hsmodule
@@ -51,10 +68,23 @@ makeHskUnit hsmodule
          let [hsmodules]  = map (map toHsModule . flatten) (components depGraph)
          return (HskUnit hsmodules Env.initialGlobalEnv)
 
+{-|
+  This function computes a list of all cycles in the given graph.
+  The cycles are represented by the vertexes which constitute them.
+-}
 cyclesFromGraph :: Graph -> [[Vertex]]
 cyclesFromGraph graph
     = filter ((>1) . length) $ map flatten (scc graph)
 
+{-|
+  This function computes the graph depicting the dependencies between all modules
+  imported by the given module plus itself. The result comes with two functions to convert
+  between the modules an the vertices of the graph (as provided by 'Data.Graph.graphFromEdges').
+-}
+makeDependencyGraph ::  HsModule
+                    -> IO (Graph,
+                          Vertex -> (HsModule, Module, [Module]),
+                          Module -> Maybe Vertex)
 makeDependencyGraph hsmodule
     = do hsmodules <- transitiveClosure hsmodule
          return $ graphFromEdges (map makeEdge hsmodules)
@@ -62,9 +92,18 @@ makeDependencyGraph hsmodule
               = let imported_modules = map importModule imports
                 in (hsmodule, modul, imported_modules)
 
+{-|
+  This function computes a list of all modules that are imported (directly or
+  indirectly, including itself) by the given module.
+-}
 transitiveClosure :: HsModule -> IO [HsModule]
 transitiveClosure hsmodule = grovelHsModules [] hsmodule
 
+{-|
+  This function computes a list of all modules that are imported (directly or
+  indirectly, including itself) by the given module. It ignores all modules that
+  are mentions in the argument list (of visited modules).
+-}
 grovelHsModules :: [Module] -> HsModule -> IO [HsModule]
 grovelHsModules visited hsmodule@(HsModule _loc modul _exports imports _decls) 
     = let imports' = filter ((`notElem` visited) . importModule) imports
@@ -72,6 +111,11 @@ grovelHsModules visited hsmodule@(HsModule _loc modul _exports imports _decls)
       in do hsmodules  <- mapM parseImportOrFail imports'
             hsmodules' <- concatMapM (grovelHsModules ([modul] ++ modules ++ visited)) hsmodules
             return (hsmodule : hsmodules')
+
+{-|
+  This method tries to parse the Haskell module identified by the given
+  import declaration.
+-}
 
 parseImportOrFail :: HsImportDecl -> IO HsModule
 parseImportOrFail (HsImportDecl { importLoc=importloc, importModule=m })
