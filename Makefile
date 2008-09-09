@@ -7,19 +7,19 @@ HC      = ghc
 # the options for the haskell compiler
 HC_OPTS = -fglasgow-exts
 # the directory to put the object files to
-OUT_DIR = out
+OUT_DIR = build/out/default
 # the directory to put the optimised object files to
-OOUT_DIR = oout
+OOUT_DIR = build/out/optimised
 # the directory to put the interface files to
-HI_DIR = hi
+HI_DIR = build/hi/default
 # the directory to put the interface files for optimised compiling to
-OHI_DIR = ohi
+OHI_DIR = build/hi/optimised
 # the directory to put the interface documentation to
-HADDOCK_DIR = doc/interface
+HADDOCK_DIR = haddock/interface
 # the directory to put the implementation documentation to
-HADDOCK_IMPL_DIR = doc/impl
+HADDOCK_IMPL_DIR = haddock/impl
 # the directory to put the built binaries to
-BUILD_DIR = build
+BUILD_DIR = build/bin
 # the filename for the default binary
 BIN_NAME = importer
 # the filename for the optimised binary
@@ -61,7 +61,7 @@ USE_PKGS = $(foreach pkg,$(PACKAGES),--use-package=$(pkg))
 # declarations #
 ################
 
-.PHONY : clean clean-optimised depend build rebuild rebuild-optimised haddock haddock-impl
+.PHONY : clean clean-optimised build rebuild rebuild-optimised haddock haddock-impl depend-default depend-optimised
 .SUFFIXES : .o .hs .hi .lhs .hc .s
 
 #######################
@@ -76,13 +76,13 @@ optimised : $(BUILD_DIR)/$(OBIN_NAME)
 	@:
 
 # builds the optimised binary
-$(BUILD_DIR)/$(OBIN_NAME) : $(OOBJS) $(BUILD_DIR)
+$(BUILD_DIR)/$(OBIN_NAME) : depend-optimised $(OOBJS) $(BUILD_DIR)
 	@rm -f $@
 	@echo linking optimised binary ...
 	@$(HC) -o $@ $(HC_OPTS) -hidir $(OHI_DIR) -odir $(OOUT_DIR) $(PKGS) $(OOBJS) $(OFLAGS)
 
 # builds the default binary
-$(BUILD_DIR)/$(BIN_NAME) : $(OBJS) $(BUILD_DIR)
+$(BUILD_DIR)/$(BIN_NAME) : depend-default $(OBJS) $(BUILD_DIR)
 	@rm -f $@
 	@echo linking default binary ...
 	@$(HC) -o $@ $(HC_OPTS) -hidir $(HI_DIR) -odir $(OUT_DIR) $(PKGS) $(OBJS)
@@ -190,9 +190,17 @@ $(ALL_DIRS) :
 	@mkdir -p $@
 
 # let ghc generate the dependencies
-depend :
-	@ghc -M -optdep-f -optdep.depend -odir $(OUT_DIR) -hidir $(HI_DIR) $(SRCS)
-	@ghc -M -optdep-f -optdep.depend -odir $(OOUT_DIR) -hidir $(OHI_DIR) $(SRCS)
+depend : depend-default depend-optimised
+	@:
+
+depend-optimised : $(OOUT_DIR) $(OHI_DIR)
+	@echo analysing dependencies ...
+	@ghc -M -optdep-f -optdep.depend-optimised -odir $(OOUT_DIR) -hidir $(OHI_DIR) $(SRCS)
+
+depend-default : $(OUT_DIR) $(HI_DIR)
+	@echo analysing dependencies ...
+	@ghc -M -optdep-f -optdep.depend-default -odir $(OUT_DIR) -hidir $(HI_DIR) $(SRCS)
 
 # include the result
--include .depend
+-include .depend-default
+-include .depend-optimised
