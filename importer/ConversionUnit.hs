@@ -2,8 +2,11 @@
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
 
-module Importer.ConversionUnit 
-    (HskUnit(..), IsaUnit(..), makeHskUnitFromFile) where
+module Importer.ConversionUnit
+    ( HskUnit(..),
+      IsaUnit(..),
+      makeHskUnitFromFile
+    ) where
 
 import Maybe
 import IO
