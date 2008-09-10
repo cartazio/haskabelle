@@ -42,11 +42,9 @@ convertHskUnit :: HskUnit -> IsaUnit
 convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'     = map preprocessHsModule hsmodules
           adaptionTable  = makeAdaptionTable_FromHsModules hsmodules'
-          global_env_hsk = Env.unionGlobalEnvs
-                             (Env.makeGlobalEnv_FromHsModules hsmodules') 
-                             -- Make initial Global Environment:
-                             (Env.augmentGlobalEnv initialGlobalEnv
-                                 $ extractHskEntries adaptionTable)
+          initial_env    = Env.augmentGlobalEnv initialGlobalEnv $ extractHskEntries adaptionTable
+          global_env_hsk = Env.unionGlobalEnvs (Env.makeGlobalEnv_FromHsModules hsmodules') initial_env
+                             
           hskmodules     = map (toHskModule global_env_hsk) hsmodules'
           
           isathys = fst $ runConversion global_env_hsk $ mapM convert hskmodules 

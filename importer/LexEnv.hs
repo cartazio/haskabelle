@@ -1,5 +1,7 @@
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
+
+Definition of a Global Environment for identifier resolution and information retrieval.
 -}
 
 module Importer.LexEnv where
@@ -20,8 +22,11 @@ import Importer.Utilities.Misc
 
 import Importer.Adapt.Common (primitive_tycon_table, primitive_datacon_table)
 
+---
+--- Identifier information
 --
--- Identifier information
+--    This is used for information retrieval about an identifier.
+--    E.g. if an identifier represents a function, or a class, etc.
 --
 
 type ModuleID     = String
@@ -54,6 +59,11 @@ unqualifyEnvName :: ModuleID -> EnvName -> EnvName
 unqualifyEnvName mID (EnvQualName mID' id) = assert (mID == mID') $ EnvUnqualName id
 unqualifyEnvName mID n@(EnvUnqualName _)   = n
 
+-- Substitute type variables in an EnvType with other EnvTypes.
+-- E.g.: 
+--       substituteTyVars [(`a', `Quux')] `Foo a -> Foobar a b -> Bar a b'
+--           ==> `Foo Quux -> Foobar Quux b -> Bar Quux b'
+--
 substituteTyVars :: [(EnvType, EnvType)] -> EnvType -> EnvType
 substituteTyVars alist typ
     = let lookup' = Prelude.lookup in
@@ -71,6 +81,25 @@ substituteTyVars alist typ
                                 Nothing -> EnvTyTuple (map (substituteTyVars alist) ts)
         t@(EnvTyNone)      -> case lookup' t alist of { Just t' -> t'; Nothing -> t }
 
+
+--- There are two different kinds of identifiers, constants and types. An identifier can
+--- name both simultaneously:
+
+data Identifier = Constant Constant
+                | Type Type
+  deriving (Eq, Ord, Show)
+
+data Constant = Variable LexInfo
+              | Function LexInfo
+              | UnaryOp  LexInfo Int
+              | InfixOp  LexInfo EnvAssoc Int
+              | TypeAnnotation LexInfo 
+  deriving (Eq, Ord, Show)
+
+data Type = Data  LexInfo [Constant] -- Data lexinfo [constructors]
+          | Class LexInfo ClassInfo
+          | Instance LexInfo [InstanceInfo]
+  deriving (Eq, Ord, Show)
 
 data LexInfo = LexInfo { 
                         nameOf   :: IdentifierID,
@@ -90,21 +119,6 @@ data ClassInfo = ClassInfo {
 data InstanceInfo = InstanceInfo { specializedTypeOf :: EnvType }
   deriving (Eq, Ord, Show)
 
-data Constant = Variable LexInfo
-              | Function LexInfo
-              | UnaryOp  LexInfo Int
-              | InfixOp  LexInfo EnvAssoc Int
-              | TypeAnnotation LexInfo 
-  deriving (Eq, Ord, Show)
-
-data Type = Data  LexInfo [Constant] -- Data lexinfo [constructors]
-          | Class LexInfo ClassInfo
-          | Instance LexInfo [InstanceInfo]
-  deriving (Eq, Ord, Show)
-
-data Identifier = Constant Constant
-                | Type Type
-  deriving (Eq, Ord, Show)
 
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
 makeLexInfo moduleID identifierID t
@@ -126,6 +140,7 @@ makeInstanceInfo :: EnvType -> InstanceInfo
 makeInstanceInfo t 
     = InstanceInfo { specializedTypeOf = t }
 
+
 isConstant, isType :: Identifier -> Bool
 
 isConstant (Constant _)              = True
@@ -133,6 +148,7 @@ isConstant _                         = False
 
 isType (Type _)                      = True
 isType _                             = False
+
 
 isVariable, isFunction, isUnaryOp, isInfixOp  :: Identifier -> Bool
 isTypeAnnotation, isClass, isData :: Identifier -> Bool
@@ -178,6 +194,8 @@ lexInfoOf identifier
       lexInfoOf_typ (Instance i _)     = i
       lexInfoOf_typ (Data i _)         = i
 
+-- Replaces the LexInfo in an Identifier with another LexInfo.
+--
 updateIdentifier :: Identifier -> LexInfo -> Identifier
 updateIdentifier identifier lexinfo
     = case identifier of
@@ -206,6 +224,9 @@ type2name     :: Type     -> EnvName
 constant2name c = identifier2name (Constant c)
 type2name t     = identifier2name (Type t)
 
+
+-- Partitions a list of Identifiers into Constants and Types.
+--
 splitIdentifiers :: [Identifier] -> ([Constant], [Type])
 splitIdentifiers ids
     = let (c_ids, t_ids) 
@@ -213,12 +234,13 @@ splitIdentifiers ids
       in 
         ([ c | Constant c <- c_ids ], [ t | Type t <- t_ids ])
 
-
-
+--- 
+--- Hsk2Env: Convert HsFoo to EnvFoo (fromHsk), and the other way around (toHsk)
+---
 class Hsk2Env a b where
     fromHsk :: (Show a, Hsk2Env a b) => a -> b
     toHsk   :: (Show b, Hsk2Env a b) => b -> a
-    toHsk b = error ("(toHsk) Internal Error: Don't know how to lift " ++ show b)
+    toHsk b = error ("(toHsk) Internal Error: Don't know how to convert: " ++ show b)
 
 instance Hsk2Env Module ModuleID where
     fromHsk (Module id) = id
@@ -235,7 +257,6 @@ instance Hsk2Env HsName IdentifierID where
     fromHsk (HsIdent s)  = s
     fromHsk (HsSymbol s) = s
     toHsk id             = string2HsName id
-
 
 instance Hsk2Env HsQName EnvName where
     fromHsk (Qual m n)  = EnvQualName (fromHsk m) (fromHsk n)
@@ -261,7 +282,6 @@ instance Hsk2Env HsAssoc EnvAssoc where
     toHsk EnvAssocRight  = HsAssocRight
     toHsk EnvAssocLeft   = HsAssocLeft
     toHsk EnvAssocNone   = HsAssocNone
-
 
 instance Hsk2Env HsType EnvType where
     fromHsk (HsTyVar name)  = EnvTyVar (fromHsk name)
@@ -338,7 +358,9 @@ instance Hsk2Env HsImportDecl EnvImport where
                                        else Just (fromHsk (fromJust nick)))
     fromHsk etc = error ("Not supported yet: " ++ show etc)
 
-
+---
+--- Isa2Env: Convert Isa.Foo to EnvFoo (fromIsa), and the other way around (toIsa)
+---
 class Isa2Env a b where
     fromIsa :: (Show a, Isa2Env a b) => a -> b
     toIsa   :: (Show b, Isa2Env a b) => b -> a
@@ -381,6 +403,11 @@ instance Isa2Env Isa.Type EnvType where
     toIsa (EnvTyScheme ctx t)     = Isa.TyScheme ctx' (toIsa t)
         where ctx' = [ (toIsa vN, map toIsa cNs) | (vN, cNs) <- ctx ]
 
+
+-- Cons (:), Nil ([]), etc. have special constructors in Language.Haskell.Exts.
+-- We have to translate those to names, because they're not special in Isabelle,
+-- and hence not in our Global Environment.
+
 data ConKind = DataCon | TypeCon deriving Show
 
 translateSpecialCon :: ConKind -> HsSpecialCon -> HsQName
@@ -395,13 +422,18 @@ retranslateSpecialCon TypeCon qname
 
 
 
+---
+--- LexEnv
 --
--- LexEnv
+--   Part of a Module Enviornment. Mappings between identifier's name and the Identifier data type.
 --
 
 data LexE = LexEnv (Map.Map IdentifierID Constant) (Map.Map IdentifierID Type)
   deriving (Show)
 
+-- Create a LexEnv from a list of Identifiers. The identifiers are normalized,
+-- i.e. possibly merged.
+--
 makeLexEnv :: [Identifier] -> LexE
 makeLexEnv identifiers
     = let (constants, types) = splitIdentifiers identifiers
@@ -412,6 +444,15 @@ makeLexEnv identifiers
       in 
         LexEnv constants_map types_map
                  
+---
+--- Merging of identifiers:
+--
+--    There are some declarations which affect the same identifier even though the declarations
+--    are apart from each other. We merge the information comming from such declarations.
+--
+--    E.g. explicit type annotations affect function-binding declarations,
+--         instance declarations affect the class defined by some class declaration.
+--
 
 mergeConstants_OrFail :: Constant -> Constant -> Constant
 mergeConstants_OrFail c1 c2
@@ -425,6 +466,9 @@ mergeTypes_OrFail t1 t2
         Just result -> result
         Nothing     -> error (Msg.merge_collision "mergeTypes_OrFail" t1 t2)
 
+-- Merge Instances into the instancesOf slot of the corresponding class's ClassInfo
+-- structure.
+--
 mergeTypes :: Type -> Type -> Maybe Type
 mergeTypes t1 t2
     = assert (nameOf (lexInfoOf (Type t1)) == nameOf (lexInfoOf (Type t2)))
@@ -438,7 +482,8 @@ mergeTypes t1 t2
           (_,_) | t1 == t2  -> Just t1
                 | otherwise -> Nothing
 
-
+-- Merge the types from explicit type annotations into the corresponding constant's LexInfo.
+--
 mergeConstants :: Constant -> Constant -> Maybe Constant
 mergeConstants c1 c2
     = assert (constant2name c1 == constant2name c2)
