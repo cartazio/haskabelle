@@ -23,9 +23,14 @@ fun used_constants thy = []
 
 (* concrete output syntax *)
 
-fun mk_classentry thy (hs, raw_isa) = ""; (*FIXME*)
-
-fun mk_instanceentry thy (hs, raw_isa) = ""; (*FIXME*)
+fun mk_classentry thy (((hs, isa), super), params) =
+  let
+    val s_super = enclose "[" "]" (commas_quote super);
+    val s_params = enclose "[" "]" (commas (map (fn (n, t) => "(" ^ quote n ^ ", " ^ quote t ^ ")") params));
+    val s_entry = "(Class (RawClassInfo { superclasses = " ^ s_super ^ ", classVar = \"a\", methods = "
+      ^ s_params ^ " }))";
+    val s = "(Haskell " ^ quote hs ^ " " ^ s_entry ^ ", Isabelle " ^ quote isa ^ " " ^ s_entry ^ ")";
+  in s end;
 
 fun mk_typentry thy (hs, raw_isa) =
   let
@@ -57,32 +62,32 @@ structure T = OuterLex;
 structure P = OuterParse;
 
 val classesN = "classes";
-val instancesN = "instances";
+val superclassN = "superclass";
+val parameterN = "parameter";
 val typesN = "types";
 val constsN = "consts";
 
 val adapt_lexicon = Scan.make_lexicon (map Symbol.explode
-  [classesN, instancesN, typesN, constsN]);
+  [classesN, superclassN, parameterN, typesN, constsN]);
 
 fun classes thy = P.$$$ classesN |--
-  Scan.repeat1 (P.name -- P.name >> mk_classentry thy);
-fun instances thy = P.$$$ instancesN |--
-  Scan.repeat1 (P.name -- P.name >> mk_instanceentry thy);
+  Scan.repeat1 (P.name -- P.name
+    -- Scan.optional (Scan.repeat1 (P.$$$ superclassN |-- P.name)) []
+    -- Scan.optional (Scan.repeat1 (P.$$$ parameterN |-- P.name -- P.string)) []
+    >> mk_classentry thy);
 fun types thy = P.$$$ typesN |--
   Scan.repeat1 (P.name -- P.name >> mk_typentry thy);
 fun consts thy = P.$$$ constsN |--
   Scan.repeat1 (P.name -- P.name >> mk_constentry thy);
 
-fun adapt thy = ((*classes thy @@@ Scan.optional (instances thy) []
-        @@@ Scan.optional (types thy) [] @@@ Scan.optional (consts thy) []
-  || instances thy @@@ Scan.optional (types thy) [] @@@ Scan.optional (consts thy) []
-  ||*) types thy @@@ Scan.optional (consts thy) []
-  || consts thy)
-  >> (space_implode ",\n  " #> enclose "[" "]");
+fun adapt thy = (
+     classes thy @@@ Scan.optional (types thy) [] @@@ Scan.optional (consts thy) []
+  || types thy @@@ Scan.optional (consts thy) []
+  || consts thy) >> (space_implode ",\n  " #> enclose "[" "]");
 
 fun convert thy pos = Source.of_string
-  #> Symbol.source false
-  #> T.source NONE (fn () => (adapt_lexicon, Scan.empty_lexicon)) pos
+  #> Symbol.source { do_recover = false }
+  #> T.source { do_recover = NONE } (fn () => (adapt_lexicon, Scan.empty_lexicon)) pos
   #> T.source_proper
   #> Source.source T.stopper (Scan.single (Scan.error (P.!!! (adapt thy)))) NONE
   #> Source.exhaust
