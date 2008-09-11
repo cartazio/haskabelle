@@ -77,9 +77,6 @@ PKG_HADDOCK = $(foreach pkg,$(filter-out $(EXCL_PGK_HADDOCK),$(PACKAGES)),--read
 # compilation targets #
 #######################
 
-echo : 
-	@echo $(PKG_HADDOCK)
-
 # builds the default binary
 default : $(BUILD_DIR)/$(BIN_NAME)
 	@:
