@@ -1,5 +1,7 @@
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
+
+Definition of a Global Environment for identifier resolution and information retrieval.
 -}
 
 module Importer.LexEnv
@@ -67,8 +69,11 @@ import Importer.Utilities.Misc
 
 import Importer.Adapt.Common (primitive_tycon_table, primitive_datacon_table)
 
+---
+--- Identifier information
 --
--- Identifier information
+--    This is used for information retrieval about an identifier.
+--    E.g. if an identifier represents a function, or a class, etc.
 --
 
 type ModuleID     = String
@@ -131,8 +136,12 @@ unqualifyEnvName mID n@(EnvUnqualName _)   = n
 
 
 {-|
-  This function substitutes types (not only type variables) by types
+  This function substitutes type variables by types
   as given by the substitution argument.
+  E.g.: 
+  	@substituteTyVars [(a, Quux)] (Foo a -> Foobar a b -> Bar a b)@
+   			==>
+  	@Foo Quux -> Foobar Quux b -> Bar Quux b@
 -}
 substituteTyVars :: [(EnvType, EnvType)] -- ^the substitution to use
                  -> EnvType -- ^the type to apply the substitution to
@@ -209,7 +218,8 @@ data Type = Data  LexInfo [Constant] -- Data lexinfo [constructors]
   deriving (Eq, Ord, Show)
 
 {-| 
-  This forms the union of the 'Type' and 'Constant' type.
+  Identifier forms the union of the 'Type' and 'Constant' type. The reasong for this
+  is that types and constants live in different namespaces.
 -}
 data Identifier = Constant Constant
                 | Type Type
@@ -398,7 +408,7 @@ splitIdentifiers ids
 class Hsk2Env a b where
     fromHsk :: (Show a, Hsk2Env a b) => a -> b
     toHsk   :: (Show b, Hsk2Env a b) => b -> a
-    toHsk b = error ("(toHsk) Internal Error: Don't know how to lift " ++ show b)
+    toHsk b = error ("(toHsk) Internal Error: Don't know how to convert: " ++ show b)
 
 
 instance Hsk2Env Module ModuleID where
@@ -442,7 +452,6 @@ instance Hsk2Env HsAssoc EnvAssoc where
     toHsk EnvAssocRight  = HsAssocRight
     toHsk EnvAssocLeft   = HsAssocLeft
     toHsk EnvAssocNone   = HsAssocNone
-
 
 instance Hsk2Env HsType EnvType where
     fromHsk (HsTyVar name)  = EnvTyVar (fromHsk name)
@@ -567,8 +576,10 @@ instance Isa2Env Isa.Type EnvType where
 
 {-|
   This data type represents which kind a particular constructor is of. 
-  I.e. a data or a type constructor.
--}
+  I.e. a data or a type constructor. We have to translate those to names,
+  because they're not special in Isabelle, and hence not in our Global Environment.
+-} 
+
 data ConKind = DataCon | TypeCon deriving Show
 
 {-|
@@ -592,8 +603,10 @@ retranslateSpecialCon TypeCon qname
 
 
 
+---
+--- LexEnv
 --
--- LexEnv
+--   Part of a Module Enviornment. Mappings between identifier's name and the Identifier data type.
 --
 
 {-|
@@ -604,7 +617,7 @@ data LexE = LexEnv (Map.Map IdentifierID Constant) (Map.Map IdentifierID Type)
 
 {-|
   This function takes a list of identifiers (that contain lexical information) and collects the
-  lexical information in a lexical environment.
+  lexical information in a lexical environment. The identifiers are normalized, i.e. possibly merged.
 -}
 makeLexEnv :: [Identifier] -> LexE
 makeLexEnv identifiers
@@ -618,7 +631,14 @@ makeLexEnv identifiers
                  
 {-|
   Same as 'mergeConstants' but throws an exception if it was not successful.
+
+  There are some declarations which affect the same identifier even though the declarations
+  are apart from each other. We merge the information comming from such declarations.
+
+  E.g. explicit type annotations affect function-binding declarations,
+       instance declarations affect the class defined by some class declaration.
 -}
+
 mergeConstants_OrFail :: Constant -> Constant -> Constant
 mergeConstants_OrFail c1 c2
     = case mergeConstants c1 c2 of
@@ -637,6 +657,8 @@ mergeTypes_OrFail t1 t2
 {-|
   This function merges two lexical information blocks involving classes (i.e., also instance declarations for
   a particular class). It throws an exception if the arguments have different names.
+  It merges instances into the instancesOf slot of the corresponding class's ClassInfo
+  structure.
 -}
 mergeTypes :: Type -> Type -> Maybe Type
 mergeTypes t1 t2
