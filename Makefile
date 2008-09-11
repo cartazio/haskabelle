@@ -39,6 +39,11 @@ search_srcs = \
 		$(wildcard $(1)/*), \
 		$(filter %.hs %lhs,$(file)) $(call search_srcs,$(file)) \
 	) 
+
+
+# this function looks up the given field (2nd arg) of the given package (1st arg)
+get-field = $(word 2, $(shell ghc-pkg field $(1) ))
+
 # all source files
 SRCS = $(wildcard  *.hs) $(call search_srcs,Importer)
 # the corresponding object files
@@ -52,27 +57,43 @@ HIS = $(SRCS:%.hs=$(HI_DIR)/%.hi)
 ALL_DIRS = $(HADDOCK_DIR) $(HADDOCK_IMPL_DIR) $(BUILD_DIR) $(HI_DIR) $(OHI_DIR) $(OUT_DIR) $(OOUT_DIR)
 # list of the packages needed
 PACKAGES = uniplate base haskell-src-exts
+# list of packages to exclude for hadock
+EXCL_PGK_HADDOCK = haskell-src-exts
 # this is used as a command line argument for ghc to include the 
 # packages as stated in the variable PACKAGES
 PKGS = $(foreach pkg,$(PACKAGES),-package $(pkg))
-USE_PKGS = $(foreach pkg,$(PACKAGES),--use-package=$(pkg))
+# list of packages used for haddock
+PKG_HADDOCK = $(foreach pkg,$(filter-out $(EXCL_PGK_HADDOCK),$(PACKAGES)),--read-interface=$(call get-field, $(pkg) haddock-html),$(call get-field, $(pkg) haddock-interfaces) )
+
 
 ################
 # declarations #
 ################
 
-.PHONY : clean clean-optimised build rebuild rebuild-optimised haddock haddock-impl depend-default depend-optimised
+.PHONY : clean clean-optimised build rebuild rebuild-optimised depend-default depend-optimised echo
 .SUFFIXES : .o .hs .hi .lhs .hc .s
 
 #######################
 # compilation targets #
 #######################
 
+echo : 
+	@echo $(PKG_HADDOCK)
+
 # builds the default binary
 default : $(BUILD_DIR)/$(BIN_NAME)
 	@:
+
 # builds the optimised binary
 optimised : $(BUILD_DIR)/$(OBIN_NAME)
+	@:
+
+# builds all binaries and haddock documentations
+all : default optimised haddock haddock-impl
+	@:
+
+# rebuilds all binaries and haddock documentations
+rebuild-all : clean-all all
 	@:
 
 # builds the optimised binary
@@ -87,6 +108,9 @@ $(BUILD_DIR)/$(BIN_NAME) : depend-default $(OBJS) $(BUILD_DIR)
 	@echo linking default binary ...
 	@$(HC) -o $@ $(HC_OPTS) -hidir $(HI_DIR) -odir $(OUT_DIR) $(PKGS) $(OBJS)
 
+# cleans all binaries and haddock documentations
+clean-all : clean clean-optimised clean-haddock clean-haddock-impl
+	@:
 
 # cleans the optimised compilation
 clean-optimised:
@@ -164,20 +188,37 @@ $(OOUT_DIR)/%.o-boot: %.hs-boot $(OOUT_DIR)
 ###################
 
 # builds standard interface documentation
-haddock : $(HADDOCK_DIR)
+haddock : $(HADDOCK_DIR) $(SRCS)
 	@echo generating interface haddock ...
-	@haddock -o $(HADDOCK_DIR) -h -t "Hsimp" $(USE_PKGS) $(filter-out %Raw.hs , $(SRCS))
+	@haddock -o $(HADDOCK_DIR) -h -t "Hsimp" $(PKG_HADDOCK) \
+	--optghc=$(HC_OPTS) \
+	--optghc=-i$(HI_DIR) \
+	--optghc=-odir --optghc=$(OUT_DIR) \
+	--optghc=-hidir --optghc=$(HI_DIR) \
+	$(filter-out %Raw.hs , $(SRCS))
 
-# alias for haddock
-doc : haddock
-	@:
 # builds an implementation documentation, i.e. including also elements that are not exported
-haddock-impl : $(HADDOCK_IMPL_DIR)
+haddock-impl : $(HADDOCK_IMPL_DIR) $(SRCS)
 	@echo generating implementation haddock ...
-	@haddock -o $(HADDOCK_IMPL_DIR) -h --ignore-all-exports -t "Hsimp" $(USE_PKGS) $(filter-out %Raw.hs , $(SRCS))
+	@haddock -o $(HADDOCK_IMPL_DIR) -h --ignore-all-exports -t "Hsimp" $(PKG_HADDOCK) \
+	--optghc=$(HC_OPTS) \
+	--optghc=-i$(HI_DIR) \
+	--optghc=-odir --optghc=$(OUT_DIR) \
+	--optghc=-hidir --optghc=$(HI_DIR) \
+	$(filter-out %Raw.hs , $(SRCS))
 
-# alias for haddock-impl
-doc-impl : haddock-impl
+clean-haddock :
+	@echo cleaning interface haddock ...
+	@rm -fr $(HADDOCK_DIR)/*
+
+clean-haddock-impl :
+	@echo cleaning implementation haddock ...
+	@rm -fr $(HADDOCK_IMPL_DIR)/*
+
+rehaddock : clean-haddock haddock
+	@:
+
+rehaddock-impl : clean-haddock-impl haddock-impl
 	@:
 
 ########
