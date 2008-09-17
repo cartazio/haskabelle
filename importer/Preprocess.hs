@@ -3,7 +3,8 @@
 -}
 
 module Importer.Preprocess
-    ( preprocessHsModule
+    (
+     preprocessHsModule
     )where
 
 import Maybe
@@ -18,13 +19,19 @@ import Importer.Utilities.Misc -- (concatMapM, assert)
 import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
 
+import Importer.Test.Generators
+
 import qualified Importer.Msg as Msg
 
 import Importer.Adapt.Raw (used_const_names, used_thy_names)
+
+import Test.QuickCheck
         
-
+{-|
+  This function preprocesses the given Haskell module to make things easier for the
+  conversion.
+-}
 preprocessHsModule :: HsModule -> HsModule
-
 preprocessHsModule (HsModule loc modul exports imports topdecls)
     = HsModule loc modul exports imports topdecls4
       where topdecls1    = map deguardify_HsDecl topdecls
@@ -35,56 +42,71 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
 --          modul'      = (let (Module n) = modul in Module (normalizeModuleName n))
 
 
+{-|
+  /Delocalization of HsDecls/
 
----- Delocalization of HsDecls:
---
---  Since Isabelle/HOL does not really support local function
---  declarations, we convert the Haskell AST to an equivalent AST
---  where every local function declaration is made a global
---  declaration. This includes where as well as let expressions.
---
---  Additionally, all variables defined in a where clause
---  are converted to an equivalent let expression.
+  Since Isabelle/HOL does not really support local function
+  declarations, we convert the Haskell AST to an equivalent AST
+  where every local function declaration is made a global
+  declaration. This includes where as well as let expressions.
+
+  Additionally, all variables defined in a where clause
+  are converted to an equivalent let expression.
 
 
--- We keep track of the names that are directly bound by a declaration,
--- as functions must not close over them. See below for an explanation.
+  We keep track of the names that are directly bound by a declaration,
+  as functions must not close over them. See below for an explanation.
+ -}
 type DelocalizerM a = StateT [HsQName] (State GensymCount) a
 
-withBindings       :: [HsQName] -> DelocalizerM v -> DelocalizerM v
-withBindings names m = do old <- getBindings; put (names ++ old); r <- m; put old; return r
+{-|
+  This function modifies the given delocaliser monad by adding the given
+  list of variables to the list of bound variables before and restoring
+  the original list afterwards.
+-}
+withAddBindings :: [HsQName] -> DelocalizerM v -> DelocalizerM v
+withAddBindings names m = do
+  old <- getBindings
+  put (names ++ old)
+  r <- m
+  put old
+  return r
 
+{-|
+  This function extracts the bindings from the @DelocalizerM@'s state.x
+-}
 getBindings :: DelocalizerM [HsQName]
 getBindings = get
 
+{-|
+  This function executes the given delocaliser monad starting with an
+  empty list of bound variables.
+-}
 runDelocalizer :: DelocalizerM [HsDecl] -> State GensymCount [HsDecl]
 runDelocalizer d = evalStateT d []
 
--- Main function. Takes a declaration, and returns a list of itself and all
--- priorly local declarations.
+{-|
+  This is the main function. It takes a declaration, and returns a list
+  of itself and all local declarations that were delocalised.
+ -}
 delocalize_topdecl  :: HsDecl  -> DelocalizerM [HsDecl]
-
--- Helper functions. Return a properly alpha-converted version of their argument 
--- plus a list of globalized declarations.
-delocalize_HsDecl      :: HsDecl      -> DelocalizerM (HsDecl,     [HsDecl])
-delocalize_HsClassDecl :: HsClassDecl -> DelocalizerM (HsClassDecl,[HsDecl])
-delocalize_HsInstDecl  :: HsInstDecl  -> DelocalizerM (HsInstDecl, [HsDecl])
-delocalize_HsMatch     :: HsMatch     -> DelocalizerM (HsMatch,    [HsDecl])
-delocalize_HsRhs       :: HsRhs       -> DelocalizerM (HsRhs,      [HsDecl])
-delocalize_HsExp       :: HsExp       -> DelocalizerM (HsExp,      [HsDecl])
-delocalize_HsAlt       :: HsAlt       -> DelocalizerM (HsAlt,      [HsDecl])
-
--- This additionally returns the renamings that reflect how the where-binds
--- were renamed. This is necessary, beacuse the body of the caller 
--- where these where-binds apply to, must also be alpha converted.
-delocalize_HsBinds :: HsBinds -> DelocalizerM (HsBinds, [HsDecl], [Renaming])
-
 delocalize_topdecl decl 
     = do (decl', localdecls) <- delocalize_HsDecl decl
          return (localdecls ++ [decl'])
 
+------------------------------------------------------------------------------
+-- Helper functions. Return a properly alpha-converted version of their argument 
+-- plus a list of globalized declarations.
+------------------------------------------------------------------------------
+
+{-|
+  This function delocalises all local declarations in the given Haskell declaration.
+  It returns the delocalised local declarations and the properly alpha-converted form
+  of the input.
+-}
+delocalize_HsDecl      :: HsDecl      -> DelocalizerM (HsDecl,     [HsDecl])
 delocalize_HsDecl (HsPatBind loc pat rhs wbinds)
-    = withBindings (extractBindingNs pat)
+    = withAddBindings (extractBindingNs pat)
       $ do (rhs', localdecls)  <- delocalize_HsRhs (letify wbinds rhs)
            return (HsPatBind loc pat rhs' (HsBDecls []), localdecls)
 delocalize_HsDecl (HsFunBind matchs)
@@ -103,24 +125,48 @@ delocalize_HsDecl decl  = assert (check decl) $ return (decl,[])
                               null [ True | HsLet _ _ <- universeBi decl ]]
           isHsLet expr = case expr of HsLet _ _ -> True; _ -> False
 
+{-|
+  The argument is supposed to be a TypeSig here (will be checked later in "Importer.Convert").
+  It will be explicitly delocalised (i.e. included in the returned list) to make the later
+  process aware of its presence. (The stuff defined by a Class will be used  by other
+  functions, and the later process will barf on things it doesn't know about.
+-}
+delocalize_HsClassDecl :: HsClassDecl -> DelocalizerM (HsClassDecl,[HsDecl])
 delocalize_HsClassDecl (HsClsDecl decl) 
     = do (decl', localdecls) <- delocalize_HsDecl decl
-         -- DECL is a TypeSig here (will be checked later in Convert.hs),
-         -- we explicitly put it out to make the later process be aware
-         -- of its presence. (The stuff defined by a Class will be used
-         -- by other functions, and the later process will barf on things
-         -- it doesn't know about.
          return (HsClsDecl decl', localdecls ++ [decl'])
 
+{-|
+  This function delocalises all local declarations in the given instance-internal declaration.
+  It returns the delocalised local declarations and the properly alpha-converted form
+  of the input. The input is supposed to be a function binding.
+-}
+delocalize_HsInstDecl  :: HsInstDecl  -> DelocalizerM (HsInstDecl, [HsDecl])
 delocalize_HsInstDecl (HsInsDecl decl)
     = do (decl', localdecls) <- delocalize_HsDecl decl
          return (HsInsDecl decl', localdecls)
 
+
+{-|
+  This function delocalises all local declarations in the given function binding clause.
+  It returns the delocalised local declarations and the properly alpha-converted form
+  of the input.
+-}
+delocalize_HsMatch     :: HsMatch     -> DelocalizerM (HsMatch,    [HsDecl])
 delocalize_HsMatch (HsMatch loc name pats rhs wbinds)
-    = withBindings (extractBindingNs pats)
+    = withAddBindings (extractBindingNs pats)
       $ do (rhs', localdecls)  <- delocalize_HsRhs (letify wbinds rhs)
            return (HsMatch loc name pats rhs' (HsBDecls []), localdecls)
 
+
+-- This . This is necessary, beacuse the body of the caller 
+-- where these where-binds apply to, must also be alpha converted.
+{-|
+  Here the actual renaming takes place. The given local bindings (NOTE: implicit parameters are not 
+  supported) are delocalised. Additionally, the renamings that reflect how the bindings
+  were renamed are returned.
+-}
+delocalize_HsBinds :: HsBinds -> DelocalizerM (HsBinds, [HsDecl], [Renaming])
 delocalize_HsBinds (HsBDecls localdecls)
     -- First rename the bindings that are established by LOCALDECLS to fresh identifiers,
     -- then also rename all occurences (i.e. recursive invocations) of these bindings
@@ -131,28 +177,48 @@ delocalize_HsBinds (HsBDecls localdecls)
          closedVarNs  <- getBindings
          return (HsBDecls [], checkForClosures closedVarNs localdecls'', renamings)
 
+{-|
+  This function delocalises local declarations in the given RHS. It returns the delocalised
+  declarations together with the properly alpha-converted input.
+-}
+delocalize_HsRhs       :: HsRhs       -> DelocalizerM (HsRhs,      [HsDecl])
 delocalize_HsRhs (HsUnGuardedRhs exp)
     = do (exp', decls) <- delocalize_HsExp exp
          return (HsUnGuardedRhs exp', decls)
 delocalize_HsRhs (HsGuardedRhss guards)
     = do (guards', declss) <- mapAndUnzipM delocalize_HsGuardedRhs guards
          return (HsGuardedRhss guards', concat declss)
-
+{-|
+  This function delocalises local declarations in the given RHS guard clause. It returns the delocalised
+  declarations together with the properly alpha-converted input.
+-}
+delocalize_HsGuardedRhs :: HsGuardedRhs -> DelocalizerM (HsGuardedRhs, [HsDecl])
 delocalize_HsGuardedRhs (HsGuardedRhs loc stmts clause_body)
     = do (clause_body', decls) <- delocalize_HsExp clause_body
          return (HsGuardedRhs loc stmts clause_body', decls)
 
+{-|
+  This function delocalises the local declarations of the given case expression alternative.
+  It returns the delocalised declarations along with the properly alpha-converted input.
+-}
+delocalize_HsAlt       :: HsAlt       -> DelocalizerM (HsAlt,      [HsDecl])
 delocalize_HsAlt (HsAlt loc pat (HsUnGuardedAlt body) wbinds)
-    = withBindings (extractBindingNs pat)
+    = withAddBindings (extractBindingNs pat)
         $ do (body', localdecls) <- delocalize_HsExp (letify wbinds body)
              return (HsAlt loc pat (HsUnGuardedAlt body') (HsBDecls []), localdecls)                              
 
+{-|
+  This function delocalises local declarations in the given expression (i.e.
+  let bindings). It returns the delocalised declarations along with the properly
+  alpha-converted input.
+ -}
+delocalize_HsExp       :: HsExp       -> DelocalizerM (HsExp,      [HsDecl])
 delocalize_HsExp (HsLet binds body)
     -- The let expression in Isabelle/HOL supports simple pattern matching. So we
     -- differentiate between pattern and other (e.g. function) bindings; the first
     -- ones are kept, the latter ones are converted to global bindings.
     = let (patBinds, otherBinds) = splitPatBinds binds
-      in withBindings (extractBindingNs patBinds)
+      in withAddBindings (extractBindingNs patBinds)
          $ do (otherBinds', decls, renamings) <- delocalize_HsBinds otherBinds
               (body', moredecls)              <- delocalize_HsExp (renameFreeVars renamings body)
               return (letify (renameFreeVars renamings patBinds) body', decls ++ moredecls)
@@ -168,11 +234,16 @@ delocalize_HsExp exp = descendM (\(e, ds) -> do (e', ds') <- delocalize_HsExp e
                                                 return (e', ds++ds')) 
                          (exp, [])
 
-
+{-|
+  This predicates checks whether the argument is a pattern binding.
+-}
+isHsPatBind :: HsDecl -> Bool
 isHsPatBind (HsPatBind _ _ _ _) = True
 isHsPatBind _ = False
 
--- Partitions HsBinds into (pattern bindings, other bindings).
+{-|
+  This function partitions bindings into a pair (pattern bindings, other bindings)
+-}
 splitPatBinds :: HsBinds -> (HsBinds, HsBinds)
 splitPatBinds (HsBDecls decls) 
     = let (patDecls, typeSigs, otherDecls)    = unzip3 (map split decls)
@@ -416,3 +487,15 @@ deguardify_HsGuardedRhss guards
 --             in hsk_concatMap fn exp
 --       expand e (HsLetStmt _ : _) 
 --           = error "Let statements not supported in List Comprehensions."
+
+
+------------------------------------------------------------
+------------------------------------------------------------
+--------------------------- Tests --------------------------
+------------------------------------------------------------
+------------------------------------------------------------
+
+noLocalDecl :: HsModule -> Bool
+noLocalDecl m = True
+
+prop_NoLocalDecl mod = noLocalDecl $ preprocessHsModule mod
