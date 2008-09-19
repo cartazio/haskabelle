@@ -35,9 +35,11 @@ import qualified Importer.LexEnv as Env
 
 import qualified Data.Map as Map
 
--- Main function of the conversion process; converts a Unit of Haskell
--- ASTs into a Unit of Isar/HOL ASTs.
---
+
+{-|
+  This is the main function of the conversion process; converts a Unit of Haskell
+  ASTs into a Unit of Isar/HOL ASTs.
+-}
 convertHskUnit :: HskUnit -> IsaUnit
 convertHskUnit (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'     = map preprocessHsModule hsmodules
@@ -69,12 +71,16 @@ convertHskUnit (HskUnit hsmodules initialGlobalEnv)
 data HskModule = HskModule SrcLoc Module [HskDependentDecls]
   deriving (Show)
 
--- Contains all declarations that are dependent on each other,
--- i.e. all those functions that are mutually recursive.
-data HskDependentDecls = HskDependentDecls [HsDecl]
+{-|
+  This data structure is supposed to collect function declarations
+  that depend mutually recursive on each other.
+-}
+newtype HskDependentDecls = HskDependentDecls [HsDecl]
   deriving (Show)
 
-
+{-|
+  ???
+-}
 data Context    = Context
     {     
       _theory      :: Isa.Theory
@@ -90,35 +96,67 @@ emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default 
                          _backtrace   = [],
                          _gensymcount = 0 }
 
--- Instead of accessing a record directly by their `_foo' slots, we
--- use the respective `foo' surrogate which consists of an appropriate
--- getter and setter -- which allows functions to both query and
--- update a record by slot name.
+{-|
+  Instead of accessing a record directly by their `_foo' slots, we
+  use the respective `foo' surrogate which consists of an appropriate
+  getter and setter -- which allows functions to both query and
+  update a record by slot name.
+-}
 type FieldSurrogate field = (Context -> field, Context -> field -> Context) 
 
+theory :: FieldSurrogate Isa.Theory
 theory      = (_theory,      \c f -> c { _theory      = f })
+globalEnv :: FieldSurrogate Env.GlobalE
 globalEnv   = (_globalEnv,   \c f -> c { _globalEnv   = f })
+warnings :: FieldSurrogate [Warning]
 warnings    = (_warnings,    \c f -> c { _warnings    = f })
+backtrace :: FieldSurrogate [String]
 backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
+gensymcount :: FieldSurrogate Int
 gensymcount = (_gensymcount, \c f -> c { _gensymcount = f })
 
+currentModule :: FieldSurrogate Module
 currentModule = (\c -> let (Isa.Theory n) = _theory c in Module n, \c f -> c)
 
-type ContextM v = StateT Context (State GensymCount) v
+{-|
+  The conversion process is done in this monad.
+-}
+newtype ContextM v = ContextM (StateT Context GensymM v)
+    deriving (Monad, MonadState Context, Functor)
 
+{-|
+  This function lifts a gensym computation to a context computation
+-}
+liftGensym :: GensymM a -> ContextM a
+liftGensym = ContextM . lift
+
+{-|
+  This function executes the given conversion with the given environment as
+  the context.
+-}
 runConversion :: Env.GlobalE -> ContextM v -> (v, Context)
-runConversion env m = evalGensym 0 (runStateT m (emptyContext { _globalEnv = env }))
+runConversion env (ContextM m) = evalGensym 0 (runStateT m (emptyContext { _globalEnv = env }))
 
+{-|
+  This function queries the given field in the context monad
+-}
 queryContext :: (FieldSurrogate field) -> ContextM field
 queryContext (query, _)
     = do context <- get; return (query context) 
 
+{-|
+  This function updates the given field in the context monad using the given function.
+-}
 updateContext :: (FieldSurrogate field) -> (field -> field) -> ContextM ()
 updateContext (query, update) updateField
     = do context <- get
          put (update context (updateField (query context)))
          return ()
 
+{-|
+  This function changes the given field in the given context monad using the given
+  function. The original context is restored afterwards.
+-}
 withUpdatedContext :: (FieldSurrogate field) -> (field -> field) -> ContextM a -> ContextM a
 withUpdatedContext surrogate updateField body
      = do oldval <- queryContext surrogate
@@ -127,13 +165,22 @@ withUpdatedContext surrogate updateField body
           updateContext surrogate (\_ -> oldval)
           return result
 
-
+{-|
+  This data structure is supposed to contain warning messages
+-}
 newtype Warning = Warning String
   deriving (Show, Eq, Ord)
 
+{-|
+  This function issues a warning in the current conversion monad.
+-}
 warn :: String -> ContextM ()
 warn msg = updateContext warnings (\warnings -> warnings ++ [(Warning msg)])
      
+{-|
+  This function quits the conversion with an error providing the given error
+  message.
+-}
 die :: String -> ContextM t
 die msg 
     = do backtrace <- queryContext backtrace
@@ -141,17 +188,32 @@ die msg
                    ++ "Backtrace:\n"
                    ++ foldr1 (++) (map (++"\n\n") (reverse backtrace))
 
+{-|
+  This function quits the conversion with an error providing the given error
+  message and source location.
+-}
 dieWithLoc :: SrcLoc -> String -> ContextM t
 dieWithLoc loc msg 
     = do backtrace <- queryContext backtrace
          error $ srcloc2string loc ++ ": " ++ msg ++ "\n\n"
                    ++ "Backtrace:\n"
                    ++ foldr1 (++) (map (++"\n\n") (reverse backtrace))
-
+{-|
+  This function quits the conversion with an error that is due to a
+  pattern matching case that was observed but not anticipated. The object
+  causing this and an a string describing the context has to be provided.
+-}
+pattern_match_exhausted :: (Show a) => String -> a -> ContextM t
 pattern_match_exhausted str obj 
     = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
 
-
+{-|
+  Instances of this class constitute pairs of types s.t. the first one
+  (a Haskell entity) can be converted into the last one (an Isabelle entity).
+  
+  Instance declarations are supposed to implement 'convert'' instead of 
+  'convert'. The latter uses the first by adding further boilerplate code.
+-}
 class Show a => Convert a b | a -> b where
     convert' :: (Convert a b) => a -> ContextM b
     convert  :: (Convert a b) => a -> ContextM b
@@ -374,32 +436,31 @@ instance Convert HsBinds [Isa.Cmd] where
 -- reduce some code bloat. (Although it comes at cost of making
 -- backtraces a bit confusing perhaps.)
 --
-instance Convert HsPat Isa.Term where
+instance Convert HsPat Isa.Pat where
     convert' (HsPWildCard) = return $ Isa.Var (Isa.Name "_")
     convert' anything      = convertHsPat anything >>= convert
+        where convertHsPat :: HsPat -> ContextM HsExp
+              convertHsPat (HsPLit literal) = return $ HsLit literal
+              convertHsPat (HsPVar name)    = return $ HsVar (UnQual name)
+              convertHsPat (HsPList pats)   = liftM HsList  $ mapM convertHsPat pats
+              convertHsPat (HsPTuple pats)  = liftM HsTuple $ mapM convertHsPat pats
+              convertHsPat (HsPParen pat)   = liftM HsParen $ convertHsPat pat
+              convertHsPat (HsPWildCard)    = return HsWildCard
+                                              
+              convertHsPat (HsPInfixApp pat1 qname pat2)
+                  = do pat1' <- convertHsPat pat1
+                       pat2' <- convertHsPat pat2
+                       return $ HsInfixApp pat1' (HsQConOp qname) pat2'
 
-convertHsPat :: HsPat -> ContextM HsExp
-convertHsPat (HsPLit literal) = return $ HsLit literal
-convertHsPat (HsPVar name)    = return $ HsVar (UnQual name)
-convertHsPat (HsPList pats)   = liftM HsList  $ mapM convertHsPat pats
-convertHsPat (HsPTuple pats)  = liftM HsTuple $ mapM convertHsPat pats
-convertHsPat (HsPParen pat)   = liftM HsParen $ convertHsPat pat
-convertHsPat (HsPWildCard)    = return HsWildCard
-
-convertHsPat (HsPInfixApp pat1 qname pat2)
-    = do pat1' <- convertHsPat pat1
-         pat2' <- convertHsPat pat2
-         return $ HsInfixApp pat1' (HsQConOp qname) pat2'
-
-convertHsPat (HsPApp qname []) = return (HsCon qname)
-convertHsPat (HsPApp qname (pat1:pats))
-    = do pat1' <- convertHsPat pat1
-         pats' <- mapM convertHsPat pats
-         return $ foldl HsApp (HsApp (HsCon qname) pat1') pats'
-
-convertHsPat junk = pattern_match_exhausted 
-                         "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" 
-                         junk
+              convertHsPat (HsPApp qname []) = return (HsCon qname)
+              convertHsPat (HsPApp qname (pat1:pats))
+                  = do pat1' <- convertHsPat pat1
+                       pats' <- mapM convertHsPat pats
+                       return $ foldl HsApp (HsApp (HsCon qname) pat1') pats'
+                              
+              convertHsPat junk = pattern_match_exhausted 
+                                "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" 
+                                junk
 
 instance Convert HsRhs Isa.Term where
     convert' (HsUnGuardedRhs exp) = convert exp
@@ -458,13 +519,13 @@ instance Convert HsExp Isa.Term where
     convert' (HsLeftSection e qop)
         = do e'   <- convert e
              qop' <- convert qop
-             g    <- lift (genIsaName (Isa.Name "arg"))
+             g    <- liftGensym (genIsaName (Isa.Name "arg"))
              return (makeLambda [g] $ Isa.App (Isa.App qop' e') (Isa.Var g))
 
     convert' (HsRightSection qop e)
         = do e'   <- convert e
              qop' <- convert qop
-             g <- lift (genIsaName (Isa.Name "arg"))
+             g <- liftGensym (genIsaName (Isa.Name "arg"))
              return (makeLambda [g] $ Isa.App (Isa.App qop' (Isa.Var g)) e')
 
     convert' (HsRecConstr qname updates)
@@ -511,69 +572,84 @@ instance Convert HsExp Isa.Term where
         = do e'     <- convert e
              stmts' <- mapM convertListCompStmt stmts
              return (Isa.ListComp e' stmts')
+        where convertListCompStmt (HsQualifier b)     = convert b >>= (return . Isa.Guard)
+              convertListCompStmt (HsGenerator _ p e) = do p' <- convert p
+                                                           e' <- convert e
+                                                           return (Isa.Generator (p', e'))
+              convertListCompStmt (HsLetStmt _)
+                  = die "Let statements not supported in List Comprehensions."
 
     convert' junk = pattern_match_exhausted "HsExp -> Isa.Term" junk
 
-convertListCompStmt (HsQualifier b)     = convert b >>= (return . Isa.Guard)
-convertListCompStmt (HsGenerator _ p e) = do p' <- convert p
-                                             e' <- convert e
-                                             return (Isa.Generator (p', e'))
-convertListCompStmt (HsLetStmt _)
-    = die "Let statements not supported in List Comprehensions."
 
-
--- We desugare lambda expressions to true unary functions, i.e. to
--- lambda expressions binding only one argument.
+{-|
+  We desugare lambda expressions to true unary functions, i.e. to
+  lambda expressions binding only one argument.
+ -}
 makeLambda :: [Isa.Name] -> Isa.Term -> Isa.Term
 makeLambda varNs body
     = assert (not (null varNs)) $ foldr Isa.Lambda body varNs
 
--- Since HOL doesn't have true n-tuple constructors (it uses nested
--- pairs to represent n-tuples), we simply return a lambda expression
--- that takes n parameters and constructs the nested pairs within its
--- body.
+{-|
+  Since HOL doesn't have true n-tuple constructors (it uses nested
+  pairs to represent n-tuples), we simply return a lambda expression
+  that takes n parameters and constructs the nested pairs within its
+  body.
+ -}
+
 makeTupleDataCon :: Int -> ContextM Isa.Term
 makeTupleDataCon n     -- n < 2  cannot happen (cf. Language.Haskell.Exts.HsTupleCon)
     = assert (n > 2) $ -- n == 2, i.e. pairs, can and are dealt with by usual conversion.
-      do argNs  <- mapM (lift . genHsQName) (replicate n (UnQual (HsIdent "arg")))
+      do argNs  <- mapM (liftGensym . genHsQName) (replicate n (UnQual (HsIdent "arg")))
          args   <- return (map HsVar argNs)
          argNs' <- mapM convert argNs
          args'  <- convert (HsTuple args)
          return $ Isa.Parenthesized (makeLambda argNs' args')
     where pair x y = HsApp (HsApp (HsCon (Special (HsTupleCon 2))) x) y
 
--- HOL does not support pattern matching directly within a lambda
--- expression, so we transform a `HsLambda pat1 pat2 .. patn -> body' to
---
---   Isa.Lambda g1 .
---     Isa.Case g1 of pat1' =>
---       Isa.Lambda g2 .
---         Isa.Case g2 of pat2' => ... => Isa.Lambda gn .
---                                          Isa.Case gn of patn' => body'
---
---   where g1, ..., gn are fresh identifiers.
---
-makePatternMatchingLambda :: [Isa.Term] -> Isa.Term -> ContextM Isa.Term
+{-|
+  HOL does not support pattern matching directly within a lambda
+  expression, so we transform a @HsLambda pat1 pat2 .. patn -> body@ to
+  
+  @
+  Isa.Lambda g1 .
+     Isa.Case g1 of pat1' =>
+       Isa.Lambda g2 .
+         Isa.Case g2 of pat2' => ... => Isa.Lambda gn .
+                                          Isa.Case gn of patn' => body'
+  @
+  where @g1@, ..., @gn@ are fresh identifiers.
+-}
+makePatternMatchingLambda :: [Isa.Pat] -> Isa.Term -> ContextM Isa.Term
 makePatternMatchingLambda patterns theBody
     = foldM mkMatchingLambda theBody (reverse patterns) -- foldM is a left fold.
       where mkMatchingLambda body pat
-                = do g <- lift (genIsaName (Isa.Name "arg"))
+                = do g <- liftGensym (genIsaName (Isa.Name "arg"))
                      return $ Isa.Lambda g (Isa.Case (Isa.Var g) [(pat, body)])
 
+{-|
+  This predicates decides whether the given constructor declarations are a
+  pure ADT declaration (value @False@) or a pure record declaration (value
+  @True@). If they define a mixture of both an exception is thrown.
+-}
 isRecDecls :: [HsConDecl] -> Bool
 isRecDecls decls
     = case decls of
-        -- Haskell allows that a data declaration may be mixed up arbitrarily
-        -- by normal data constructor declarations and record declarations.
-        -- As HOL does not support that kind of mishmash, we require that a
-        -- data declaration either consists of exactly one record definition,
-        -- or arbitrarily many data constructor definitions.
+        -- Haskell allows that a data declaration may be mixed up
+        -- arbitrarily by normal data constructor declarations and
+        -- record declarations.  As HOL does not support that kind of
+        -- mishmash, we require that a data declaration either
+        -- consists of exactly one record definition, or arbitrarily
+        -- many data constructor definitions.
         (HsRecDecl _ _):rest -> assert (null rest) True
         decls                -> assert (all (not.isRecDecl) decls) False
     where isRecDecl (HsRecDecl _ _) = True
           isRecDecl _               = False
 
-makeRecordCmd :: HsName -> [HsName] -> [HsConDecl] -> ContextM Isa.Cmd
+makeRecordCmd :: HsName  -- ^type constructor
+              -> [HsName] -- ^type variable arguments to the constructor
+              -> [HsConDecl] -- ^a singleton list containing a record declaration
+              -> ContextM Isa.Cmd   -- ^the resulting record declaration
 makeRecordCmd tyconN tyvarNs [HsRecDecl name slots] -- cf. `isRecDecls'
     = do tycon  <- convert tyconN
          tyvars <- mapM convert tyvarNs
@@ -585,12 +661,12 @@ makeRecordCmd tyconN tyvarNs [HsRecDecl name slots] -- cf. `isRecDecls'
                    return (zip names' (cycle [typ']))
  
 
-
--- Hsx parses every infix application simply from left to right without
--- taking operator associativity or binding priority into account. So
--- we gotta fix that up ourselves. (We also properly consider infix
--- declarations to get user defined operator right.)
-
+{-|
+  Hsx parses every infix application simply from left to right without
+  taking operator associativity or binding priority into account. So
+  we gotta fix that up ourselves. (We also properly consider infix
+  declarations to get user defined operator right.)
+-}
 fixOperatorFixities :: HsExp -> ContextM HsExp
 
 -- Notice that `1 * 2 + 3 / 4' is parsed as `((1 * 2) + 3) / 4', i.e.
@@ -629,22 +705,36 @@ fixOperatorFixities app@(HsInfixApp (HsInfixApp e1 op1 e2) op2 e3)
                                                "(AssocNone should have already been normalized away.)")
 fixOperatorFixities nonNestedInfixApp = return nonNestedInfixApp
 
+{-|
+  Enforces left associativity as default.
+-}
+normalizeAssociativity :: HsAssoc -> HsAssoc
 normalizeAssociativity (HsAssocNone) = HsAssocLeft -- as specified in Haskell98.
 normalizeAssociativity etc = etc
 
-
+{-|
+  This function looks up the lexical information for the
+  given constant identifier.
+-}
 lookupIdentifier_Constant :: HsQName -> ContextM (Maybe Env.Identifier)
 lookupIdentifier_Constant qname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
          return (Env.lookupConstant (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
 
+{-|
+  This function looks up the lexical information for the given
+  type identifier.
+-}
 lookupIdentifier_Type :: HsQName -> ContextM (Maybe Env.Identifier)
 lookupIdentifier_Type qname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
          return (Env.lookupType (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
-
+{-|
+  This function looks up the fixity declaration for the given
+  infix operator.
+-}
 lookupInfixOp :: HsQOp -> ContextM (HsAssoc, Int)
 lookupInfixOp qop
     = do identifier <- lookupIdentifier_Constant (qop2name qop)
@@ -657,6 +747,9 @@ lookupInfixOp qop
     where qop2name (HsQVarOp n) = n
           qop2name (HsQConOp n) = n
 
+{-|
+  This function looks up the type for the given identifier.
+-}
 lookupType :: HsQName -> ContextM (Maybe HsType)
 lookupType fname
     -- We're interested in the type of a Constant.

@@ -277,7 +277,7 @@ type Renaming = (HsQName, HsQName)
   This function generates renamings for all variables given in the
   list to provide fresh names.
 -}
-freshIdentifiers :: [HsQName] -> State GensymCount [Renaming]
+freshIdentifiers :: [HsQName] -> GensymM [Renaming]
 freshIdentifiers qnames
     = do freshs <- mapM genHsQName qnames
          return (zip qnames freshs)
