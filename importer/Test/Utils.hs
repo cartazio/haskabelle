@@ -6,12 +6,14 @@
 module Importer.Test.Utils
     ( deriveArbitrary,
       deriveArbitraryAll,
-      deriveArbitrary_shrink
+      deriveArbitrary_shrink,
+      deriveGenForConstrs
     ) where
 
 import Test.QuickCheck
 import Language.Haskell.TH
 import Control.Monad
+import Data.Maybe
 
 abstractConType :: Con -> (Name,Int)
 abstractConType (NormalC constr args) = (constr, length args)
@@ -22,21 +24,56 @@ abstractConType (ForallC _ _ constr) = abstractConType constr
 newNames :: Int -> String -> Q [Name]
 newNames n name = replicateM n (newName name)
 
+{-|
+  This function takes the name of a constructor and returns all constructor
+  for the corresponding type.
+-}
+getTypeConstrs :: Name -> Q (Name,[Con])
+getTypeConstrs name = do DataConI _name _type datatypeName _fixity <- reify name
+                         TyConI tyDecl <- reify datatypeName
+                         let ret =
+                                 case tyDecl of
+                                   NewtypeD _ _ _ constr _ -> [constr]
+                                   DataD _ _ _ constrs _ -> constrs 
+                         return (datatypeName, ret)
+
+lookupConstr :: Name -> [Con] -> Maybe Con
+lookupConstr name [] =  Nothing
+lookupConstr name (constr : constrs) = case constr of
+                                         NormalC cname _ -> if cname == name
+                                                           then Just constr
+                                                           else lookupConstr name constrs
+                                         _ -> lookupConstr name constrs
+
+
 generateArbitraryDecl :: [Con] -> Q Dec
-generateArbitraryDecl constrs
-    = do let genList = listE $ map (constrGen . abstractConType) constrs
-         arbitraryBody <- [| oneof $genList |]
-         let arbitraryClause = Clause [] (NormalB arbitraryBody) []
-         return $ FunD 'arbitrary [arbitraryClause]
-    where constrGen (constr, n)
+generateArbitraryDecl = generateGenDecl 'arbitrary
+
+generateGenDecl :: Name -> [Con] -> Q Dec
+generateGenDecl genName constrs
+    = do let genList = listE $ map (constrGen (length constrs) . abstractConType) constrs
+         genBody <- [| oneof $genList |]
+         let genClause = Clause [] (NormalB genBody) []
+         return $ FunD genName [genClause]
+    where constrGen constrCount (constr, n)
               = do varNs <- newNames n "x"
-                   let binds = map (\var -> BindS (VarP var) (VarE 'arbitrary)) varNs
-                   let varExps = (map VarE) varNs 
-                   let con = ConE constr
-                   let apps = return $ foldl1 AppE  (con: varExps)
-                   ret <- noBindS [|return $ $apps|] 
-                   let stmtSeq = binds ++ [ret]
-                   return $ DoE stmtSeq
+                   newSizeN <- newName "newSize"
+                   let newSizeE = varE newSizeN
+                   let newSizeP = varP newSizeN
+                   let constrsE = litE . IntegerL . toInteger $ constrCount
+                   let binds = (`map` varNs) (\var -> bindS
+                                                     (varP var)
+                                                     [| resize $newSizeE arbitrary |] )
+                   let apps =  appsE (conE constr: map varE varNs)
+                   let build = doE $
+                               binds ++
+                               [noBindS [|return $apps|]]
+                   [| sized $ \ size ->
+                        $(letE [valD 
+                              newSizeP
+                              (normalB [|((size - 1) `div` $constrsE ) `max` 0|])
+                              [] ]
+                          build) |]
 
 generateShrinkDecl :: [Con] -> Q Dec
 generateShrinkDecl constrs
@@ -58,15 +95,18 @@ generateShrinkDecl constrs
   Usage:
   
   @
-    instance Arbitrary (MyDatatype a b c) where
-      arbitrary = /<custom definition>/
-      $(deriveArbitrary_shrink ''MyDatatype)
+      $(deriveArbitrary_shrink ''MyDatatype [| /<custom definition for arbitrary>/ |])
   @
 -}
-deriveArbitrary_shrink :: Name -> Q [Dec]
-deriveArbitrary_shrink dt
-    = do TyConI (DataD _cxt _name _args constrs _deriving) <- abstractNewtypeQ $ reify dt
-         liftM (:[]) $ generateShrinkDecl constrs
+deriveArbitrary_shrink :: Name -> Q Exp -> Q [Dec]
+deriveArbitrary_shrink dt arbitraryExp
+    = do TyConI (DataD _cxt name args constrs _deriving) <- abstractNewtypeQ $ reify dt
+         let complType = foldl1 AppT (ConT name : map VarT args)
+         let classType = AppT (ConT ''Arbitrary) complType
+         arbitraryDecl <- funD 'arbitrary [clause [] (normalB arbitraryExp) []]
+         shrinkDecl <- generateShrinkDecl constrs
+         return $ [InstanceD [] classType [arbitraryDecl, shrinkDecl]]
+
 
 {-|
   This template function generates an instance declaration of the given data type 
@@ -88,6 +128,26 @@ deriveArbitrary dt = do TyConI (DataD _cxt name args constrs _deriving) <- abstr
 -}
 deriveArbitraryAll :: [Name] -> Q [Dec]
 deriveArbitraryAll = liftM concat . mapM deriveArbitrary
+
+{-|
+  This template function generates a generator for a data type using only
+  the given constructors
+-}
+deriveGenForConstrs :: String -> [Name] -> Q [Dec]
+deriveGenForConstrs genName constrNs
+    = do let defName = mkName genName
+         if (null constrNs) then report False "List of constructors must not be empty!" >> return [] else do
+           (typeName, typeConstrs) <- getTypeConstrs $ head constrNs
+           let maybeConstrs = map (`lookupConstr` typeConstrs) constrNs
+           let confl = notFound maybeConstrs constrNs
+           when (not $ null confl) $ fail $ (show $ head confl) ++ " is not a constructor for " ++ (show typeName) ++"!"
+           let constrs = map fromJust maybeConstrs                     
+           liftM (:[]) $ generateGenDecl (mkName genName) constrs
+    where notFound :: [Maybe Con] -> [Name] -> [Name]
+          notFound cons names = foldr (\ e l -> case e of
+                                               (Nothing, name) -> name : l
+                                               (Just _,_) -> l
+                                    ) []  $ zip cons names
 
 abstractNewtypeQ :: Q Info -> Q Info
 abstractNewtypeQ = liftM abstractNewtype

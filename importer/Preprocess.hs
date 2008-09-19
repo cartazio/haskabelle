@@ -26,6 +26,9 @@ import qualified Importer.Msg as Msg
 import Importer.Adapt.Raw (used_const_names, used_thy_names)
 
 import Test.QuickCheck
+import qualified Test.QuickCheck.Monadic as QC (assert)
+import Test.QuickCheck.Monadic hiding (assert)
+import Data.Set (fromList, isSubsetOf)
         
 {-|
   This function preprocesses the given Haskell module to make things easier for the
@@ -36,7 +39,7 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
     = HsModule loc modul exports imports topdecls4
       where topdecls1    = map deguardify_HsDecl topdecls
             (topdecls2, gensymcount) 
-                         = runGensym 0 (runDelocalizer (concatMapM delocalize_topdecl topdecls1))
+                         = runGensym 0 (evalDelocalizer [] (concatMapM delocalize_topdecl topdecls1))
             topdecls3    = map normalizePatterns_HsDecl topdecls2
             topdecls4    = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls3) 
 --          modul'      = (let (Module n) = modul in Module (normalizeModuleName n))
@@ -57,7 +60,12 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
   We keep track of the names that are directly bound by a declaration,
   as functions must not close over them. See below for an explanation.
  -}
-type DelocalizerM a = StateT [HsQName] (State GensymCount) a
+newtype DelocalizerM a = DelocalizerM ( StateT [HsQName] GensymM a )
+    deriving (Monad, Functor, MonadFix, MonadState [HsQName])
+
+
+liftGensym :: GensymM a -> DelocalizerM a
+liftGensym = DelocalizerM . lift
 
 {-|
   This function modifies the given delocaliser monad by adding the given
@@ -82,8 +90,9 @@ getBindings = get
   This function executes the given delocaliser monad starting with an
   empty list of bound variables.
 -}
-runDelocalizer :: DelocalizerM [HsDecl] -> State GensymCount [HsDecl]
-runDelocalizer d = evalStateT d []
+evalDelocalizer :: [HsQName] -> DelocalizerM a -> GensymM a
+evalDelocalizer state (DelocalizerM d) = evalStateT d state
+
 
 {-|
   This is the main function. It takes a declaration, and returns a list
@@ -171,7 +180,7 @@ delocalize_HsBinds (HsBDecls localdecls)
     -- First rename the bindings that are established by LOCALDECLS to fresh identifiers,
     -- then also rename all occurences (i.e. recursive invocations) of these bindings
     -- within the body of the declarations.
-    = do renamings    <- lift (freshIdentifiers (bindingsFromDecls localdecls))
+    = do renamings    <- liftGensym (freshIdentifiers (bindingsFromDecls localdecls))
          let localdecls' = map (renameFreeVars renamings . renameHsDecl renamings) localdecls
          localdecls'' <- concatMapM delocalize_topdecl localdecls'
          closedVarNs  <- getBindings
@@ -370,7 +379,7 @@ normalizePattern p = error ("Pattern not supported: " ++ show p)
 -- We simply rename all those identifiers.
 --
 
-normalizeNames_HsDecl :: HsDecl -> State GensymCount HsDecl
+normalizeNames_HsDecl :: HsDecl -> GensymM HsDecl
 
 should_be_renamed :: HsQName -> Bool
 should_be_renamed qn = case qn of
@@ -499,3 +508,37 @@ noLocalDecl :: HsModule -> Bool
 noLocalDecl m = True
 
 prop_NoLocalDecl mod = noLocalDecl $ preprocessHsModule mod
+
+checkDelocM :: PropertyM DelocalizerM a -> Property
+checkDelocM deloc = forAll arbitrary $ \ (NonNegative gsState, delocState) ->
+              monadic (evalGensym gsState . evalDelocalizer delocState) deloc
+
+{-|
+  'withAddBindings' really adds the names it was given and restores the old state afterwards.
+-}
+prop_withAddBindings = checkDelocM $
+                       do newNames <- pick arbitrary
+                          monitor (classify (null newNames) "trivial")
+                          oldBs <- run getBindings
+                          interBs <- run $ withAddBindings newNames getBindings
+                          QC.assert $ fromList newNames `isSubsetOf` fromList interBs
+                          newBs <- run getBindings
+                          QC.assert $ fromList oldBs == fromList newBs
+                          
+
+{-|
+  'flattenHsTypeSig' really flattens the type declaration.
+-}
+prop_flattenHsTypeSig_isFlat = forAll typeSigDecl $ \ decl ->
+                        all isFlat $ flattenHsTypeSig decl
+    where isFlat (HsTypeSig _src names _type) = length names `elem` [0,1]
+          isFlat _ = False
+
+prop_flattenHsTypeSig_isEquiv = forAll typeSigDecl $ \ decl ->
+                               let flat = flattenHsTypeSig decl in
+                               flat `equiv` [decl]
+    where d `subOf` e = (`all` d) $ \ (HsTypeSig _src names typ) -> 
+                        (`all` names) $ \ name ->
+                        (`any` e) $ \ (HsTypeSig _src' names' typ') ->
+                        (`any` names) $ \ name' -> name == name' && typ == typ'
+          d `equiv` e = d `subOf` e && e `subOf` d
