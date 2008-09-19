@@ -112,19 +112,19 @@ rebuild-all : clean-all all
 	@:
 
 # builds the hpc binary
-$(BUILD_DIR)/$(CBIN_NAME) : depend-hpc $(COBJS) $(BUILD_DIR)
+$(BUILD_DIR)/$(CBIN_NAME) : $(COBJS) $(BUILD_DIR)
 	@rm -f $@
 	@echo linking hpc binary ...
 	@$(HC) -o $@ $(HC_OPTS) -hidir $(CHI_DIR) -odir $(COUT_DIR) $(PKGS) $(COBJS) $(CFLAGS)
 
 # builds the optimised binary
-$(BUILD_DIR)/$(OBIN_NAME) : depend-optimised $(OOBJS) $(BUILD_DIR)
+$(BUILD_DIR)/$(OBIN_NAME) :  $(OOBJS) $(BUILD_DIR)
 	@rm -f $@
 	@echo linking optimised binary ...
 	@$(HC) -o $@ $(HC_OPTS) -hidir $(OHI_DIR) -odir $(OOUT_DIR) $(PKGS) $(OOBJS) $(OFLAGS)
 
 # builds the default binary
-$(BUILD_DIR)/$(BIN_NAME) : depend-default $(OBJS) $(BUILD_DIR)
+$(BUILD_DIR)/$(BIN_NAME) : $(OBJS) $(BUILD_DIR)
 	@rm -f $@
 	@echo linking default binary ...
 	@$(HC) -o $@ $(HC_OPTS) -hidir $(HI_DIR) -odir $(OUT_DIR) $(PKGS) $(OBJS)
