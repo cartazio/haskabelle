@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<translation>
+  <input>
+    <dir location="src_hs" />
+  </input>
+  <output location="dst_thy" />
+  <customisation>
+    <replace>
+      <module name="Text.PrettyPrint.HughesPJ" />
+      <theory name="Empty" location="Empty.thy" />
+    </replace>
+  </customisation>
+</translation>

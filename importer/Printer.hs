@@ -1,10 +1,15 @@
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 
-Pretty printing of abstract Isar/HOL theory.
 -}
 
-module Importer.Printer where
+{-|
+  Pretty printing of abstract Isar/HOL theory.
+-}
+
+module Importer.Printer
+    ( pprint
+    ) where
 
 import Maybe
 

@@ -70,7 +70,7 @@ OOBJS = $(SRCS:$(SRC_DIR)/%.hs=$(OOUT_DIR)/%.o)
 # a list of all directories that might need to be created
 ALL_DIRS = $(HADDOCK_DIR) $(HADDOCK_IMPL_DIR) $(BUILD_DIR) $(HI_DIR) $(CHI_DIR) $(OHI_DIR) $(OUT_DIR) $(COUT_DIR) $(OOUT_DIR) $(HPC_MARKUP_DIR)
 # list of the packages needed
-PACKAGES = uniplate base haskell-src-exts QuickCheck-2.0 template-haskell
+PACKAGES = uniplate base haskell-src-exts QuickCheck-2.0 template-haskell xml
 # list of packages to exclude for hadock
 EXCL_PGK_HADDOCK = haskell-src-exts
 # this is used as a command line argument for ghc to include the 

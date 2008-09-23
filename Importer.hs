@@ -8,12 +8,13 @@ module Importer (
   module Importer.Convert,
   module Importer.IsaSyntax,
   module Importer.Printer,
-  convertFile, convertDir, convertFiles, importFiles, importDir,
-  makeAbsolute, convertSingleFile, preprocessFile, withCurrentDirectory
+  convertFiles, importFiles, importDir, importProject,
+  convertSingleFile, preprocessFile, withCurrentDirectory
 ) where
 
 import Prelude hiding (catch)
 import System.FilePath
+import System.Directory
 import IO hiding (catch,bracket_)
 import Directory
 
@@ -29,34 +30,15 @@ import Language.Haskell.Exts.Pretty
 import Language.Haskell.Exts.Syntax 
 import Importer.IsaSyntax (Cmd(..), Theory(..))
 
+import Importer.Configuration
 import Importer.Preprocess
 import Importer.Utilities.Hsk (srcloc2string, module2FilePath, isHaskellSourceFile)
-import Importer.Utilities.Misc (assert, wordsBy, prettyShow)
+import Importer.Utilities.Misc
 import Importer.ConversionUnit
 import Importer.Convert
 import Importer.Printer (pprint)
 import Importer.LexEnv
 
-
--- The main function, takes a path to a Haskell source file and
--- returns its convertion, that is an AST for Isar/HOL as defined in
--- Importer.IsaSyntax.
---
--- The AST can then be feed to the pretty printer (Importer.Printer.pprint)
--- to return a Text.PrettyPrinter.doc datum.
---
--- E.g.
---
---    do unit <- convertFile "/path/foo.hs"
---       return (pprintIsaUnit unit)
---
-
-{-|
-  Similar to 'convertSingleFile' but the result is projected to the first argument.
--}
-
-convertFile :: FilePath -> IO IsaUnit
-convertFile = fmap fst . convertSingleFile
 
 {-|
   Converts a Haskell unit identified by the given file path (i.e., the module defined
@@ -65,8 +47,8 @@ convertFile = fmap fst . convertSingleFile
 -}
 convertSingleFile :: FilePath -> IO (IsaUnit, [FilePath])
 convertSingleFile fp =
-    let dir      = dirname fp
-        filename = basename fp
+    let dir      = takeDirectory fp
+        filename = takeFileName fp
     in withCurrentDirectory (if dir == "" then "./" else dir) $
        do unit@(HskUnit hsmodules _) <- makeHskUnitFromFile filename 
           let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
@@ -81,7 +63,7 @@ convertFiles []   = return []
 convertFiles (fp:fps) = do
   (isaUnit,dependentFiles) <-
       do
-        putStr $ "converting " ++ (basename fp) ++ " ...\n"
+        putStr $ "converting " ++ (takeFileName fp) ++ " ...\n"
         (unit,files) <- convertSingleFile fp
         return ([unit],files)        
       `catch` (\ exc -> do
@@ -90,21 +72,6 @@ convertFiles (fp:fps) = do
 --  units <- convertFiles fps
   units <- convertFiles (filter (`notElem` dependentFiles) fps) 
   return  (isaUnit ++ units)
-
-{-|
-  This function provides the directory name of the given path (e.g. @\/some\/path\/to\/@
-  for input @\/some\/path\/to\/foo@).
--}                
-
-dirname :: FilePath -> FilePath
-dirname fp = reverse $ dropWhile (/= '/') (reverse fp)
-
-{-|
-  This function provides the base name of the given file path (e.g. @foo@ for
-  input @\/some\/path\/to\/foo@).
--}
-basename :: FilePath -> FilePath
-basename fp = reverse $ takeWhile (/= '/') (reverse fp)
      
 {-|
   This function recursively searches the given directory for Haskell source files.
@@ -127,29 +94,6 @@ traverseDir dirpath op = do
               res <- op f
               res' <- traverseDir f op
               return $ res:res'
-
-
-{-|
-  This function searches recursively in the given directory for
-  Haskell source files (using 'getFilesRecursively') and converts them using 'convertFiles'.
--}
-convertDir :: FilePath -> IO [IsaUnit]
-convertDir dirpath
-    = do fps   <- getFilesRecursively dirpath
-         units <- convertFiles (filter isHaskellSourceFile fps)
-         return units
-{-|
-  This function pretty prints the given Isabelle Unit.
--}
-pprintIsaUnit :: IsaUnit -> Doc
-pprintIsaUnit (IsaUnit thys env)
-    = vcat (map (dashes . flip pprint env) thys)
-    where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
-
-printIsaUnit_asAST :: IsaUnit -> Doc
-printIsaUnit_asAST (IsaUnit thys env)
-    = vcat (map (dashes . text . prettyShow) thys)
-    where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
 
 {-|
   This function changes the current directory to that given in the first argument
@@ -186,9 +130,31 @@ importDir :: FilePath -- ^source directory
 importDir srcdir dstdir
     = do exists <- doesDirectoryExist dstdir
          when (not exists) $ createDirectory dstdir
-         do convertedUnits <- convertDir srcdir
-            withCurrentDirectory dstdir
+         fps   <- getFilesRecursively srcdir
+         convertedUnits <- convertFiles (filter isHaskellSourceFile fps)
+         withCurrentDirectory dstdir
               $ sequence_ (map writeIsaUnit convertedUnits)
+
+
+
+importProject :: Config -> IO ()
+importProject conf
+    = do let outDir = outputLocation conf
+         inFiles <- liftM concat $ mapM getFiles $ inputLocations conf 
+         exists <- doesDirectoryExist outDir
+         when (not exists) $ createDirectory outDir
+         convertedUnits <- convertFiles (filter isHaskellSourceFile inFiles)
+         withCurrentDirectory outDir
+              $ sequence_ (map writeIsaUnit convertedUnits)
+    where getFiles :: InputLocation -> IO [FilePath]
+          getFiles (FileInputLocation path) = do ex <- doesFileExist path
+                                                 if ex
+                                                   then return [path]
+                                                   else putStr ("Warning: File \"" ++ path ++ "\"does not exist!") >> return []
+          getFiles (DirInputLocation path) = do ex <- doesDirectoryExist path
+                                                if ex
+                                                  then getFilesRecursively path
+                                                  else putStr ("Warning: Directory \"" ++ path ++ "\"does not exist!") >> return []
 
 {-|
   This function writes all Isabelle theories contained in the given unit to corresponding
@@ -209,6 +175,22 @@ writeTheory thy@(TheoryCmd (Theory thyname) _) env
          putStr $ "writing " ++ dstName ++ "...\n"
          writeFile dstName content
 
+
+{-|
+  This function pretty prints the given Isabelle Unit.
+-}
+pprintIsaUnit :: IsaUnit -> Doc
+pprintIsaUnit (IsaUnit thys env)
+    = vcat (map (dashes . flip pprint env) thys)
+    where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
+
+printIsaUnit_asAST :: IsaUnit -> Doc
+printIsaUnit_asAST (IsaUnit thys env)
+    = vcat (map (dashes . text . prettyShow) thys)
+    where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
+
+
+
 {-|
   This function turns a relative path into an absolute path using
   the current directory as provided by 'getCurrentDirectory'.
@@ -216,7 +198,6 @@ writeTheory thy@(TheoryCmd (Theory thyname) _) env
 
 makeAbsolute :: FilePath -> IO FilePath
 makeAbsolute fp = liftM2 combine getCurrentDirectory (return fp)
-
 
 ----------------------------------------------------------
 ------------ Preprocessing Only --------------------------

@@ -12,6 +12,7 @@ import Control.Monad
 import Control.Exception
 import System.Environment(getArgs, getProgName)
 import System.Directory
+import Importer.Configuration
 
 main :: IO ()
 main = do
@@ -24,6 +25,14 @@ mainArgs args = mainProgArgs "importer" args
 
 
 mainProgArgs :: String -> [String] -> IO ()
+mainProgArgs progname args
+    = case args of
+        [configFile] -> 
+            do config <- readConfig configFile
+               importProject config
+        _ -> error $ "Usage: " ++ progname ++ " <config file>"
+
+{-
 mainProgArgs progname args =
   case args of
     []   -> ioError $ userError ("Usage: " ++ progname ++ " [[source_file | source_dir]]* destination_dir")
@@ -40,3 +49,4 @@ mainProgArgs progname args =
                     sequence_ ([importFiles files destdir] ++ map (\srcdir -> importDir srcdir destdir) dirs) 
                               `catch` (\ e -> print e >> putStr "\nProcess finished with uncaught exceptions!\n")
              putStr "done"
+-}
