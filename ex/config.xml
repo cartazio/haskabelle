@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <translation>
   <input>
-    <dir location="src_hs" />
+    <file location="src_hs/Depend.hs" />
   </input>
   <output location="dst_thy" />
   <customisation>
     <replace>
       <module name="Text.PrettyPrint.HughesPJ" />
-      <theory name="Empty" location="Empty.thy" />
+      <theory name="Empty" location="Empty.thy">
+	<export implicit="true" />
+      </theory>
     </replace>
   </customisation>
 </translation>

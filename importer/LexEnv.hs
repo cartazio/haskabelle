@@ -40,7 +40,7 @@ module Importer.LexEnv
       augmentGlobalEnv,
       updateGlobalEnv,
       updateIdentifier,
-      makeGlobalEnv_FromHsModules,
+      environmentOf,
       makeGlobalEnv,
       lookupConstant,
       lookupType,
@@ -50,13 +50,14 @@ module Importer.LexEnv
       lexInfoOf,
       methodsOf,
       classVarOf,
+      runLexM,
       prelude
     ) where
 
 import Maybe
-import List (nub, partition)
+import List
 
-import Control.Monad.State
+import Control.Monad.Reader
 import qualified Data.Map as Map
 
 import Language.Haskell.Exts
@@ -66,8 +67,25 @@ import qualified Importer.IsaSyntax as Isa
 
 import Importer.Utilities.Hsk
 import Importer.Utilities.Misc
+import Importer.Configuration hiding (getCustomTheory)
+import Importer.Configuration as Conf (getCustomTheory)
 
 import Importer.Adapt.Common (primitive_tycon_table, primitive_datacon_table)
+
+newtype LexM a = LexM (Reader Customisations a)
+    deriving (Functor, Monad, MonadReader Customisations)
+
+runLexM :: Customisations -> LexM a -> a
+runLexM c (LexM m) = runReader m c 
+
+{-|
+  This function returns the custom theory for given module name if there is one.
+-}
+getCustomTheory :: Module -> LexM (Maybe CustomTheory)
+getCustomTheory mod
+    = do custs <- ask
+         return $ Conf.getCustomTheory custs mod
+
 
 ---
 --- Identifier information
@@ -784,13 +802,13 @@ makeModuleEnv imports shall_export_p identifiers
 {-|
   This function constructs a module environment from a Haskell module.
 -}
-makeModuleEnv_FromHsModule :: HsModule -> ModuleE
+makeModuleEnv_FromHsModule :: HsModule ->  LexM ModuleE
 makeModuleEnv_FromHsModule (HsModule loc modul exports imports topdecls)
     = let lexenv   = makeLexEnv (concatMap (computeConstantMappings modul) topdecls)
           imports' = map fromHsk imports ++ defaultImports
           exports' = if isNothing exports then [EnvExportMod (fromHsk modul)] 
                                           else map fromHsk (fromJust exports)
-      in ModuleEnv (fromHsk modul) imports' exports' lexenv
+      in return $ ModuleEnv (fromHsk modul) imports' exports' lexenv
 
 {-|
   This function infers lexical information for the identifiers mentioned in the given Haskell 
@@ -916,7 +934,6 @@ makeGlobalEnv compute_imports shall_export_p identifiers
 
 {-|
   Merges instance and corresponding class declarations using 'mergeTypes_OrFail'.
-  TODO: The code looks a bit cumbersome!
 -}
 mergeInstancesWithClasses :: [Type] -> [Type]
 mergeInstancesWithClasses ts
@@ -938,15 +955,18 @@ groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]
 groupIdentifiers identifiers
     = groupAlist [ (moduleOf (lexInfoOf id), id) | id <- identifiers ]
 
+environmentOf :: Customisations -> [HsModule] -> GlobalE
+environmentOf custs ms = runLexM custs $ makeGlobalEnv_FromHsModules ms
+
 {-|
   This function constructs a global environment given a list of Haskell modules.
 -}
-makeGlobalEnv_FromHsModules :: [HsModule] -> GlobalE
+makeGlobalEnv_FromHsModules :: [HsModule] -> LexM GlobalE
 makeGlobalEnv_FromHsModules ms 
-    = GlobalEnv 
-        $ Map.fromListWith failDups 
-              [ (fromHsk modul, makeModuleEnv_FromHsModule m) 
-                    | m@(HsModule _ modul _ _ _) <- ms ]
+    = do mapping <- mapM (\ m@(HsModule _ modul _ _ _) ->
+                         do env <- makeModuleEnv_FromHsModule m
+                            return (fromHsk modul,env) ) ms
+         return $ GlobalEnv $ Map.fromListWith failDups mapping
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
 {-|

@@ -18,8 +18,8 @@ import Importer.Utilities.Misc (wordsBy, hasDuplicates, prettyShow', trace, asse
 import Importer.Utilities.Hsk (string2HsName, extractBindingNs)
 
 import qualified Importer.LexEnv as Env
-
 import qualified Importer.IsaSyntax as Isa
+import Importer.Configuration
 
 import Importer.Adapt.Common
 
@@ -43,12 +43,11 @@ extractIsaEntries (AdaptionTable mapping) = map snd mapping
 -- 
 -- Hence, we have to remove entries from `adaptionTable' which are
 -- defined in one of the source files.
-makeAdaptionTable_FromHsModules :: [HsModule] -> AdaptionTable
-makeAdaptionTable_FromHsModules hsmodules
+makeAdaptionTable_FromHsModules :: Env.GlobalE -> [HsModule] -> AdaptionTable
+makeAdaptionTable_FromHsModules env hsmodules
     = let initial_class_env = makeGlobalEnv_FromAdaptionTable
                                   (filterAdaptionTable (Env.isClass . fst) adaptionTable)
-          tmp_env           = Env.unionGlobalEnvs initial_class_env
-                                                  (Env.makeGlobalEnv_FromHsModules hsmodules)
+          tmp_env           = Env.unionGlobalEnvs initial_class_env env
           defined_names     = concatMap (extractDefNames tmp_env) hsmodules
       in 
         filterAdaptionTable 

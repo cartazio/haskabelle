@@ -9,7 +9,8 @@ module Importer (
   module Importer.IsaSyntax,
   module Importer.Printer,
   convertFiles, importFiles, importDir, importProject,
-  convertSingleFile, preprocessFile, withCurrentDirectory
+  convertSingleFile, preprocessFile, withCurrentDirectory,
+  defaultCustomisations
 ) where
 
 import Prelude hiding (catch)
@@ -45,32 +46,31 @@ import Importer.LexEnv
   therein and all imported modules) to a Isabelle unit. Furthermore a list of all 
   Haskell files that were converted is returned.
 -}
-convertSingleFile :: FilePath -> IO (IsaUnit, [FilePath])
-convertSingleFile fp =
+convertSingleFile :: Customisations -> FilePath -> IO (IsaUnit, [FilePath])
+convertSingleFile custs fp =
     let dir      = takeDirectory fp
         filename = takeFileName fp
     in withCurrentDirectory (if dir == "" then "./" else dir) $
        do unit@(HskUnit hsmodules _) <- makeHskUnitFromFile filename 
           let dependentModuleNs = map (\(HsModule _ m _ _ _) -> m) hsmodules
           let dependentFiles    = map module2FilePath dependentModuleNs
-          let isaUnit = convertHskUnit unit
+          let isaUnit = convertHskUnit custs unit
           return (isaUnit,dependentFiles)
 {-|
   This function converts all Haskell files into Isabelle units.
 -}
-convertFiles :: [FilePath] -> IO [IsaUnit]
-convertFiles []   = return []
-convertFiles (fp:fps) = do
+convertFiles :: Customisations -> [FilePath] -> IO [IsaUnit]
+convertFiles _ []   = return []
+convertFiles custs (fp:fps) = do
   (isaUnit,dependentFiles) <-
       do
         putStr $ "converting " ++ (takeFileName fp) ++ " ...\n"
-        (unit,files) <- convertSingleFile fp
+        (unit,files) <- convertSingleFile custs fp
         return ([unit],files)        
       `catch` (\ exc -> do
                  print exc
                  return ([],[]))
---  units <- convertFiles fps
-  units <- convertFiles (filter (`notElem` dependentFiles) fps) 
+  units <- convertFiles custs (filter (`notElem` dependentFiles) fps) 
   return  (isaUnit ++ units)
      
 {-|
@@ -109,13 +109,13 @@ withCurrentDirectory fp body
   This function imports all Haskell files given in the list of files into Isabelle theories
   that are written into files in the given destination directory.
 -}
-importFiles :: [FilePath] -- ^source files
+importFiles :: Customisations -> [FilePath] -- ^source files
             -> FilePath    -- ^destination directory
             -> IO ()
-importFiles sources dstdir
+importFiles custs sources dstdir
     = do exists <- doesDirectoryExist dstdir
          when (not exists) $ createDirectory dstdir
-         do convertedUnits <- convertFiles sources
+         do convertedUnits <- convertFiles custs sources
             withCurrentDirectory dstdir
               $ sequence_ (map writeIsaUnit convertedUnits)
 
@@ -124,14 +124,15 @@ importFiles sources dstdir
   subdirectories (recursively) to Isabelle theories that are written in files in the given
   destination directory.
 -}
-importDir :: FilePath -- ^source directory
+importDir :: Customisations
+          -> FilePath -- ^source directory
           -> FilePath -- ^destination directory
           -> IO ()
-importDir srcdir dstdir
+importDir custs srcdir dstdir
     = do exists <- doesDirectoryExist dstdir
          when (not exists) $ createDirectory dstdir
          fps   <- getFilesRecursively srcdir
-         convertedUnits <- convertFiles (filter isHaskellSourceFile fps)
+         convertedUnits <- convertFiles custs (filter isHaskellSourceFile fps)
          withCurrentDirectory dstdir
               $ sequence_ (map writeIsaUnit convertedUnits)
 
@@ -139,22 +140,25 @@ importDir srcdir dstdir
 
 importProject :: Config -> IO ()
 importProject conf
-    = do let outDir = outputLocation conf
+    = do let FileLocation outDir = outputLocation conf
+         let custs = customisations conf
          inFiles <- liftM concat $ mapM getFiles $ inputLocations conf 
          exists <- doesDirectoryExist outDir
          when (not exists) $ createDirectory outDir
-         convertedUnits <- convertFiles (filter isHaskellSourceFile inFiles)
+         convertedUnits <- convertFiles custs (filter isHaskellSourceFile inFiles)
          withCurrentDirectory outDir
               $ sequence_ (map writeIsaUnit convertedUnits)
     where getFiles :: InputLocation -> IO [FilePath]
-          getFiles (FileInputLocation path) = do ex <- doesFileExist path
-                                                 if ex
-                                                   then return [path]
-                                                   else putStr ("Warning: File \"" ++ path ++ "\"does not exist!") >> return []
-          getFiles (DirInputLocation path) = do ex <- doesDirectoryExist path
-                                                if ex
-                                                  then getFilesRecursively path
-                                                  else putStr ("Warning: Directory \"" ++ path ++ "\"does not exist!") >> return []
+          getFiles (FileInputLocation (FileLocation path))
+              = do ex <- doesFileExist path
+                   if ex
+                     then return [path]
+                     else putStr ("Warning: File \"" ++ path ++ "\"does not exist!") >> return []
+          getFiles (DirInputLocation (FileLocation path))
+              = do ex <- doesDirectoryExist path
+                   if ex
+                     then getFilesRecursively path
+                     else putStr ("Warning: Directory \"" ++ path ++ "\"does not exist!") >> return []
 
 {-|
   This function writes all Isabelle theories contained in the given unit to corresponding

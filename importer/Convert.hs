@@ -34,18 +34,19 @@ import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 
 import qualified Data.Map as Map
-
+import Importer.Configuration
 
 {-|
   This is the main function of the conversion process; converts a Unit of Haskell
   ASTs into a Unit of Isar/HOL ASTs.
 -}
-convertHskUnit :: HskUnit -> IsaUnit
-convertHskUnit (HskUnit hsmodules initialGlobalEnv)
+convertHskUnit :: Customisations -> HskUnit -> IsaUnit
+convertHskUnit custs (HskUnit hsmodules initialGlobalEnv)
     = let hsmodules'     = map preprocessHsModule hsmodules
-          adaptionTable  = makeAdaptionTable_FromHsModules hsmodules'
+          env            = Env.environmentOf custs hsmodules'
+          adaptionTable  = makeAdaptionTable_FromHsModules env hsmodules'
           initial_env    = Env.augmentGlobalEnv initialGlobalEnv $ extractHskEntries adaptionTable
-          global_env_hsk = Env.unionGlobalEnvs (Env.makeGlobalEnv_FromHsModules hsmodules') initial_env
+          global_env_hsk = Env.unionGlobalEnvs env initial_env
                              
           hskmodules     = map (toHskModule global_env_hsk) hsmodules'
           

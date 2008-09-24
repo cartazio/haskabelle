@@ -1,8 +1,12 @@
 module Importer.Configuration
     ( Config (..),
-      Customisation (..),
+      Customisations,
+      CustomTheory (..),
       InputLocation (..),
-      readConfig
+      Location (..),
+      readConfig,
+      defaultCustomisations,
+      getCustomTheory
     ) where
 import Importer.IsaSyntax (Theory (..))
 import Language.Haskell.Exts.Syntax (Module (..))
@@ -10,24 +14,47 @@ import Text.XML.Light hiding (findAttr)
 import qualified Text.XML.Light as XML
 import Control.Monad
 import Data.Maybe
+import Data.List
 import Control.Monad.Error
 import Data.Generics
 import System.FilePath
 import System.Directory
 
-data Config = Config{inputLocations :: [InputLocation], outputLocation :: OutputLocation, customisations :: [Customisation]}
+newtype Location = FileLocation FilePath
+    deriving (Show, Eq, Data, Typeable)
+
+newtype Customisations = Customisations [Customisation]
+    deriving (Show, Eq, Data, Typeable)
+
+data CustomTheory = CustomTheory{ custThyName :: Theory, custThyLocation :: Location, custThyExportList :: ExportList}
+                    deriving (Show, Eq, Data, Typeable)
+
+data Config = Config{inputLocations :: [InputLocation], outputLocation :: OutputLocation, customisations :: Customisations}
               deriving (Show, Eq, Data, Typeable)
 
-data Customisation = Replace Module Theory FilePath
+data Customisation = Replace Module CustomTheory
                      deriving (Show, Eq, Data, Typeable)
 
-data InputLocation = FileInputLocation FilePath
-                   | DirInputLocation FilePath
+data ExportList = ExportList [String] 
+                | ImplicitExportList
+                  deriving (Show, Eq, Data, Typeable)
+
+data InputLocation = FileInputLocation Location
+                   | DirInputLocation Location
                      deriving (Show, Eq, Data, Typeable)
 
-type OutputLocation = FilePath
+type OutputLocation = Location
 
 type XMLParser a = Either String a
+
+
+getCustomTheory :: Customisations -> Module -> Maybe CustomTheory
+getCustomTheory (Customisations custs) mod = liftM (\(Replace _ c) -> c) $ find isRepl custs
+    where isRepl (Replace m _) = mod == m
+         -- isRepl _ = False
+
+defaultCustomisations :: Customisations
+defaultCustomisations = Customisations []
 
 
 {-|
@@ -61,7 +88,7 @@ parseConfigDoc el
          cust <- parseCustElem custEl
          return $ Config {inputLocations=input,
                           outputLocation=output,
-                          customisations=cust}
+                          customisations=Customisations cust}
                      
 parseInputElem :: Element -> XMLParser [InputLocation]
 parseInputElem el =  mapM parseInputLocElem $ onlyElems $ elContent el
@@ -71,12 +98,12 @@ parseInputLocElem el
     | elName el == simpName "file" = parseFile
     | elName el == simpName "dir" = parseDir
     | otherwise = fail $ "Unexpected element \"" ++ (show.qName.elName $ el) ++ "\"" ++ (showLine.elLine $ el) ++ "!"
-    where parseFile = liftM FileInputLocation $ findSAttr "location" el
-          parseDir = liftM DirInputLocation $ findSAttr "location" el
+    where parseFile = liftM (FileInputLocation . FileLocation) $ findSAttr "location" el
+          parseDir = liftM (DirInputLocation . FileLocation) $ findSAttr "location" el
                        
 
 parseOutputElem :: Element -> XMLParser OutputLocation
-parseOutputElem  el = findSAttr "location" el
+parseOutputElem  el = liftM FileLocation $ findSAttr "location" el
 
 
 parseCustElem :: Element -> XMLParser [Customisation]
@@ -103,14 +130,19 @@ parseReplaceElem  el
     = do moduleEl <- findSingleSElem "module" el
          theoryEl <- findSingleSElem "theory" el
          mod <- parseModuleElem moduleEl
-         (thy,path) <- parseTheoryElem theoryEl
-         return $  Replace mod thy path
+         (thy,path,expList) <- parseTheoryElem theoryEl
+         return $  Replace mod (CustomTheory thy (FileLocation path) expList)
 
 
-parseTheoryElem :: Element -> XMLParser (Theory,FilePath)
+parseTheoryElem :: Element -> XMLParser (Theory,FilePath,ExportList)
 parseTheoryElem el = do thy <- findSAttr "name" el
                         path <- findSAttr "location" el
-                        return (Theory thy, path)        
+                        exportEl <- findSingleSElem "export" el
+                        expList <- parseExportElem exportEl
+                        return (Theory thy, path, expList)        
+
+parseExportElem :: Element -> XMLParser ExportList
+parseExportElem el = return ImplicitExportList
                      
 parseModuleElem :: Element -> XMLParser Module
 parseModuleElem el = liftM Module $ findSAttr "name" el
@@ -149,10 +181,5 @@ findAttr name el = maybe
 
 
 makePathsAbsolute :: FilePath -> Config -> Config
-makePathsAbsolute base = foldr1 (.) all
-    where top (Config inp outp cust) = Config inp (alterPath outp) cust
-          cust (Replace mod thy path) = Replace mod thy (alterPath path)
-          inp (FileInputLocation path) = FileInputLocation (alterPath path)
-          inp (DirInputLocation path) = DirInputLocation (alterPath path)
-          all = map everywhere [mkT top, mkT cust, mkT inp]
-          alterPath path = combine base path
+makePathsAbsolute base = everywhere $ mkT alterPath
+    where alterPath (FileLocation path) = FileLocation $ combine base path
