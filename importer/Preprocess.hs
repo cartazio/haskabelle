@@ -260,8 +260,8 @@ splitPatBinds (HsBDecls decls)
                                                  concatMap flattenHsTypeSig (catMaybes typeSigs), 
                                                  catMaybes otherDecls)
           (patTypeSigs, otherTypeSigs) 
-              = partition (let patNs = concatMap (fromJust . namesFromHsDecl) patDecls'
-                           in \sig -> head (fromJust (namesFromHsDecl sig)) `elem` patNs)
+              = partition (let patNs = concatMap namesFromHsDecl patDecls'
+                           in \sig -> head (namesFromHsDecl sig) `elem` patNs)
                           typeSigs'
       in (HsBDecls (patTypeSigs ++ patDecls'), HsBDecls (otherTypeSigs ++ otherDecls'))
 

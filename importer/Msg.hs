@@ -37,9 +37,8 @@ missing_fun_sig name env
     = "Missing function signature for " ++ (quote name) ++ ". (FIXME)\n\n"
       ++ printEnv env
 
-failed_import importloc m errormsg
-    = srcloc2string importloc ++ ": "
-      ++ "While trying to import " ++ quote (module2FilePath m)
+failed_import m errormsg
+    = "While trying to import " ++ quote (module2FilePath m)
       ++ ", the following error occured:\n" ++ errormsg
 
 duplicate_import ms

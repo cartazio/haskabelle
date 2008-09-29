@@ -10,7 +10,7 @@ module Importer.Convert (
 
 import Language.Haskell.Exts
 
-import List (unzip4, partition)
+import Data.List
 import Monad
 import Maybe
 
@@ -41,9 +41,9 @@ import Importer.Configuration
   ASTs into a Unit of Isar/HOL ASTs.
 -}
 convertHskUnit :: Customisations -> HskUnit -> IsaUnit
-convertHskUnit custs (HskUnit hsmodules initialGlobalEnv)
+convertHskUnit custs (HskUnit hsmodules custMods initialGlobalEnv)
     = let hsmodules'     = map preprocessHsModule hsmodules
-          env            = Env.environmentOf custs hsmodules'
+          env            = Env.environmentOf custs hsmodules' custMods
           adaptionTable  = makeAdaptionTable_FromHsModules env hsmodules'
           initial_env    = Env.augmentGlobalEnv initialGlobalEnv $ extractHskEntries adaptionTable
           global_env_hsk = Env.unionGlobalEnvs env initial_env
@@ -51,7 +51,8 @@ convertHskUnit custs (HskUnit hsmodules initialGlobalEnv)
           hskmodules     = map (toHskModule global_env_hsk) hsmodules'
           
           isathys = fst $ runConversion global_env_hsk $ mapM convert hskmodules 
-          isaunit = IsaUnit isathys (adaptGlobalEnv global_env_hsk adaptionTable)
+          custThys = nub . snd . unzip $ custMods
+          isaunit = IsaUnit isathys custThys (adaptGlobalEnv global_env_hsk adaptionTable)
       in
         adaptIsaUnit global_env_hsk adaptionTable isaunit
     where 

@@ -2,9 +2,12 @@ module Importer.Configuration
     ( Config (..),
       Customisations,
       CustomTheory (..),
-      InputLocation (..),
       Location (..),
+      ExportList (..),
+      CustomTranslations,
+      CustomTranslation,
       readConfig,
+      defaultConfig,
       defaultCustomisations,
       getCustomTheory
     ) where
@@ -19,8 +22,13 @@ import Control.Monad.Error
 import Data.Generics
 import System.FilePath
 import System.Directory
+import Data.Map (Map)
 
-newtype Location = FileLocation FilePath
+
+type CustomTranslations = [CustomTranslation]
+type CustomTranslation = (Module, CustomTheory)
+
+newtype Location = FileLocation{ fileLocation :: FilePath}
     deriving (Show, Eq, Data, Typeable)
 
 newtype Customisations = Customisations [Customisation]
@@ -28,6 +36,7 @@ newtype Customisations = Customisations [Customisation]
 
 data CustomTheory = CustomTheory{ custThyName :: Theory, custThyLocation :: Location, custThyExportList :: ExportList}
                     deriving (Show, Eq, Data, Typeable)
+
 
 data Config = Config{inputLocations :: [InputLocation], outputLocation :: OutputLocation, customisations :: Customisations}
               deriving (Show, Eq, Data, Typeable)
@@ -39,14 +48,17 @@ data ExportList = ExportList [String]
                 | ImplicitExportList
                   deriving (Show, Eq, Data, Typeable)
 
-data InputLocation = FileInputLocation Location
-                   | DirInputLocation Location
-                     deriving (Show, Eq, Data, Typeable)
+type InputLocation = Location
 
 type OutputLocation = Location
 
 type XMLParser a = Either String a
 
+defaultConfig ::[FilePath] -> FilePath -> Customisations -> Config
+defaultConfig inFiles outDir custs = Config {
+                                      inputLocations = map FileLocation inFiles,
+                                      outputLocation = FileLocation outDir,
+                                      customisations = custs}
 
 getCustomTheory :: Customisations -> Module -> Maybe CustomTheory
 getCustomTheory (Customisations custs) mod = liftM (\(Replace _ c) -> c) $ find isRepl custs
@@ -82,32 +94,33 @@ parseConfigDoc el
     = do checkSName el "translation"
          inputEl <- findSingleSElem "input" el
          outputEl <- findSingleSElem "output" el
-         custEl <- findSingleSElem "customisation" el
+         mbCustEl <- ((findSingleSElem "customisation" el >>= (return . Just))
+                     `catchError` (const $ return Nothing))
          input <- parseInputElem inputEl
          output <- parseOutputElem outputEl
-         cust <- parseCustElem custEl
+         cust <- case mbCustEl of
+                  Nothing -> return defaultCustomisations
+                  Just custEl -> parseCustElem custEl
          return $ Config {inputLocations=input,
                           outputLocation=output,
-                          customisations=Customisations cust}
+                          customisations=cust}
                      
 parseInputElem :: Element -> XMLParser [InputLocation]
 parseInputElem el =  mapM parseInputLocElem $ onlyElems $ elContent el
 
 parseInputLocElem :: Element -> XMLParser InputLocation
 parseInputLocElem el
-    | elName el == simpName "file" = parseFile
-    | elName el == simpName "dir" = parseDir
+    | elName el `elem`  map simpName ["file", "dir", "path"]
+        = liftM FileLocation $ findSAttr "location" el
     | otherwise = fail $ "Unexpected element \"" ++ (show.qName.elName $ el) ++ "\"" ++ (showLine.elLine $ el) ++ "!"
-    where parseFile = liftM (FileInputLocation . FileLocation) $ findSAttr "location" el
-          parseDir = liftM (DirInputLocation . FileLocation) $ findSAttr "location" el
                        
 
 parseOutputElem :: Element -> XMLParser OutputLocation
 parseOutputElem  el = liftM FileLocation $ findSAttr "location" el
 
 
-parseCustElem :: Element -> XMLParser [Customisation]
-parseCustElem el = mapM parseCustOptElem $ onlyElems $ elContent el
+parseCustElem :: Element -> XMLParser Customisations
+parseCustElem el =liftM Customisations $ mapM parseCustOptElem $ onlyElems $ elContent el
 
 parseCustOptElem :: Element -> XMLParser Customisation
 parseCustOptElem el
@@ -142,7 +155,10 @@ parseTheoryElem el = do thy <- findSAttr "name" el
                         return (Theory thy, path, expList)        
 
 parseExportElem :: Element -> XMLParser ExportList
-parseExportElem el = return ImplicitExportList
+parseExportElem el = do implicit <- findSAttr "implicit" el `catchError` const (return "")
+                        if implicit `elem` ["yes","true","implicit"] 
+                           then return ImplicitExportList
+                           else return . ExportList . words . strContent $ el
                      
 parseModuleElem :: Element -> XMLParser Module
 parseModuleElem el = liftM Module $ findSAttr "name" el

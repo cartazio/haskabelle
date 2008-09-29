@@ -221,10 +221,10 @@ adaptClass classN = do let ignore = Isa.Name "_"
                        return classN'
 
 adaptIsaUnit :: Env.GlobalE -> AdaptionTable -> IsaUnit -> IsaUnit
-adaptIsaUnit globalEnv adaptionTable (IsaUnit thycmds adaptedGlobalEnv)
+adaptIsaUnit globalEnv adaptionTable (IsaUnit thycmds custThys adaptedGlobalEnv)
     = let run thunk = runAdaption globalEnv adaptedGlobalEnv adaptionTable thunk
           thycmds'  = run (mapM adapt thycmds)
-      in IsaUnit thycmds' adaptedGlobalEnv
+      in IsaUnit thycmds' custThys adaptedGlobalEnv
 
 
 not_implemented x = error ("Adaption not implemented yet for\n  " ++ prettyShow' "thing" x) 

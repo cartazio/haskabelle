@@ -6,9 +6,11 @@
   <output location="dst_thy" />
   <customisation>
     <replace>
-      <module name="Text.PrettyPrint.HughesPJ" />
+      <module name="System.IO" />
       <theory name="Empty" location="Empty.thy">
-	<export implicit="true" />
+	<export>
+	  something
+	</export>
       </theory>
     </replace>
   </customisation>

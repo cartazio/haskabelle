@@ -25,6 +25,7 @@ module Importer.Utilities.Hsk
       orderDeclsBySourceLine,
       renameHsPat,
       module2FilePath,
+      moduleFileLocation,
       namesFromHsDecl,
       string2HsName,
       extractSuperclassNs,
@@ -33,7 +34,9 @@ module Importer.Utilities.Hsk
       hsk_cons,
       hsk_pair,
       hsk_negate,
-      isHaskellSourceFile
+      isHaskellSourceFile,
+      moduleHierarchyDepth,
+      showModule
     ) where
   
 import Maybe
@@ -146,6 +149,12 @@ module2FilePath :: Module -> FilePath
 module2FilePath (Module name)
     = map (\c -> if c == '.' then '/' else c) name ++ ".hs"
 
+moduleFileLocation :: HsModule -> FilePath
+moduleFileLocation (HsModule SrcLoc{srcFilename = file} _ _ _ _) = file
+
+moduleHierarchyDepth :: Module -> Int
+moduleHierarchyDepth (Module name) = length $ filter (== '.') name
+
 {-|
   This predicate checks whether the given file path refers to a Haskell
   source file.
@@ -177,21 +186,20 @@ extractMethodSigs class_decls
 
 {-|
   This function extracts all Haskell names that are affected by the given
-  declaration. If the given kind of declaration is not supported 'Nothing' is
-  returned.
+  declaration. If the given kind of declaration is not supported an exception
+  is thrown.
 -}
-namesFromHsDecl :: HsDecl -> Maybe [HsQName]
-namesFromHsDecl (HsTypeDecl _ name _ _)        = Just [UnQual name]
-namesFromHsDecl (HsDataDecl _ _ _ name _ _ _)  = Just [UnQual name]
-namesFromHsDecl (HsClassDecl _ _ name _ _ _)   = Just [UnQual name]
-namesFromHsDecl (HsInstDecl _ _ qname _ _)     = Just [qname]
-namesFromHsDecl (HsTypeSig _ names _)          = Just (map UnQual names)
-namesFromHsDecl (HsInfixDecl _ _ _ ops)        = Just [UnQual n | n <- (universeBi ops :: [HsName])]
-namesFromHsDecl (HsPatBind _ pat _ _)          = case bindingsFromPats [pat] of [] -> Nothing
-                                                                                bs -> Just bs
-namesFromHsDecl (HsFunBind (m:ms))             = case m of 
-                                                   HsMatch _ fname _ _ _ -> Just [UnQual fname]
-namesFromHsDecl _                              = Nothing
+namesFromHsDecl :: HsDecl -> [HsQName]
+namesFromHsDecl (HsTypeDecl _ name _ _)        = [UnQual name]
+namesFromHsDecl (HsDataDecl _ _ _ name _ _ _)  = [UnQual name]
+namesFromHsDecl (HsClassDecl _ _ name _ _ _)   = [UnQual name]
+namesFromHsDecl (HsInstDecl _ _ qname _ _)     = [qname]
+namesFromHsDecl (HsTypeSig _ names _)          = map UnQual names
+namesFromHsDecl (HsInfixDecl _ _ _ ops)        = [UnQual n | n <- (universeBi ops :: [HsName])]
+namesFromHsDecl (HsPatBind _ pat _ _)          = bindingsFromPats [pat]
+namesFromHsDecl (HsFunBind (HsMatch _ fname _ _ _ : ms ))
+                                               = [UnQual fname]
+namesFromHsDecl decl                           = error $ "Internal error: The given declaration " ++ show decl ++ " is not supported!"
 
 {-|
   Instances of this class represent pieces of Haskell syntax that can bind 
@@ -238,7 +246,7 @@ bindingsFromPats pattern  = [ UnQual n | HsPVar n <- universeBi pattern ]
 bindingsFromDecls       :: [HsDecl] -> [HsQName]
 bindingsFromDecls decls = assert (not (hasDuplicates bindings)) bindings
     -- Type signatures do not create new bindings, but simply annotate them.
-    where bindings = concatMap (fromJust . namesFromHsDecl) (filter (not . isTypeSig) decls)
+    where bindings = concatMap namesFromHsDecl (filter (not . isTypeSig) decls)
           isTypeSig (HsTypeSig _ _ _) = True
           isTypeSig _                 = False
 
@@ -584,6 +592,9 @@ getSourceLine decl
     = let srclocs = childrenBi decl :: [SrcLoc]
           lines   = map srcLine srclocs
       in head (sort lines)
+
+showModule :: Module -> String
+showModule (Module name) = name
 
 ------------------------------------------------------------------
 -- In the following we define predicates that define the supported
