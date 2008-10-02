@@ -14,12 +14,11 @@ import Data.List
 import Monad
 import Maybe
 
+import Control.Monad.Reader
 import Control.Monad.State
 
 import Importer.Utilities.Misc
-import Importer.Utilities.Hsk 
-    (hsk_nil, hsk_cons, hsk_pair, hsk_negate,
-     extractBindingNs, extractSuperclassNs, srcloc2string)
+import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
 import Importer.Preprocess
 import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
@@ -34,7 +33,8 @@ import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 
 import qualified Data.Map as Map
-import Importer.Configuration
+import Importer.Configuration hiding (getMonadInstance)
+import qualified Importer.Configuration as Config (getMonadInstance)
 
 {-|
   This is the main function of the conversion process; converts a Unit of Haskell
@@ -50,7 +50,7 @@ convertHskUnit custs (HskUnit hsmodules custMods initialGlobalEnv)
                              
           hskmodules     = map (toHskModule global_env_hsk) hsmodules'
           
-          isathys = fst $ runConversion global_env_hsk $ mapM convert hskmodules 
+          isathys = fst $ runConversion custs global_env_hsk $ mapM convert hskmodules 
           custThys = nub . snd . unzip $ custMods
           isaunit = IsaUnit isathys custThys (adaptGlobalEnv global_env_hsk adaptionTable)
       in
@@ -89,14 +89,14 @@ data Context    = Context
     , _globalEnv   :: Env.GlobalE
     , _warnings    :: [Warning]
     , _backtrace   :: [String]
-    , _gensymcount :: Int
+    , _monad       :: Maybe MonadInstance
     }
 
 emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default Module in Haskell
                          _globalEnv   = Env.initialGlobalEnv,  --  is called `Main'; clashes with Isabelle.
                          _warnings    = [],
                          _backtrace   = [],
-                         _gensymcount = 0 }
+                         _monad = Nothing }
 
 {-|
   Instead of accessing a record directly by their `_foo' slots, we
@@ -114,30 +114,60 @@ warnings :: FieldSurrogate [Warning]
 warnings    = (_warnings,    \c f -> c { _warnings    = f })
 backtrace :: FieldSurrogate [String]
 backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
-gensymcount :: FieldSurrogate Int
-gensymcount = (_gensymcount, \c f -> c { _gensymcount = f })
+monad     :: FieldSurrogate (Maybe MonadInstance)
+monad       = (_monad,       \c f -> c { _monad       = f })
 
 currentModule :: FieldSurrogate Module
 currentModule = (\c -> let (Isa.Theory n) = _theory c in Module n, \c f -> c)
 
+getMonadInstance :: String -> ContextM (Maybe MonadInstance)
+getMonadInstance name = ask >>= (return . flip Config.getMonadInstance name)
+
+getMonadInstance' :: HsType -> ContextM (Maybe MonadInstance)
+getMonadInstance' ty =
+    case typeConName . returnType $ ty of
+      Nothing -> return Nothing
+      Just name -> getMonadInstance name
+
+getCurrentMonadFunction :: HsQName -> ContextM HsQName
+getCurrentMonadFunction name =
+    do mbMon <- queryContext monad
+       case mbMon of
+         Nothing -> return name
+         Just mon -> 
+             case name of
+               Qual mod uName -> return $ Qual mod (lookup mon uName)
+               UnQual uName -> return $ UnQual (lookup mon uName)
+               def -> return def
+       where lookup mon (HsIdent name) = HsIdent $ getMonadConstant mon name
+             lookup mon (HsSymbol name) = HsSymbol $ getMonadConstant mon name
+
+getCurrentMonadDoSyntax :: ContextM (Maybe DoSyntax)
+getCurrentMonadDoSyntax =
+    do mbMon <- queryContext monad
+       case mbMon of 
+         Nothing -> return Nothing
+         Just mon -> return . Just $ getMonadDoSyntax mon
+         
+
 {-|
   The conversion process is done in this monad.
 -}
-newtype ContextM v = ContextM (StateT Context GensymM v)
-    deriving (Monad, MonadState Context, Functor)
+newtype ContextM v = ContextM (ReaderT Customisations (StateT Context GensymM) v)
+    deriving (Monad, MonadState Context, Functor, MonadReader Customisations)
 
 {-|
   This function lifts a gensym computation to a context computation
 -}
 liftGensym :: GensymM a -> ContextM a
-liftGensym = ContextM . lift
+liftGensym = ContextM . lift . lift
 
 {-|
   This function executes the given conversion with the given environment as
   the context.
 -}
-runConversion :: Env.GlobalE -> ContextM v -> (v, Context)
-runConversion env (ContextM m) = evalGensym 0 (runStateT m (emptyContext { _globalEnv = env }))
+runConversion :: Customisations -> Env.GlobalE -> ContextM v -> (v, Context)
+runConversion custs env (ContextM m) = evalGensym 0 $ runStateT (runReaderT m custs) (emptyContext { _globalEnv = env })
 
 {-|
   This function queries the given field in the context monad
@@ -345,13 +375,21 @@ instance Convert HsDecl Isa.Cmd where
         = do let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs)
              assert (all (== head names) (tail names)) (return ())
              assert (all isEmpty wbinds) (return ())      -- all decls are global at this point.
-             ftype      <- lookupType (UnQual (names!!0)) -- as all names are equal, pick first one.
+             ftype      <- lookupType (UnQual (names!!0)) -- as all
+                                                        -- names are
+                                                        -- equal, pick
+                                                        -- first one.
+             monadInstance <- maybe
+                                (return Nothing)
+                                getMonadInstance'
+                                ftype
              name'      <- convert' (names!!0)
              fsig'      <- (case ftype of Nothing -> return Isa.TyNone
                                           Just t  -> convert' t) >>= (return . Isa.TypeSig name')
              fname'     <- convert (names!!0)           
              patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
-             bodies'    <- mapM convert bodies
+             bodies'    <- withUpdatedContext monad (const monadInstance) $
+                                mapM convert bodies
              thy        <- queryContext theory
              return $ Isa.FunCmd [fname'] [fsig'] (zip3 (cycle [fname']) patterns' bodies')
        where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
@@ -484,7 +522,9 @@ instance Convert HsAlt (Isa.Term, Isa.Term) where
 
 instance Convert HsExp Isa.Term where
     convert' (HsLit lit)       = convert lit   >>= (\l -> return (Isa.Literal l))
-    convert' (HsVar qname)     = convert qname >>= (\n -> return (Isa.Var n))
+    convert' (HsVar qname)     =
+        do qname' <- getCurrentMonadFunction qname
+           convert qname' >>= (\n -> return (Isa.Var n))
     convert' (HsCon qname)     = convert qname >>= (\n -> return (Isa.Var n))
     convert' (HsParen exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
     convert' (HsWildCard)      = return (Isa.Var (Isa.Name "_"))
@@ -580,9 +620,25 @@ instance Convert HsExp Isa.Term where
                                                            return (Isa.Generator (p', e'))
               convertListCompStmt (HsLetStmt _)
                   = die "Let statements not supported in List Comprehensions."
+    convert' (HsDo stmts)
+        = do isaStmts <- mapM convert stmts
+             mbDo <- getCurrentMonadDoSyntax
+             case mbDo of
+               Nothing -> die "Do syntax is used without sufficient type information!"
+               Just (DoParen pre post) -> 
+                   return $ Isa.DoBlock pre isaStmts post
 
     convert' junk = pattern_match_exhausted "HsExp -> Isa.Term" junk
 
+instance Convert HsStmt Isa.Stmt where
+
+    convert' (HsGenerator _ pat exp) = liftM2 Isa.DoGenerator (convert pat) (convert exp)
+    convert' (HsQualifier exp) = liftM Isa.DoQualifier (convert exp)
+    convert' (HsLetStmt binds) =
+        case binds of
+          HsBDecls [HsPatBind _ pat (HsUnGuardedRhs exp) _] ->
+              liftM2 Isa.DoGenerator (convert pat) (convert (HsApp (HsVar (UnQual (HsIdent "return"))) exp))
+          def -> pattern_match_exhausted "HsStmt -> Isa.Stmt" def
 
 {-|
   We desugare lambda expressions to true unary functions, i.e. to

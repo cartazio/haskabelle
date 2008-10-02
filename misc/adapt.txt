@@ -66,7 +66,7 @@ consts
   "Prelude.(<)"         "HOL.less"
   "Prelude.(<=)"        "HOL.less_eq"
   "Prelude.(>)"         "HOL.greater"
-  "Prelude.(<=)"        "HOL.greater_eq"
+  "Prelude.(>=)"        "HOL.greater_eq"
   "Prelude.(==)"        "Prelude.heq"
   "Prelude.(/=)"        "Prelude.hneq"
   "Prelude.abs"         "HOL.abs"
@@ -74,3 +74,5 @@ consts
   "Prelude.fromInteger" "Int.of_int"
 
   "Prelude._|_"         "HOL.undefined"
+
+  "Prelude.($)"		"Prelude.fun_app"

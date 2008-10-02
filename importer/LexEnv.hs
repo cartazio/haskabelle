@@ -184,7 +184,7 @@ substituteTyVars alist typ
         t@(EnvTyNone)      -> case lookup' t alist of { Just t' -> t'; Nothing -> t }
 
 {-|
-  This data type collects lexical information attached to
+  This data type collects identifier information attached to
   an identifier
 -}
 
@@ -216,7 +216,7 @@ data InstanceInfo = InstanceInfo { specializedTypeOf :: EnvType }
   deriving (Eq, Ord, Show)
 
 {-|
-  This data structure represents lexical information for
+  This data structure represents identifier information for
   different kinds of constants.
 -}
 
@@ -228,7 +228,7 @@ data Constant = Variable LexInfo
   deriving (Eq, Ord, Show)
 
 {-|
-  This data structure represents lexical information for 
+  This data structure represents identifier information for 
   different kinds of type declaration.
 -}
 data Type = Data  LexInfo [Constant] -- Data lexinfo [constructors]
@@ -245,7 +245,7 @@ data Identifier = Constant Constant
   deriving (Eq, Ord, Show)
 
 {-| 
-  This function constructs a lexical information structure, given a module
+  This function constructs a identifier information structure, given a module
   the identifier and the type of the identifier.
 -}
 makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
@@ -347,7 +347,7 @@ isData (Type (Data _ _)) = True
 isData _                 = False
 
 {-|
-  This function provides the lexical information attached to the
+  This function provides the information attached to the
   given identifier.
 -}
 lexInfoOf :: Identifier -> LexInfo
@@ -368,7 +368,7 @@ lexInfoOf identifier
 
 
 {-|
-  This function updates the lexical information attached to the
+  This function updates the identifier information attached to the
   given identifier.
 -}
 updateIdentifier :: Identifier -> LexInfo -> Identifier
@@ -634,14 +634,14 @@ retranslateSpecialCon TypeCon qname
 --
 
 {-|
-  This data structure provides lexical information for constants and types.
+  This data structure provides identifier information for constants and types.
 -}
 data LexE = LexEnv (Map.Map IdentifierID Constant) (Map.Map IdentifierID Type)
   deriving (Show)
 
 {-|
-  This function takes a list of identifiers (that contain lexical information) and collects the
-  lexical information in a lexical environment. The identifiers are normalized, i.e. possibly merged.
+  This function takes a list of identifiers (that contain identifier information) and collects the
+  identifier information in a lexical environment. The identifiers are normalized, i.e. possibly merged.
 -}
 makeLexEnv :: [Identifier] -> LexE
 makeLexEnv identifiers
@@ -679,7 +679,7 @@ mergeTypes_OrFail t1 t2
         Nothing     -> error (Msg.merge_collision "mergeTypes_OrFail" t1 t2)
 
 {-|
-  This function merges two lexical information blocks involving classes (i.e., also instance declarations for
+  This function merges two identifier information blocks involving classes (i.e., also instance declarations for
   a particular class). It throws an exception if the arguments have different names.
   It merges instances into the instancesOf slot of the corresponding class's ClassInfo
   structure.
@@ -698,7 +698,7 @@ mergeTypes t1 t2
                 | otherwise -> Nothing
 
 {-|
-  This function merges type annotations with lexical information for constants.
+  This function merges type annotations with identifier information for constants.
 -}
 mergeConstants :: Constant -> Constant -> Maybe Constant
 mergeConstants c1 c2
@@ -816,22 +816,22 @@ makeModuleEnv_FromHsModule (HsModule loc modul exports imports topdecls)
 
 customExportList :: ModuleID -> CustomTheory -> [EnvExport]
 customExportList mod custThy
-    = case custThyExportList custThy of
-        ImplicitExportList -> []
-        ExportList exps -> concatMap (\name -> let qname = EnvQualName mod name
-                                            in [EnvExportVar qname, EnvExportAll qname])
-                                     exps
+    = let constants = getCustomConstants custThy 
+          constants' = map (EnvExportVar . EnvQualName mod) constants
+          types = getCustomTypes custThy
+          types' = map (EnvExportAll . EnvQualName mod) types
+      in constants' ++ types'
 
 customLexEnv :: ModuleID -> CustomTheory -> LexE
 customLexEnv mod custThy
-    = case custThyExportList custThy of
-        ImplicitExportList -> LexEnv Map.empty Map.empty
-        ExportList exps -> LexEnv (env Variable) (env (`Data` []))
-            where env ctr = Map.fromListWith (\a b -> a) $ 
+    = let constants = getCustomConstants custThy 
+          types = getCustomTypes custThy
+      in LexEnv (env Variable constants) (env (`Data` []) types)
+            where env ctr exps = Map.fromListWith (\a b -> a) $ 
                                     map (\a -> (a,ctr $ LexInfo {nameOf = a,typeOf = EnvTyNone, moduleOf = mod})) exps
 
 {-|
-  This function infers lexical information for the identifiers mentioned in the given Haskell 
+  This function infers identifier information for the identifiers mentioned in the given Haskell 
   declaration.
 -}
 computeConstantMappings :: Module -> HsDecl -> [Identifier]

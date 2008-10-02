@@ -467,6 +467,15 @@ instance Printer Isa.Term where
           ppStmt (Isa.Generator (p, e)) 
               = pprint' p <+> text "<-" <+> pprint' e
 
+    pprint' (Isa.DoBlock pre stmts post) = 
+        text (pre) $$ printStmts stmts $$ text (post)
+        where printStmts [stmt] = pprint' stmt
+              printStmts (stmt:stmts) = pprint' stmt <> text ";" $$ printStmts stmts
+
+instance Printer Isa.Stmt where
+    pprint' (Isa.DoGenerator pat exp) = pprint' pat <+> text "\\<leftarrow>" <+> pprint' exp
+    pprint' (Isa.DoQualifier exp) = pprint' exp
+
 
 reAdaptEnvName :: Env.EnvName -> Maybe Env.EnvName
 reAdaptEnvName name

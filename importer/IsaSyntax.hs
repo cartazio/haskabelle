@@ -179,7 +179,15 @@ data Term = Literal Literal
           | ListComp Term [ListCompStmt]
           | RecConstr VarName [(Name, Term)]
           | RecUpdate Term [(Name, Term)]
+          | DoBlock String [Stmt] String -- syntactic sugar for
+                                         -- translating Haskell do
+                                         -- expressions
   deriving (Show, Data, Typeable)
+
+data Stmt = DoGenerator Pat Term
+          | DoQualifier Term
+--          | DoLetStmt [(Pat, Term)]
+            deriving (Show, Data, Typeable)
 
 {-|
   This type represents statements of list comprehensions.

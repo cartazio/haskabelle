@@ -341,6 +341,13 @@ instance Adapt Isa.Term where
                  exp' <- adapt exp
                  shadowing (extractNames pat') $ 
                    adpt e rest (Isa.Generator (pat', exp') : stmts')
+    adapt (Isa.DoBlock pre stmts post) = 
+        do stmts' <- mapM adapt stmts
+           return $ Isa.DoBlock pre stmts' post
+
+instance Adapt Isa.Stmt where
+    adapt (Isa.DoGenerator pat exp) = liftM2 Isa.DoGenerator (adapt pat) (adapt exp)
+    adapt (Isa.DoQualifier exp) = liftM Isa.DoQualifier $ adapt exp
 
                
 extractNames :: Isa.Term -> [Isa.Name]

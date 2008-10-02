@@ -1,16 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <translation>
   <input>
-    <file location="src_hs/Depend.hs" />
+    <path location="src_hs/UseMonads.hs" />
   </input>
   <output location="dst_thy" />
   <customisation>
+    <monadInstance name="MyStateM">
+      <doSyntax>do od</doSyntax>
+      <constants>
+	return returnS
+	liftM liftM
+      </constants>
+    </monadInstance>
     <replace>
-      <module name="System.IO" />
+      <module name="Monads" />
       <theory name="Empty" location="Empty.thy">
-	<export>
-	  something
-	</export>
+	<monads>
+	  MyStateM
+	</monads>
+	<constants>
+	  get put
+	</constants>
       </theory>
     </replace>
   </customisation>

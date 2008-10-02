@@ -97,8 +97,9 @@ writeIsaUnit (IsaUnit thys custThys env)
       mapM_ (flip writeTheory env) thys
 
 writeCustomTheory :: CustomTheory -> Conversion ()
-writeCustomTheory CustomTheory{custThyLocation = FileLocation src} = 
-    do let filename = takeFileName src
+writeCustomTheory cust = 
+    do let src = getCustomTheoryPath cust
+           filename = takeFileName src
        outDir <- getOutputDir
        let dest = combine outDir filename
        liftIO $ copyFile src dest

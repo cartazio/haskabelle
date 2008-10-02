@@ -15,6 +15,9 @@ class print = type +
 class heq = type +
   fixes heq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
 
+class hneq = type +
+  fixes hneq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+
 class num = number_ring + heq + print + abs + sgn
 
 (* FIXME: TODO. *)
@@ -42,4 +45,8 @@ where
   "zipWith z (a # as) (b # bs) = (z a b # zipWith z as bs)"
 | "zipWith _ _ _ = Nil"
 
+
+constdefs
+  fun_app :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 10)
+  "f $ x \<equiv> f x"
 end

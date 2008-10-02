@@ -1,18 +1,25 @@
 module Importer.Configuration
     ( Config (..),
       Customisations,
-      CustomTheory (..),
+      CustomTheory,
       Location (..),
-      ExportList (..),
       CustomTranslations,
       CustomTranslation,
+      MonadInstance (..),
+      DoSyntax (..),
       readConfig,
       defaultConfig,
       defaultCustomisations,
-      getCustomTheory
+      getCustomTheory,
+      getCustomConstants,
+      getCustomTypes,
+      getCustomTheoryPath,
+      getMonadInstance,
+      getMonadConstant,
+      getMonadDoSyntax
     ) where
 import Importer.IsaSyntax (Theory (..))
-import Language.Haskell.Exts.Syntax (Module (..))
+import Language.Haskell.Exts.Syntax (Module (..), HsType(..), HsQName(..))
 import Text.XML.Light hiding (findAttr)
 import qualified Text.XML.Light as XML
 import Control.Monad
@@ -23,6 +30,7 @@ import Data.Generics
 import System.FilePath
 import System.Directory
 import Data.Map (Map)
+import qualified Data.Map as Map hiding (Map)
 
 
 type CustomTranslations = [CustomTranslation]
@@ -31,22 +39,36 @@ type CustomTranslation = (Module, CustomTheory)
 newtype Location = FileLocation{ fileLocation :: FilePath}
     deriving (Show, Eq, Data, Typeable)
 
-newtype Customisations = Customisations [Customisation]
+data Customisations = Customisations{ customTheoryCust :: Map Module CustomTheory, monadInstanceCust ::  Map String MonadInstance}
     deriving (Show, Eq, Data, Typeable)
 
-data CustomTheory = CustomTheory{ custThyName :: Theory, custThyLocation :: Location, custThyExportList :: ExportList}
+data Customisation = CustReplace Replace
+                   | CustMonadInstance MonadInstance
+                     deriving (Show, Eq, Data, Typeable)
+
+data CustomTheory = CustomTheory {
+      custThyName :: Theory,
+      custThyLocation :: Location,
+      custThyConstants :: [String],
+      custThyTypes :: [String],
+      custThyMonads :: Either [String] [MonadInstance] }
                     deriving (Show, Eq, Data, Typeable)
 
 
 data Config = Config{inputLocations :: [InputLocation], outputLocation :: OutputLocation, customisations :: Customisations}
               deriving (Show, Eq, Data, Typeable)
 
-data Customisation = Replace Module CustomTheory
-                     deriving (Show, Eq, Data, Typeable)
+data Replace = Replace{ moduleRepl :: Module, customTheoryRepl :: CustomTheory}
+               deriving (Show, Eq, Data, Typeable)
 
-data ExportList = ExportList [String] 
-                | ImplicitExportList
-                  deriving (Show, Eq, Data, Typeable)
+data MonadInstance = MonadInstance {monadName :: String, doSyntax :: DoSyntax, monadConstants :: MonadConstants}
+                   deriving (Show, Eq, Data, Typeable)
+
+data DoSyntax = DoParen String String
+                deriving (Show, Eq, Data, Typeable)
+data MonadConstants = ExplicitMonadConstants {explMonConstants :: Map String String}
+                      deriving (Show, Eq, Data, Typeable)
+
 
 type InputLocation = Location
 
@@ -61,12 +83,43 @@ defaultConfig inFiles outDir custs = Config {
                                       customisations = custs}
 
 getCustomTheory :: Customisations -> Module -> Maybe CustomTheory
-getCustomTheory (Customisations custs) mod = liftM (\(Replace _ c) -> c) $ find isRepl custs
-    where isRepl (Replace m _) = mod == m
-         -- isRepl _ = False
+getCustomTheory Customisations{ customTheoryCust = custs} mod = Map.lookup mod custs
+
+getCustomTheoryPath :: CustomTheory -> String
+getCustomTheoryPath CustomTheory{custThyLocation = FileLocation src} = src
+
+getCustomConstants :: CustomTheory -> [String]
+getCustomConstants cust = 
+    let expl = custThyConstants cust
+        Right mons = custThyMonads cust
+        impl = concatMap (Map.keys . explMonConstants . monadConstants) mons
+    in expl ++ impl
+        
+
+getCustomTypes :: CustomTheory -> [String]
+getCustomTypes  = custThyConstants
+
+getMonadInstance :: Customisations -> String -> Maybe MonadInstance
+getMonadInstance Customisations{monadInstanceCust = insts} monadName = Map.lookup monadName insts
+
+getMonadDoSyntax :: MonadInstance -> DoSyntax
+getMonadDoSyntax = doSyntax
+
+getMonadConstants :: MonadInstance -> [String]
+getMonadConstants mon = 
+    let ExplicitMonadConstants transl = monadConstants mon in
+    Map.keys transl
+
+getMonadConstant :: MonadInstance -> String -> String
+getMonadConstant mon name =
+    case monadConstants mon of
+      ExplicitMonadConstants funMap -> 
+          case Map.lookup name funMap  of
+            Nothing -> name
+            Just name' -> name'
 
 defaultCustomisations :: Customisations
-defaultCustomisations = Customisations []
+defaultCustomisations = Customisations Map.empty Map.empty
 
 
 {-|
@@ -101,9 +154,20 @@ parseConfigDoc el
          cust <- case mbCustEl of
                   Nothing -> return defaultCustomisations
                   Just custEl -> parseCustElem custEl
+         cust' <- processCustomisations cust
          return $ Config {inputLocations=input,
                           outputLocation=output,
-                          customisations=cust}
+                          customisations=cust'}
+
+processCustomisations :: Customisations -> XMLParser Customisations
+processCustomisations (Customisations thys mons) = 
+    let thys' = Map.map lookup thys in
+    case check of
+      [] -> return $ Customisations thys' mons
+      monName:_ -> fail $ "Monad instance " ++ monName ++ " not found in configuration!"
+    where monNames CustomTheory{custThyMonads = (Left ns)} = ns
+          lookup thy = thy{custThyMonads = Right $ map (fromJust . (flip Map.lookup mons)) (monNames thy)}
+          check = filter (`Map.notMember` mons) $ concatMap monNames (Map.elems thys)
                      
 parseInputElem :: Element -> XMLParser [InputLocation]
 parseInputElem el =  mapM parseInputLocElem $ onlyElems $ elContent el
@@ -119,12 +183,27 @@ parseOutputElem :: Element -> XMLParser OutputLocation
 parseOutputElem  el = liftM FileLocation $ findSAttr "location" el
 
 
+partitionCustomisations :: [Customisation] -> ([Replace],[MonadInstance])
+partitionCustomisations [] = ([],[])
+partitionCustomisations (cust: custs) =
+    let (repls,mons) = partitionCustomisations custs in
+    case cust of
+      CustReplace repl -> (repl:repls,mons)
+      CustMonadInstance mon -> (repls, mon:mons)
+
+makeCustomisations :: [Customisation] -> Customisations
+makeCustomisations custs = Customisations replsMap monsMap
+    where (repls,mons) = partitionCustomisations custs
+          monsMap = Map.fromList $ map (\mon -> (monadName mon,mon)) mons
+          replsMap = Map.fromList $ map (\repl-> (moduleRepl repl, customTheoryRepl repl)) repls
+
 parseCustElem :: Element -> XMLParser Customisations
-parseCustElem el =liftM Customisations $ mapM parseCustOptElem $ onlyElems $ elContent el
+parseCustElem el =liftM makeCustomisations $ mapM parseCustOptElem $ onlyElems $ elContent el
 
 parseCustOptElem :: Element -> XMLParser Customisation
 parseCustOptElem el
-    | elName el == simpName "replace" = parseReplaceElem el
+    | elName el == simpName "replace" = liftM CustReplace $ parseReplaceElem el
+    | elName el == simpName "monadInstance" = liftM CustMonadInstance $ parseMonadInstanceElem el
     | otherwise = fail $ "Unexpected element \"" ++ (show.qName.elName $ el) ++ "\"" ++ (showLine.elLine $ el) ++ "!"
 
 
@@ -138,27 +217,59 @@ findSingleElem name el = case findChildren name el of
                            _:_:_ -> failAt el $ "Only one element \""++ (showName name) ++"\" is allowed"
                            [e] -> return e
 
-parseReplaceElem :: Element -> XMLParser Customisation
+parseReplaceElem :: Element -> XMLParser Replace
 parseReplaceElem  el
     = do moduleEl <- findSingleSElem "module" el
          theoryEl <- findSingleSElem "theory" el
          mod <- parseModuleElem moduleEl
-         (thy,path,expList) <- parseTheoryElem theoryEl
-         return $  Replace mod (CustomTheory thy (FileLocation path) expList)
+         custThy <- parseTheoryElem theoryEl
+         return $  Replace mod custThy
+
+parseMonadInstanceElem :: Element -> XMLParser MonadInstance
+parseMonadInstanceElem el
+    = do name <- findSAttr "name" el
+         doEl <- findSingleSElem "doSyntax" el
+         constantsEl <- findSingleSElem "constants" el
+         doSyn <- parseDoSyntaxElem doEl
+         functions <- parseMonConstantsElem constantsEl
+         return $ MonadInstance name doSyn functions
+
+parseDoSyntaxElem :: Element -> XMLParser DoSyntax
+parseDoSyntaxElem el =
+    let [begin, end] = words . strContent $ el
+    in return $ DoParen begin end
+
+parseMonConstantsElem :: Element -> XMLParser MonadConstants
+parseMonConstantsElem = return . ExplicitMonadConstants . Map.fromList . pair . words . strContent
+    where pair [] = []
+          pair (a:b:rest) = (a,b) : pair rest
 
 
-parseTheoryElem :: Element -> XMLParser (Theory,FilePath,ExportList)
+parseTheoryElem :: Element -> XMLParser CustomTheory
 parseTheoryElem el = do thy <- findSAttr "name" el
                         path <- findSAttr "location" el
-                        exportEl <- findSingleSElem "export" el
-                        expList <- parseExportElem exportEl
-                        return (Theory thy, path, expList)        
+                        types <- getTypes
+                        monads <- getMonads
+                        constants <- getConstants
+                        return $ CustomTheory (Theory thy)  (FileLocation path) constants types (Left monads)
+    where getTypes = (findSingleSElem "types" el >>=
+                      parseThyTypesElem)
+                     `catchError` (\_ -> return [])
+          getMonads = (findSingleSElem "monads" el >>=
+                       parseThyMonadsElem)
+                      `catchError` (\_ -> return [])
+          getConstants = (findSingleSElem "constants" el >>=
+                          parseThyConstantsElem)
+                         `catchError` (\_-> return [])
 
-parseExportElem :: Element -> XMLParser ExportList
-parseExportElem el = do implicit <- findSAttr "implicit" el `catchError` const (return "")
-                        if implicit `elem` ["yes","true","implicit"] 
-                           then return ImplicitExportList
-                           else return . ExportList . words . strContent $ el
+parseThyConstantsElem :: Element -> XMLParser [String]
+parseThyConstantsElem el = return . words . strContent $ el
+
+parseThyTypesElem :: Element -> XMLParser [String]
+parseThyTypesElem el = return . words . strContent $ el
+
+parseThyMonadsElem :: Element -> XMLParser [String]
+parseThyMonadsElem el = return .words . strContent $ el
                      
 parseModuleElem :: Element -> XMLParser Module
 parseModuleElem el = liftM Module $ findSAttr "name" el

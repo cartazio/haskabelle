@@ -36,7 +36,9 @@ module Importer.Utilities.Hsk
       hsk_negate,
       isHaskellSourceFile,
       moduleHierarchyDepth,
-      showModule
+      showModule,
+      typeConName,
+      returnType
     ) where
   
 import Maybe
@@ -65,6 +67,29 @@ hsk_prelude = Module "Prelude"
 -}
 prelude_fn :: String -> HsExp
 prelude_fn fn_name = HsVar (Qual hsk_prelude (HsIdent fn_name))
+
+{-|
+  This function provides the return type of a type. E.g.
+  returnType (a -> b -> c) = c
+-}
+returnType :: HsType -> HsType
+returnType (HsTyForall _ _ ty) = ty
+returnType (HsTyFun _ ty) = ty
+returnType (HsTyKind ty _) = ty
+returnType ty = ty
+
+
+{-|
+  This function provides the (unqualified) name of the type constructor that constructed
+  the given type or nothing if the given type is not a constructor application.
+-}
+typeConName :: HsType -> Maybe String
+typeConName (HsTyApp (HsTyCon qname) _) =
+    case qname of
+      Qual _ (HsIdent name) -> Just name
+      UnQual (HsIdent name) -> Just name
+      _                     -> Nothing
+typeConName _ = Nothing
 
 
 {-|
@@ -394,12 +419,22 @@ instance AlphaConvertable HsExp where
                          boundNs = concatMap extractBindingNs stmts
                          renams' = shadow boundNs renams
                          e'      = renameFreeVars renams' e
-
+            HsDo stmts
+                 -> HsDo $ renStmts renams stmts
+                   where renStmts _ [] = []
+                         renStmts renams (stmt:stmts) = 
+                             let stmt' = renameFreeVars renams stmt
+                                 binds = extractBindingNs stmt
+                                 renams' = shadow binds renams
+                                 stmts' = renStmts renams' stmts
+                             in stmt':stmts'
             exp -> assert (isTriviallyDescendable exp)
                      $ descend (renameFreeVars renams :: HsExp -> HsExp) exp
 {-|
-  ???
+  This predicate decides whether the given Haskell expression can be traversed
+  using uniplates 'descend' function.
 -}
+
 isTriviallyDescendable :: HsExp -> Bool
 isTriviallyDescendable hsexp 
     = case hsexp of
@@ -411,7 +446,18 @@ isTriviallyDescendable hsexp
         HsParen    _     -> True
         _                -> False -- rest is not supported at the moment.
 
-
+instance AlphaConvertable HsStmt where
+    renameFreeVars renams stmt = 
+        case stmt of
+          HsGenerator loc pat exp ->
+              HsGenerator loc pat exp'
+                  where exp' = renameFreeVars renams exp
+          HsQualifier exp ->
+              HsQualifier exp'
+                  where exp' = renameFreeVars renams exp
+          HsLetStmt binds ->
+              HsLetStmt binds'
+                  where binds' = renameFreeVars renams binds
 
 instance AlphaConvertable HsDecl where
     renameFreeVars renams hsdecl
