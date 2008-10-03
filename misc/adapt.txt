@@ -19,6 +19,8 @@ types
   "Prelude.Int"         "int"
   "Prelude.Integer"     "int"
 
+  "Prelude.UnitTyCon" 	"unit"
+
 consts
   "Prelude.show"        "Prelude.print"
 

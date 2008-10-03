@@ -38,12 +38,14 @@ primitive_tycon_table, primitive_datacon_table :: [(HsSpecialCon, HsQName)]
 
 primitive_tycon_table 
     = [(HsListCon,    Qual (Module "Prelude") (HsIdent "ListTyCon")),
+       (HsUnitCon,    Qual (Module "Prelude") (HsIdent "()")),
        (HsTupleCon 2, Qual (Module "Prelude") (HsIdent "PairTyCon"))
       ]
 
 primitive_datacon_table 
     = [(HsCons,       Qual (Module "Prelude") (HsIdent ":")),
        (HsListCon,    Qual (Module "Prelude") (HsIdent "[]")),
+       (HsUnitCon,    Qual (Module "Prelude") (HsIdent "()")),
        (HsTupleCon 2, Qual (Module "Prelude") (HsIdent "PairDataCon"))
       ]
 

@@ -12,6 +12,7 @@ module Importer.Printer
     ) where
 
 import Maybe
+import Control.Monad
 
 import Importer.Utilities.Misc
 import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, 
@@ -172,6 +173,7 @@ withinApplication app d
          updatePP (\pps -> pps { currentAppFlavor = old_app })
          return result
 
+
 withTyScheme :: [(Isa.Name, [Isa.Name])] -> Doc -> Doc
 withTyScheme ctx d
     = do old_ctx <- queryPP (\pps -> currentTyScheme pps)
@@ -188,12 +190,13 @@ comment d = text "(*" <+> d <+> text "*)"
 -- Combinators
 
 (<>),(<+>),($$),($+$) :: Doc -> Doc -> Doc
-aM <> bM  = do{a<-aM; b<-bM; return (a P.<> b)}
-aM <+> bM = do{a<-aM; b<-bM; return (a P.<+> b)}
-aM $$ bM  = do{a<-aM; b<-bM; return (a P.$$ b)}
-aM $+$ bM = do{a<-aM; b<-bM; return (a P.$+$ b)}
+(<>) = liftM2 (P.<>)
+(<+>) = liftM2 (P.<+>)
+($$) = liftM2 (P.$$)
+($+$) = liftM2 (P.$+$)
 
-hcat,hsep,vcat,sep,cat,fsep,fcat :: [Doc] -> Doc
+ncat, hcat,hsep,vcat,sep,cat,fsep,fcat :: [Doc] -> Doc
+ncat = foldr ($+$) empty
 hcat dl = sequence dl >>= return . P.hcat
 hsep dl = sequence dl >>= return . P.hsep
 vcat dl = sequence dl >>= return . P.vcat
@@ -468,12 +471,12 @@ instance Printer Isa.Term where
               = pprint' p <+> text "<-" <+> pprint' e
 
     pprint' (Isa.DoBlock pre stmts post) = 
-        text (pre) $$ printStmts stmts $$ text (post)
-        where printStmts [stmt] = pprint' stmt
-              printStmts (stmt:stmts) = pprint' stmt <> text ";" $$ printStmts stmts
+        text pre <+> (vcat $ (printStmts stmts) ++ [text post])
+        where printStmts [stmt] = [pprint' stmt]
+              printStmts (stmt:stmts) = (pprint' stmt <> semi) : (printStmts stmts)
 
 instance Printer Isa.Stmt where
-    pprint' (Isa.DoGenerator pat exp) = pprint' pat <+> text "\\<leftarrow>" <+> pprint' exp
+    pprint' (Isa.DoGenerator pat exp) = pprint' pat <+> text "<-" <+> pprint' exp
     pprint' (Isa.DoQualifier exp) = pprint' exp
 
 
