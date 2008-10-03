@@ -16,7 +16,8 @@ module Importer.Configuration
       getCustomTheoryPath,
       getMonadInstance,
       getMonadConstant,
-      getMonadDoSyntax
+      getMonadDoSyntax,
+      getMonadLift
     ) where
 import Importer.IsaSyntax (Theory (..))
 import Language.Haskell.Exts.Syntax (Module (..), HsType(..), HsQName(..))
@@ -32,6 +33,9 @@ import System.Directory
 import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)
 
+---------------------
+-- Data Structures --
+---------------------
 
 type CustomTranslations = [CustomTranslation]
 type CustomTranslation = (Module, CustomTheory)
@@ -61,8 +65,12 @@ data Config = Config{inputLocations :: [InputLocation], outputLocation :: Output
 data Replace = Replace{ moduleRepl :: Module, customTheoryRepl :: CustomTheory}
                deriving (Show, Eq, Data, Typeable)
 
-data MonadInstance = MonadInstance {monadName :: String, doSyntax :: DoSyntax, monadConstants :: MonadConstants}
+data MonadInstance = MonadInstance {monadName :: String, doSyntax :: DoSyntax, monadConstants :: MonadConstants, monadLifts :: MonadLifts}
                    deriving (Show, Eq, Data, Typeable)
+{-|
+  A mapping from lift functions to monads.
+-}
+type MonadLifts = Either [(String,String)] (Map String MonadInstance)
 
 data DoSyntax = DoParen String String
                 deriving (Show, Eq, Data, Typeable)
@@ -76,11 +84,25 @@ type OutputLocation = Location
 
 type XMLParser a = Either String a
 
+--------------------
+-- Default Values --
+--------------------
+
 defaultConfig ::[FilePath] -> FilePath -> Customisations -> Config
 defaultConfig inFiles outDir custs = Config {
                                       inputLocations = map FileLocation inFiles,
                                       outputLocation = FileLocation outDir,
                                       customisations = custs}
+
+defaultCustomisations :: Customisations
+defaultCustomisations = Customisations Map.empty Map.empty
+
+noMonadConstants = ExplicitMonadConstants (Map.empty)
+
+
+---------------------------------------
+-- Data Structure Accessor Functions --
+---------------------------------------
 
 getCustomTheory :: Customisations -> Module -> Maybe CustomTheory
 getCustomTheory Customisations{ customTheoryCust = custs} mod = Map.lookup mod custs
@@ -93,7 +115,10 @@ getCustomConstants cust =
     let expl = custThyConstants cust
         Right mons = custThyMonads cust
         impl = concatMap (Map.keys . explMonConstants . monadConstants) mons
-    in expl ++ impl
+        impl' = concatMap (names . monadLifts) mons
+    in expl `union` impl `union` impl'
+        where names (Right x) = Map.keys x
+              names (Left x) = map fst x
         
 
 getCustomTypes :: CustomTheory -> [String]
@@ -110,6 +135,10 @@ getMonadConstants mon =
     let ExplicitMonadConstants transl = monadConstants mon in
     Map.keys transl
 
+getMonadLift :: MonadInstance -> String -> Maybe MonadInstance
+getMonadLift MonadInstance{monadLifts = Right consts} name =
+    Map.lookup name consts
+
 getMonadConstant :: MonadInstance -> String -> String
 getMonadConstant mon name =
     case monadConstants mon of
@@ -118,8 +147,9 @@ getMonadConstant mon name =
             Nothing -> name
             Just name' -> name'
 
-defaultCustomisations :: Customisations
-defaultCustomisations = Customisations Map.empty Map.empty
+-----------------
+-- XML Parsing --
+-----------------
 
 
 {-|
@@ -135,12 +165,14 @@ readConfig path =
             error $ "Parsing error: The configuration file \"" ++ path ++ "\" is not a well-formed XML document!"
        let Just root = maybeRoot
        let res = parseConfigDoc root
-       config <- either (\msg -> error $ "Parsing error: " ++ msg) return res
+       config <- either (\msg -> error $ "Malformed configuration file: " ++ msg) return res
        wd <- getCurrentDirectory
        let path' = combine wd path
        return $ makePathsAbsolute (takeDirectory path') config
        
-
+-----------------------
+-- General Structure --
+-----------------------
 
 parseConfigDoc :: Element -> XMLParser Config
 parseConfigDoc el
@@ -160,7 +192,26 @@ parseConfigDoc el
                           customisations=cust'}
 
 processCustomisations :: Customisations -> XMLParser Customisations
-processCustomisations (Customisations thys mons) = 
+processCustomisations custs = processCustThys custs >>= processLifts
+
+processLifts :: Customisations -> XMLParser Customisations
+processLifts (Customisations thys mons) = 
+    let mons' = Map.map lookup mons
+        lookup mon@MonadInstance{monadLifts = Left lifts} = 
+            let lifts' = Map.fromList $ map lookupLift lifts in
+            mon{monadLifts = Right lifts'}
+        lookupLift (cons,monName) = (cons, fromJust $ Map.lookup monName mons')
+    in case (check,cycle) of
+         (monName:_,_) -> fail $ "Monad instance " ++ monName ++ " not found in configuration!"
+         (_,mon:_) -> fail $ "Monad instance " ++ monadName mon ++ " has a lifting function to itself!"
+         ([],[]) -> return (Customisations thys mons')
+    where check = filter (`Map.notMember` mons) $ concatMap monNames monList
+          cycle = filter (\mon -> monadName mon `elem` monNames mon) monList
+          monNames MonadInstance{monadLifts = Left lifts} = map snd lifts
+          monList = Map.elems mons
+
+processCustThys :: Customisations -> XMLParser Customisations
+processCustThys (Customisations thys mons) = 
     let thys' = Map.map lookup thys in
     case check of
       [] -> return $ Customisations thys' mons
@@ -168,7 +219,11 @@ processCustomisations (Customisations thys mons) =
     where monNames CustomTheory{custThyMonads = (Left ns)} = ns
           lookup thy = thy{custThyMonads = Right $ map (fromJust . (flip Map.lookup mons)) (monNames thy)}
           check = filter (`Map.notMember` mons) $ concatMap monNames (Map.elems thys)
-                     
+
+-----------
+-- Input --
+-----------
+          
 parseInputElem :: Element -> XMLParser [InputLocation]
 parseInputElem el =  mapM parseInputLocElem $ onlyElems $ elContent el
 
@@ -177,11 +232,17 @@ parseInputLocElem el
     | elName el `elem`  map simpName ["file", "dir", "path"]
         = liftM FileLocation $ findSAttr "location" el
     | otherwise = fail $ "Unexpected element \"" ++ (show.qName.elName $ el) ++ "\"" ++ (showLine.elLine $ el) ++ "!"
-                       
+
+------------                       
+-- Output --
+------------
 
 parseOutputElem :: Element -> XMLParser OutputLocation
 parseOutputElem  el = liftM FileLocation $ findSAttr "location" el
 
+--------------------
+-- Customisations --
+--------------------
 
 partitionCustomisations :: [Customisation] -> ([Replace],[MonadInstance])
 partitionCustomisations [] = ([],[])
@@ -206,16 +267,9 @@ parseCustOptElem el
     | elName el == simpName "monadInstance" = liftM CustMonadInstance $ parseMonadInstanceElem el
     | otherwise = fail $ "Unexpected element \"" ++ (show.qName.elName $ el) ++ "\"" ++ (showLine.elLine $ el) ++ "!"
 
-
-
-findSingleSElem :: String -> Element -> XMLParser Element
-findSingleSElem name el = findSingleElem (simpName name) el
-
-findSingleElem :: QName -> Element -> XMLParser Element
-findSingleElem name el = case findChildren name el of
-                           [] -> failAt el $ "Required element \""++ (showName name) ++"\" not found"
-                           _:_:_ -> failAt el $ "Only one element \""++ (showName name) ++"\" is allowed"
-                           [e] -> return e
+---------------------
+-- Custom Theories --
+---------------------
 
 parseReplaceElem :: Element -> XMLParser Replace
 parseReplaceElem  el
@@ -224,26 +278,6 @@ parseReplaceElem  el
          mod <- parseModuleElem moduleEl
          custThy <- parseTheoryElem theoryEl
          return $  Replace mod custThy
-
-parseMonadInstanceElem :: Element -> XMLParser MonadInstance
-parseMonadInstanceElem el
-    = do name <- findSAttr "name" el
-         doEl <- findSingleSElem "doSyntax" el
-         constantsEl <- findSingleSElem "constants" el
-         doSyn <- parseDoSyntaxElem doEl
-         functions <- parseMonConstantsElem constantsEl
-         return $ MonadInstance name doSyn functions
-
-parseDoSyntaxElem :: Element -> XMLParser DoSyntax
-parseDoSyntaxElem el =
-    let [begin, end] = words . strContent $ el
-    in return $ DoParen begin end
-
-parseMonConstantsElem :: Element -> XMLParser MonadConstants
-parseMonConstantsElem = return . ExplicitMonadConstants . Map.fromList . pair . words . strContent
-    where pair [] = []
-          pair (a:b:rest) = (a,b) : pair rest
-
 
 parseTheoryElem :: Element -> XMLParser CustomTheory
 parseTheoryElem el = do thy <- findSAttr "name" el
@@ -254,13 +288,13 @@ parseTheoryElem el = do thy <- findSAttr "name" el
                         return $ CustomTheory (Theory thy)  (FileLocation path) constants types (Left monads)
     where getTypes = (findSingleSElem "types" el >>=
                       parseThyTypesElem)
-                     `catchError` (\_ -> return [])
+                     `defaultVal` []
           getMonads = (findSingleSElem "monads" el >>=
                        parseThyMonadsElem)
-                      `catchError` (\_ -> return [])
+                      `defaultVal` []
           getConstants = (findSingleSElem "constants" el >>=
                           parseThyConstantsElem)
-                         `catchError` (\_-> return [])
+                         `defaultVal` []
 
 parseThyConstantsElem :: Element -> XMLParser [String]
 parseThyConstantsElem el = return . words . strContent $ el
@@ -273,6 +307,69 @@ parseThyMonadsElem el = return .words . strContent $ el
                      
 parseModuleElem :: Element -> XMLParser Module
 parseModuleElem el = liftM Module $ findSAttr "name" el
+
+---------------------
+-- Monad Instances --
+---------------------
+
+parseMonadInstanceElem :: Element -> XMLParser MonadInstance
+parseMonadInstanceElem el
+    = do name <- findSAttr "name" el
+         doSyn <- getDoSyntax
+         constants <- getConstants
+         lifts <- getLifts
+         return $ MonadInstance name doSyn constants (Left lifts)
+    where getLifts = (findSingleSElem "lifts" el >>=
+                      parseLiftsElem)
+                     `defaultVal` []
+          getConstants = (findSingleSElem "constants" el >>= 
+                          parseMonConstantsElem)
+                         `defaultVal` noMonadConstants
+          getDoSyntax = findSingleSElem "doSyntax" el >>=
+                        parseDoSyntaxElem
+
+parseLiftsElem :: Element -> XMLParser [(String,String)]
+parseLiftsElem el = findSElems "lift" el >>= mapM parseLiftElem
+
+parseLiftElem :: Element -> XMLParser (String,String)
+parseLiftElem el = 
+    do from <- findSAttr "from" el
+       by <- findSAttr "by" el
+       return (by, from)
+
+parseDoSyntaxElem :: Element -> XMLParser DoSyntax
+parseDoSyntaxElem el =
+    let [begin, end] = words . strContent $ el
+    in return $ DoParen begin end
+
+parseMonConstantsElem :: Element -> XMLParser MonadConstants
+parseMonConstantsElem = return . ExplicitMonadConstants . Map.fromList . pair . words . strContent
+    where pair [] = []
+          pair (a:b:rest) = (a,b) : pair rest
+
+
+
+-------------------
+-- XML utilities -- 
+-------------------
+
+defaultVal :: XMLParser a -> a -> XMLParser a
+defaultVal parse val = parse `catchError` const (return val)
+
+findSingleSElem :: String -> Element -> XMLParser Element
+findSingleSElem name el = findSingleElem (simpName name) el
+
+findSingleElem :: QName -> Element -> XMLParser Element
+findSingleElem name el = case findChildren name el of
+                           [] -> failAt el $ "Required element \""++ (showName name) ++"\" not found"
+                           _:_:_ -> failAt el $ "Only one element \""++ (showName name) ++"\" is allowed"
+                           [e] -> return e
+
+findSElems :: String -> Element -> XMLParser [Element]
+findSElems name el = findElems (simpName name) el
+
+findElems :: QName -> Element -> XMLParser [Element]
+findElems name el = return $ findChildren name el
 
 simpName :: String -> QName
 simpName name = QName {qName = name, qURI = Nothing, qPrefix = Nothing}

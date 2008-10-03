@@ -129,6 +129,35 @@ getMonadInstance' ty =
       Nothing -> return Nothing
       Just name -> getMonadInstance name
 
+withFunctionType :: HsType -> ContextM a -> ContextM a
+withFunctionType ty contextm = 
+    do mbMon <- getMonadInstance' ty
+       withUpdatedContext monad (const mbMon) contextm
+
+withFunctionType' :: Maybe HsType -> ContextM a -> ContextM a
+withFunctionType' mbTy contextm = 
+    case mbTy of
+      Nothing -> contextm
+      Just ty -> withFunctionType ty contextm
+
+withPossibleLift :: HsExp -> ContextM a -> ContextM a
+withPossibleLift name contextm = 
+    do mbMon <- queryContext monad
+       case mbMon of
+         Nothing -> contextm
+         Just mon -> 
+             case varName name >>= getMonadLift mon of
+               Nothing -> contextm
+               newMon@(Just _) ->
+                   withUpdatedContext monad (const newMon) contextm
+    where uname (Qual _ n) = n
+          uname (UnQual n) = n
+          sname (HsIdent n) = n
+          sname (HsSymbol n) = n
+          qname (HsVar n) = Just n
+          qname _ = Nothing
+          varName = liftM sname . liftM uname . qname
+
 getCurrentMonadFunction :: HsQName -> ContextM HsQName
 getCurrentMonadFunction name =
     do mbMon <- queryContext monad
@@ -379,16 +408,12 @@ instance Convert HsDecl Isa.Cmd where
                                                         -- names are
                                                         -- equal, pick
                                                         -- first one.
-             monadInstance <- maybe
-                                (return Nothing)
-                                getMonadInstance'
-                                ftype
              name'      <- convert' (names!!0)
              fsig'      <- (case ftype of Nothing -> return Isa.TyNone
                                           Just t  -> convert' t) >>= (return . Isa.TypeSig name')
              fname'     <- convert (names!!0)           
              patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
-             bodies'    <- withUpdatedContext monad (const monadInstance) $
+             bodies'    <- withFunctionType' ftype $
                                 mapM convert bodies
              thy        <- queryContext theory
              return $ Isa.FunCmd [fname'] [fsig'] (zip3 (cycle [fname']) patterns' bodies')
@@ -541,21 +566,30 @@ instance Convert HsExp Isa.Term where
     convert' (HsTuple exps)    = convert (foldr hsk_pair (HsParen (last exps)) (init exps))
 
     convert' (HsApp exp1 exp2)
-        = do exp1' <- cnv exp1 ; exp2' <- cnv exp2
+        = do exp1' <- convert exp1
+             exp2' <- withPossibleLift exp1 $ convert exp2
              return (Isa.App exp1' exp2')
           where cnv app@(HsCon (Special (HsTupleCon n)))
                     | n < 2  = die ("Internal Error, (HsTupleCon " ++ show n ++ ")")
                     | n == 2 = convert app         -- pairs can be dealt with the usual way. 
                     | n > 2  = makeTupleDataCon n
-                cnv etc = convert etc
 
     convert' infixapp@(HsInfixApp _ _ _)
         = do (HsInfixApp exp1 op exp2) <- fixOperatorFixities infixapp
              exp1' <- convert exp1 
              op'   <- convert op
-             exp2' <- convert exp2
+             exp2' <- if isApp op
+                       then withPossibleLift exp1 $ convert exp2
+                       else convert exp2
              return (mkInfixApp exp1' op' exp2')
         where 
+          uname (Qual _ n) = n
+          uname (UnQual n) = n
+          isApp (HsQVarOp qname) =
+              case uname qname of
+                HsIdent _ -> False
+                HsSymbol sym -> sym == "$"
+          isApp _ = False
           mkInfixApp t1 op t2 = Isa.App (Isa.App op t1) t2
 
     convert' (HsLeftSection e qop)
