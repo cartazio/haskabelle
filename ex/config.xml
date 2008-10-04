@@ -6,6 +6,14 @@
   <output location="dst_thy" />
   <customisation>
     
+    <monadInstance name="MyStateM">
+      <doSyntax>do od</doSyntax>
+      <constants>
+	return return
+	liftM liftM
+      </constants>
+    </monadInstance>
+    
     <monadInstance name="MyErrorM">
       <doSyntax>doE odE</doSyntax>
       <constants>
@@ -15,14 +23,6 @@
       <lifts>
 	<lift from="MyStateM" by="lift" />
       </lifts>
-    </monadInstance>
-    
-    <monadInstance name="MyStateM">
-      <doSyntax>do od</doSyntax>
-      <constants>
-	return return
-	liftM liftM
-      </constants>
     </monadInstance>
     
     <replace>

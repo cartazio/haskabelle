@@ -12,4 +12,4 @@ type MyError = String
 
 type MyStateM = State MyState
 
-type MyErrorM= ErrorT MyError MyStateM
+type MyErrorM = ErrorT MyError MyStateM
