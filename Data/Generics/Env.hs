@@ -7,6 +7,7 @@ module Data.Generics.Env
 where
 
 import Data.Generics
+import Data.Monoid
 import Control.Monad
 import Control.Monad.Reader
 
@@ -29,6 +30,32 @@ instance Component (a, b) b where
 newtype EnvTrans e = EnvTrans (forall a. Data a => a -> [e -> e])
 
 {-|
+  This function turns a simple query function into a function
+  that returns a list repeating the original result as often as
+  there are immediate subterms in the argument.
+-}
+uniE :: (Data a) => (a -> b) -> (a -> [b])
+uniE query node = (flip replicate (query node) . glength) node
+
+{-|
+  This function turns constant environments into environment
+  transformations that accumulate the environment values.
+-}
+accE :: (Monoid e) => (a -> [e]) -> (a -> [e -> e])
+accE accum node = map (flip mappend) (accum node)
+
+{-|
+  This function turns constant environments into environment
+  transformations that replace the current environment with a new
+  value (for @Just@) or keep it (for @Nothing@)
+-}
+replE :: (a -> [Maybe e]) -> (a -> [e -> e])
+replE repl node = map replMb (repl node)
+    where replMb Nothing    old = old
+          replMb (Just new) _   = new
+
+
+{-|
   This transformer for environments of type @e@ will result in no changes to
   the environment during the generic traversal.
 -}
@@ -38,35 +65,13 @@ nilE = EnvTrans (flip replicate id. glength)
 
 {-|
   This function constructs a transformer for environments of type @e@ from
-  a function that produces an environment transformation function for a specific
-  type @a@. The environment transformation is applied uniformly to all immediate subterms
-  of the type @a@. For all other types the environment is left unchanged.
--}
-
-mkE :: (Data a) => (a -> (e -> e)) ->  EnvTrans e
-mkE trans = nilE `extE` trans
-
-{-|
-  This function constructs a transformer for environments of type @e@ from
   a function that produces a list of environment transformation function for a specific
   type @a@. The environment transformations from the list are applied to the respective immediate
   subterm of the data type @a@, i.e., the first element is applied to the first component
   of the type etc. For all other types the environment is left unchanged.
 -}
-mkSelE :: (Typeable a) => (a -> [e -> e]) ->  EnvTrans e
-mkSelE trans = nilE `extSelE` trans
-
-{-|
-  This function extends the given base transformer for environments of type @e@ by
-  a function that produces an environment transformation function for a specific
-  type @a@. The environment transformation is applied uniformly to all immediate subterms
-  of the type @a@. For all other types the environment is transformed as by the
-  base transformer that was given to this function.
--}
-
-extE :: (Data a) => EnvTrans e -> (a -> (e -> e)) ->  EnvTrans e
-extE (EnvTrans base) trans = EnvTrans ( base `extQ` trans')
-    where trans' node = (flip replicate (trans node) . glength) node
+mkE :: (Typeable a) => (a -> [e -> e]) ->  EnvTrans e
+mkE trans = nilE `extE` trans
 
 
 {-|
@@ -78,8 +83,8 @@ extE (EnvTrans base) trans = EnvTrans ( base `extQ` trans')
   base transformer that was given to this function.
 -}
 
-extSelE :: (Typeable a) => EnvTrans e -> (a -> [e -> e]) ->  EnvTrans e
-extSelE (EnvTrans base) trans = EnvTrans ( base `extQ` trans)
+extE :: (Typeable a) => EnvTrans e -> (a -> [e -> e]) ->  EnvTrans e
+extE (EnvTrans base) trans = EnvTrans ( base `extQ` trans)
 
 {-|
   This function takes a transformer for environments of type @c@ and
