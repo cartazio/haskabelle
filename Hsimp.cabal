@@ -9,9 +9,7 @@ Category:	Language
 Synopsis:	Translates Haskell into Isabelle
 
 Executable importer
-  Build-Depends:	uniplate base haskell-src-exts QuickCheck-2.0 template-haskell xml
   Exposed-modules:
     Importer
   Main-Is:         Main.hs
   Hs-Source-Dirs:  .
-  Extensions:	glasgow-exts

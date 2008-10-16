@@ -59,7 +59,7 @@ search_srcs = \
 get-field = $(word 2, $(shell ghc-pkg field $(1) ))
 
 # all source files
-SRCS = $(wildcard  $(SRC_DIR)/*.hs) $(call search_srcs,$(SRC_DIR)/Importer)
+SRCS = $(wildcard  $(SRC_DIR)/*.hs) $(call search_srcs,$(SRC_DIR)/Importer) $(call search_srcs,$(SRC_DIR)/Data)
 # the corresponding object files
 OBJS = $(SRCS:$(SRC_DIR)/%.hs=$(OUT_DIR)/%.o)
 # the corresponding hpc object files

@@ -1,5 +1,11 @@
 {-# OPTIONS_GHC -fglasgow-exts -XTemplateHaskell #-}
 
+{-|
+  This module provides data generators as used by /QuickCheck/ for types from external
+  libraries. Data generators of types defined in this application should be defined
+  locally with the definition of the type.
+-}
+
 module Importer.Test.Generators where
 
 import Importer.Test.Utils
@@ -10,6 +16,8 @@ import Control.Monad
 import Control.Monad.State
 import Language.Haskell.Exts.Syntax
 import Language.Haskell.Exts.Pretty
+import Data.Set (Set)
+import qualified Data.Set as Set hiding (Set)
 
 -- some example declarations
 {-
@@ -25,6 +33,10 @@ instance Arbitrary SrcLoc where
                    return $ SrcLoc a b c
     shrink (SrcLoc a b c) = [SrcLoc a' b' c' | a' <- shrink a, b' <- shrink b, c' <- shrink c]
 -}
+
+instance (Arbitrary a , Ord a) => Arbitrary (Set a) where
+    arbitrary = liftM Set.fromList  arbitrary 
+
 
 $(deriveArbitrary_shrink ''SrcLoc
   [|

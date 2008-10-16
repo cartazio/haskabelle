@@ -9,11 +9,16 @@ module Importer.Preprocess
 
 import Maybe
 import List
-import Control.Monad.State
+import Control.Monad.Writer
+import Control.Monad.Reader
 import Language.Haskell.Exts
 
 import Data.Generics.Biplate
 import Data.Generics.Str
+import Data.Generics.Env
+import Data.Generics
+import Data.Graph
+import Data.Tree
 
 import Importer.Utilities.Misc -- (concatMapM, assert)
 import Importer.Utilities.Hsk
@@ -28,7 +33,12 @@ import Importer.Adapt.Raw (used_const_names, used_thy_names)
 import Test.QuickCheck
 import qualified Test.QuickCheck.Monadic as QC (assert)
 import Test.QuickCheck.Monadic hiding (assert)
-import Data.Set (fromList, isSubsetOf)
+
+
+import Data.Map (Map)
+import qualified Data.Map as Map hiding (Map)
+import Data.Set (Set)
+import qualified Data.Set as Set hiding (Set)
         
 {-|
   This function preprocesses the given Haskell module to make things easier for the
@@ -37,11 +47,12 @@ import Data.Set (fromList, isSubsetOf)
 preprocessHsModule :: HsModule -> HsModule
 preprocessHsModule (HsModule loc modul exports imports topdecls)
     = HsModule loc modul exports imports topdecls4
-      where topdecls1    = map deguardify_HsDecl topdecls
-            (topdecls2, gensymcount) 
-                         = runGensym 0 (evalDelocalizer [] (concatMapM delocalize_topdecl topdecls1))
-            topdecls3    = map normalizePatterns_HsDecl topdecls2
-            topdecls4    = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls3) 
+      where topdecls1    =  map (whereToLet .  deguardify) topdecls
+            ((topdecls2 ,topdecls2'), gensymcount) 
+                         = runGensym 0 (evalDelocaliser Set.empty (delocaliseAll topdecls1))
+            topdecls3    = topdecls2 ++ topdecls2'
+            topdecls4    = map normalizePatterns_HsDecl topdecls3
+            topdecls5    = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls4) 
 --          modul'      = (let (Module n) = modul in Module (normalizeModuleName n))
 
 
@@ -60,188 +71,201 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
   We keep track of the names that are directly bound by a declaration,
   as functions must not close over them. See below for an explanation.
  -}
-newtype DelocalizerM a = DelocalizerM ( StateT [HsQName] GensymM a )
-    deriving (Monad, Functor, MonadFix, MonadState [HsQName])
+newtype DelocaliserM a = DelocaliserM (ReaderT HskNames (WriterT [HsDecl] GensymM) a )
+    deriving (Monad, Functor, MonadFix, MonadReader HskNames, MonadWriter [HsDecl])
 
 
-liftGensym :: GensymM a -> DelocalizerM a
-liftGensym = DelocalizerM . lift
 
-{-|
-  This function modifies the given delocaliser monad by adding the given
-  list of variables to the list of bound variables before and restoring
-  the original list afterwards.
--}
-withAddBindings :: [HsQName] -> DelocalizerM v -> DelocalizerM v
-withAddBindings names m = do
-  old <- getBindings
-  put (names ++ old)
-  r <- m
-  put old
-  return r
+addTopDecls :: [HsDecl] -> DelocaliserM ()
+addTopDecls = tell
 
-{-|
-  This function extracts the bindings from the @DelocalizerM@'s state.x
--}
-getBindings :: DelocalizerM [HsQName]
-getBindings = get
+addTopDecl :: HsDecl -> DelocaliserM ()
+addTopDecl = addTopDecls . (:[])
+
+liftGensym :: GensymM a -> DelocaliserM a
+liftGensym = DelocaliserM . lift . lift
+
 
 {-|
   This function executes the given delocaliser monad starting with an
   empty list of bound variables.
 -}
-evalDelocalizer :: [HsQName] -> DelocalizerM a -> GensymM a
-evalDelocalizer state (DelocalizerM d) = evalStateT d state
+evalDelocaliser :: HskNames -> DelocaliserM a -> GensymM (a,[HsDecl]) 
+evalDelocaliser state (DelocaliserM sm) =
+    let wm = runReaderT sm state in
+    runWriterT wm
 
+delocaliseAll :: GenericM DelocaliserM
+delocaliseAll = everywhereEnv boundNamesEnv delocalise
+
+delocalise :: GenericM DelocaliserM
+delocalise = mkM delocaliseLet
+             `extM` delocaliseClsDecl
+
+delocaliseClsDecl :: HsClassDecl -> DelocaliserM HsClassDecl
+delocaliseClsDecl clsDecl@(HsClsDecl decl) = 
+    do addTopDecl decl
+       return clsDecl
 
 {-|
-  This is the main function. It takes a declaration, and returns a list
-  of itself and all local declarations that were delocalised.
- -}
-delocalize_topdecl  :: HsDecl  -> DelocalizerM [HsDecl]
-delocalize_topdecl decl 
-    = do (decl', localdecls) <- delocalize_HsDecl decl
-         return (localdecls ++ [decl'])
-
-------------------------------------------------------------------------------
--- Helper functions. Return a properly alpha-converted version of their argument 
--- plus a list of globalized declarations.
-------------------------------------------------------------------------------
-
-{-|
-  This function delocalises all local declarations in the given Haskell declaration.
-  It returns the delocalised local declarations and the properly alpha-converted form
-  of the input.
+  This data structure is supposed to comprise the definition
+  of a function and possibly its type signature declaration.
 -}
-delocalize_HsDecl      :: HsDecl      -> DelocalizerM (HsDecl,     [HsDecl])
-delocalize_HsDecl (HsPatBind loc pat rhs wbinds)
-    = withAddBindings (extractBindingNs pat)
-      $ do (rhs', localdecls)  <- delocalize_HsRhs (letify wbinds rhs)
-           return (HsPatBind loc pat rhs' (HsBDecls []), localdecls)
-delocalize_HsDecl (HsFunBind matchs)
-    = do (matchs', localdecls) <- liftM (\(xs, ys) -> (xs, concat ys))
-                                  $ mapAndUnzipM delocalize_HsMatch matchs
-         return (HsFunBind matchs', localdecls)
-delocalize_HsDecl (HsClassDecl loc ctx classN varNs fundeps class_decls)
-    = do (decls', localdeclss) <- mapAndUnzipM delocalize_HsClassDecl class_decls
-         return (HsClassDecl loc ctx classN varNs fundeps decls', concat localdeclss)
-delocalize_HsDecl (HsInstDecl loc ctx qname tys inst_decls)
-    = do (decls', localdeclss) <- mapAndUnzipM delocalize_HsInstDecl inst_decls
-         return (HsInstDecl loc ctx qname tys decls', concat localdeclss)
-delocalize_HsDecl decl  = assert (check decl) $ return (decl,[])
-    -- Safety check to make sure we didn't miss anything.
-    where check decl   = and [null (universeBi decl :: [HsBinds]),
-                              null [ True | HsLet _ _ <- universeBi decl ]]
-          isHsLet expr = case expr of HsLet _ _ -> True; _ -> False
+data FunDef = FunDef { funBind :: HsDecl, funSig :: Maybe HsDecl, funFreeNames :: HskNames}
+
+funName :: FunDef -> HsName
+funName FunDef{funBind = HsFunBind(HsMatch _ name _ _ _  : _)} = name
 
 {-|
-  The argument is supposed to be a TypeSig here (will be checked later in "Importer.Convert").
-  It will be explicitly delocalised (i.e. included in the returned list) to make the later
-  process aware of its presence. (The stuff defined by a Class will be used  by other
-  functions, and the later process will barf on things it doesn't know about.
+  This function renames the function name of the given function definition.
 -}
-delocalize_HsClassDecl :: HsClassDecl -> DelocalizerM (HsClassDecl,[HsDecl])
-delocalize_HsClassDecl (HsClsDecl decl) 
-    = do (decl', localdecls) <- delocalize_HsDecl decl
-         return (HsClsDecl decl', localdecls ++ [decl'])
+renameFunDef :: [Renaming] -> FunDef -> FunDef
+renameFunDef ren def@(FunDef{ funBind = bind, funSig = sig})
+    = let bind' = renameHsDecl ren bind
+          sig' = liftM (renameHsDecl ren) sig
+      in def{ funBind = bind', funSig = sig'}
 
 {-|
-  This function delocalises all local declarations in the given instance-internal declaration.
-  It returns the delocalised local declarations and the properly alpha-converted form
-  of the input. The input is supposed to be a function binding.
+  This function partitions bindings into a pair (signature declarations, other bindings)
 -}
-delocalize_HsInstDecl  :: HsInstDecl  -> DelocalizerM (HsInstDecl, [HsDecl])
-delocalize_HsInstDecl (HsInsDecl decl)
-    = do (decl', localdecls) <- delocalize_HsDecl decl
-         return (HsInsDecl decl', localdecls)
+groupFunDefs :: [HsDecl] -> [FunDef]
+groupFunDefs decls = 
+    let (funBinds,funSigs) = partition isFunBind decls
+        funSigs' = concatMap flattenHsTypeSig funSigs
+        sigMap = Map.fromList $ map sigName funSigs'
+        mkFunDef bind@(HsFunBind (HsMatch _ name _ _ _  : _))
+            = FunDef bind (Map.lookup name sigMap) (extractFreeVarNs bind)
+    in map mkFunDef funBinds
+    where isFunBind (HsFunBind _) = True
+          isFunBind _ = False
+          sigName decl@(HsTypeSig _ [name] _) = (name,decl)
 
+
+funDefComponents :: [FunDef] -> [[FunDef]]
+funDefComponents funDefs =
+   let names = Set.fromList $ map (UnQual . funName) funDefs
+       graphConstr = map graphComp funDefs
+       graphComp funDef = (funDef,UnQual . funName $ funDef, Set.toList . Set.intersection names . funFreeNames $ funDef)
+       (graph, extr,_) = graphFromEdges graphConstr
+       forest = components graph
+    in map (map ((\(n,_,_) -> n) . extr) . flatten) forest
 
 {-|
-  This function delocalises all local declarations in the given function binding clause.
-  It returns the delocalised local declarations and the properly alpha-converted form
-  of the input.
+  This function adds an additional argument to the given match that contains the
+  environment of a closure.
 -}
-delocalize_HsMatch     :: HsMatch     -> DelocalizerM (HsMatch,    [HsDecl])
-delocalize_HsMatch (HsMatch loc name pats rhs wbinds)
-    = withAddBindings (extractBindingNs pats)
-      $ do (rhs', localdecls)  <- delocalize_HsRhs (letify wbinds rhs)
-           return (HsMatch loc name pats rhs' (HsBDecls []), localdecls)
+addEnvArgToMatch :: HsName  -- ^the name of the environment variable
+          -> [HsName] -- ^the names of the variables in the environment
+          -> HsMatch  -- ^the match that should be enriched by an environment argument
+          -> HsMatch  -- ^the resulting match
+addEnvArgToMatch envName closureNames match@(HsMatch loc name pats rhs binds)
+    = let boundNames = map uname (extractBindingNs pats)
+          toPat name = if name `elem` boundNames
+                       then HsPWildCard
+                       else HsPVar name
+          allBound = all (`elem` boundNames) closureNames
+          tuple = case closureNames of
+                    [closureName] -> toPat closureName
+                    _ -> HsPTuple (map toPat closureNames)
+          passing = (UnQual envName) `Set.member` extractFreeVarNs match
+          envArg = if passing then if allBound
+                                   then HsPVar envName
+                                   else HsPAsPat envName tuple
+                   else if allBound
+                        then HsPWildCard
+                        else tuple
+      in (HsMatch loc name (envArg:pats) rhs binds)                       
+    where uname (Qual _ name) = name
+          uname (UnQual name) = name
 
-
--- This . This is necessary, beacuse the body of the caller 
--- where these where-binds apply to, must also be alpha converted.
 {-|
-  Here the actual renaming takes place. The given local bindings (NOTE: implicit parameters are not 
-  supported) are delocalised. Additionally, the renamings that reflect how the bindings
-  were renamed are returned.
+  This function adds an additional argument to the given function binding that contains the
+  environment of a closure.
 -}
-delocalize_HsBinds :: HsBinds -> DelocalizerM (HsBinds, [HsDecl], [Renaming])
-delocalize_HsBinds (HsBDecls localdecls)
-    -- First rename the bindings that are established by LOCALDECLS to fresh identifiers,
-    -- then also rename all occurences (i.e. recursive invocations) of these bindings
-    -- within the body of the declarations.
-    = do renamings    <- liftGensym (freshIdentifiers (bindingsFromDecls localdecls))
-         let localdecls' = map (renameFreeVars renamings . renameHsDecl renamings) localdecls
-         localdecls'' <- concatMapM delocalize_topdecl localdecls'
-         closedVarNs  <- getBindings
-         return (HsBDecls [], checkForClosures closedVarNs localdecls'', renamings)
+addEnvArgToDecl :: HsName  -- ^the name of the environment variable
+                -> [HsName] -- ^the names of the variables in the environment
+                -> HsDecl  -- ^the match that should be enriched by an environment argument
+                -> HsDecl  -- ^the resulting match
+addEnvArgToDecl envName closureNames (HsFunBind matches)
+    = let matches' = map (addEnvArgToMatch envName closureNames) matches
+      in HsFunBind matches'
 
-{-|
-  This function delocalises local declarations in the given RHS. It returns the delocalised
-  declarations together with the properly alpha-converted input.
--}
-delocalize_HsRhs       :: HsRhs       -> DelocalizerM (HsRhs,      [HsDecl])
-delocalize_HsRhs (HsUnGuardedRhs exp)
-    = do (exp', decls) <- delocalize_HsExp exp
-         return (HsUnGuardedRhs exp', decls)
-delocalize_HsRhs (HsGuardedRhss guards)
-    = do (guards', declss) <- mapAndUnzipM delocalize_HsGuardedRhs guards
-         return (HsGuardedRhss guards', concat declss)
-{-|
-  This function delocalises local declarations in the given RHS guard clause. It returns the delocalised
-  declarations together with the properly alpha-converted input.
--}
-delocalize_HsGuardedRhs :: HsGuardedRhs -> DelocalizerM (HsGuardedRhs, [HsDecl])
-delocalize_HsGuardedRhs (HsGuardedRhs loc stmts clause_body)
-    = do (clause_body', decls) <- delocalize_HsExp clause_body
-         return (HsGuardedRhs loc stmts clause_body', decls)
+addPatBindsToMatch :: [HsDecl] -> HsMatch -> HsMatch
+addPatBindsToMatch patBinds match@(HsMatch loc name pats (HsUnGuardedRhs exp) binds)
+    = let neededPatBinds = filter patBindNeeded patBinds
+          shadowedPatBinds = map shadowPatBind neededPatBinds
+          rhs' = HsUnGuardedRhs (HsLet (HsBDecls shadowedPatBinds) exp)
+      in HsMatch loc name pats rhs' binds
+    where patBindNeeded patBind
+              = Set.null ( Set.fromList (extractBindingNs patBind)
+                           `Set.intersection` extractFreeVarNs patBind )
+          boundNames = Set.fromList (extractBindingNs pats)
+          shadowPatBind :: HsDecl -> HsDecl
+          shadowPatBind (HsPatBind loc pat rhs binds) 
+              = (HsPatBind loc (shadow pat) rhs binds) 
+          shadowPVar :: HsPat -> HsPat
+          shadowPVar var@(HsPVar name) 
+              | UnQual name `Set.member` boundNames = HsPWildCard
+              | otherwise = var
+          shadow :: GenericT
+          shadow = everywhere (mkT shadowPVar)
 
-{-|
-  This function delocalises the local declarations of the given case expression alternative.
-  It returns the delocalised declarations along with the properly alpha-converted input.
--}
-delocalize_HsAlt       :: HsAlt       -> DelocalizerM (HsAlt,      [HsDecl])
-delocalize_HsAlt (HsAlt loc pat (HsUnGuardedAlt body) wbinds)
-    = withAddBindings (extractBindingNs pat)
-        $ do (body', localdecls) <- delocalize_HsExp (letify wbinds body)
-             return (HsAlt loc pat (HsUnGuardedAlt body') (HsBDecls []), localdecls)                              
+addPatBindsToDecl :: [HsDecl] -> HsDecl -> HsDecl
+addPatBindsToDecl patBinds (HsFunBind matches) = 
+    let matches' = map (addPatBindsToMatch patBinds) matches
+    in HsFunBind matches'
 
-{-|
-  This function delocalises local declarations in the given expression (i.e.
-  let bindings). It returns the delocalised declarations along with the properly
-  alpha-converted input.
- -}
-delocalize_HsExp       :: HsExp       -> DelocalizerM (HsExp,      [HsDecl])
-delocalize_HsExp (HsLet binds body)
-    -- The let expression in Isabelle/HOL supports simple pattern matching. So we
-    -- differentiate between pattern and other (e.g. function) bindings; the first
-    -- ones are kept, the latter ones are converted to global bindings.
-    = let (patBinds, otherBinds) = splitPatBinds binds
-      in withAddBindings (extractBindingNs patBinds)
-         $ do (otherBinds', decls, renamings) <- delocalize_HsBinds otherBinds
-              (body', moredecls)              <- delocalize_HsExp (renameFreeVars renamings body)
-              return (letify (renameFreeVars renamings patBinds) body', decls ++ moredecls)
+delocaliseFunDefs :: [FunDef] -> DelocaliserM [HsDecl]
+delocaliseFunDefs funDefs = 
+    do envNames <- boundNames
+       let freeNames = Set.unions (map funFreeNames funDefs)
+           closureNames = freeNames `Set.intersection` envNames
+           closureNameList = Set.toList closureNames
+           closureUNameList = map uname closureNameList
+           funNames = map (UnQual . funName) funDefs
+       renamings <- liftGensym $ freshIdentifiers funNames
+       envUName <- liftGensym $ genHsName (HsIdent "env")
+       let envName = UnQual envUName
+           addEnv (orig,ren) = (orig, HsApp (HsVar ren) (HsVar envName))
+           envTuple = case closureNameList of
+                        [closureName] -> HsVar closureName
+                        _ -> HsTuple (map HsVar closureNameList)
+           addEnvTuple (orig,ren) = HsPatBind
+                                    (SrcLoc "" 0 0)
+                                    (HsPVar $ uname orig)
+                                    (HsUnGuardedRhs (HsApp (HsVar ren) envTuple))
+                                    (HsBDecls [])
+           withoutEnvTuple (orig,ren) = HsPatBind
+                                        (SrcLoc "" 0 0)
+                                        (HsPVar $ uname orig)
+                                        (HsUnGuardedRhs (HsVar ren))
+                                        (HsBDecls [])
+           subst = Map.fromList $ map addEnv renamings
+           funs = map funBind funDefs
+           funsRenamed = map (renameHsDecl renamings) funs
+           funsNoEnvPassing = map (renameFreeVars renamings) funsRenamed
+           funsEnvPassing = applySubst subst funsRenamed
+           funsDeloc = if null closureNameList 
+                       then funsNoEnvPassing
+                       else map (addEnvArgToDecl envUName closureUNameList) funsEnvPassing
+           newPatBinds = if null closureNameList
+                         then map withoutEnvTuple renamings
+                         else map addEnvTuple renamings
+       addTopDecls funsDeloc
+       return newPatBinds
+    where uname (Qual _ name) = name
+          uname (UnQual name) = name
 
-delocalize_HsExp (HsCase body alternatives)
-    = do (body', localdecls)    <- delocalize_HsExp body
-         (alternatives', decls) <- liftM (\(xs, ys) -> (xs, concat ys))
-                                      $ mapAndUnzipM delocalize_HsAlt alternatives
-         return (HsCase body' alternatives', localdecls ++ decls)
-    where
+delocaliseLet :: HsExp -> DelocaliserM HsExp
+delocaliseLet (HsLet binds exp) = 
+    let (HsBDecls patBinds, HsBDecls  funBinds) = splitPatBinds binds
+        funBinds' = map (addPatBindsToDecl patBinds) funBinds
+        funDefs = funDefComponents (groupFunDefs funBinds') 
+    in do newPatBinds <- mapM delocaliseFunDefs funDefs
+          return $ HsLet (HsBDecls $ (concat newPatBinds) ++ patBinds) exp
+delocaliseLet exp = return exp 
 
-delocalize_HsExp exp = descendM (\(e, ds) -> do (e', ds') <- delocalize_HsExp e
-                                                return (e', ds++ds')) 
-                         (exp, [])
+
 
 {-|
   This predicates checks whether the argument is a pattern binding.
@@ -249,6 +273,7 @@ delocalize_HsExp exp = descendM (\(e, ds) -> do (e', ds') <- delocalize_HsExp e
 isHsPatBind :: HsDecl -> Bool
 isHsPatBind (HsPatBind _ _ _ _) = True
 isHsPatBind _ = False
+
 
 {-|
   This function partitions bindings into a pair (pattern bindings, other bindings)
@@ -276,26 +301,6 @@ flattenHsTypeSig :: HsDecl -> [HsDecl]
 flattenHsTypeSig (HsTypeSig loc names typ)
     = map (\n -> HsTypeSig loc [n] typ) names
 
-
--- Closures over variables can obviously not be delocalized, as for instance
---
---    foo x = let bar y = y * x 
---            in bar 42
---
--- would otherwise be delocalized to the bogus
---
---    bar0 y = y * x
---
---    foo x  = bar0 42
---
-
-checkForClosures :: [HsQName] -> [HsDecl] -> [HsDecl]
-checkForClosures closedNs decls 
-    = map check decls
-    where check decl = let loc:_  = childrenBi decl :: [SrcLoc]
-                           freeNs = filter (flip isFreeVar decl) closedNs
-                       in if (null freeNs) then decl 
-                                           else error (Msg.free_vars_found loc freeNs)
 
 ---- Normalization of As-patterns
 
@@ -412,46 +417,69 @@ normalizeNames_HsDecl decl
 -- normalizeModuleName :: String -> String
 
 
+whereToLet :: HsDecl -> HsDecl
+whereToLet =
+    everywhere $ mkT 
+    whereToLetDecl `extT`
+    whereToLetMatch `extT`
+    whereToLetAlt
+
+isEmptyBinds :: HsBinds -> Bool
+isEmptyBinds (HsBDecls []) = True
+isEmptyBinds (HsIPBinds []) = True
+isEmptyBinds _ = False
+
+whereToLetDecl :: HsDecl -> HsDecl
+whereToLetDecl (HsPatBind loc pat rhs binds)
+    | not $ isEmptyBinds binds = 
+        case rhs of
+          HsGuardedRhss _ -> assert False undefined
+          HsUnGuardedRhs exp -> 
+              let rhs' = HsUnGuardedRhs $ HsLet binds exp
+              in HsPatBind loc pat rhs' (HsBDecls [])
+whereToLetDecl decl = decl
+
+whereToLetMatch :: HsMatch -> HsMatch
+whereToLetMatch match@(HsMatch loc name pat rhs binds)
+    | isEmptyBinds binds = match
+    | otherwise =
+        case rhs of
+          HsGuardedRhss _ -> assert False undefined
+          HsUnGuardedRhs exp -> 
+              let rhs' = HsUnGuardedRhs $ HsLet binds exp
+              in HsMatch loc name pat rhs' (HsBDecls [])
+
+whereToLetAlt :: HsAlt -> HsAlt
+whereToLetAlt (HsAlt loc pat alt binds) = 
+    case alt of
+      HsGuardedAlts _ -> assert False undefined
+      HsUnGuardedAlt exp -> 
+          let alt' = HsUnGuardedAlt $ HsLet binds exp
+          in HsAlt loc pat alt' (HsBDecls [])
+
+
 ---- Deguardification
 
-deguardify_HsDecl :: HsDecl -> HsDecl
+deguardify :: HsDecl -> HsDecl
+deguardify =
+    everywhere $ mkT
+    deguardifyRhs `extT` deguardifyAlts
 
-deguardify_HsDecl d@(HsFunBind matchs)
-    = HsFunBind (map deguardify_HsMatch matchs)
-    where deguardify_HsMatch (HsMatch loc name pats rhs where_binds)
-              = HsMatch loc name pats (deguardify_HsRhs rhs) (deguardify_HsBinds where_binds)
+deguardifyRhs :: HsRhs -> HsRhs
+deguardifyRhs rhs@(HsUnGuardedRhs _) = rhs
+deguardifyRhs (HsGuardedRhss guards) = HsUnGuardedRhs $ deguardifyGuards guards
 
--- deguardify_HsDecl (HsPatBind)
+deguardifyAlts :: HsGuardedAlts -> HsGuardedAlts
+deguardifyAlts alt@(HsUnGuardedAlt _) = alt
+deguardifyAlts (HsGuardedAlts guards) = 
+    HsUnGuardedAlt .
+    deguardifyGuards .
+    (map (\(HsGuardedAlt l ss e) -> HsGuardedRhs l ss e)) $
+    guards
 
-deguardify_HsDecl decl = descend deguardify_HsDecl (descendBi deguardify_HsExp decl)
-
-
-deguardify_HsRhs (HsUnGuardedRhs body)
-    = HsUnGuardedRhs (deguardify_HsExp body)
-deguardify_HsRhs (HsGuardedRhss guards)
-    = HsUnGuardedRhs (deguardify_HsGuardedRhss guards)
-
-deguardify_HsBinds (HsBDecls decls)
-    = HsBDecls (map deguardify_HsDecl decls)
-
--- deguardify_HsExp (HsCase)
-
-deguardify_HsExp :: HsExp -> HsExp
-deguardify_HsExp exp = descend deguardify_HsExp exp
-
-deguardify_HsAlt (HsAlt loc pat (HsUnGuardedAlt clause_body) wbinds)
-    = HsAlt loc pat (HsUnGuardedAlt clause_body) wbinds'
-    where wbinds' = deguardify_HsBinds wbinds
-
-deguardify_HsAlt (HsAlt loc pat (HsGuardedAlts guarded_alts) wbinds)
-    = let guarded_rhss = map (\(HsGuardedAlt l ss e) -> HsGuardedRhs l ss e) guarded_alts
-          wbinds'      = deguardify_HsBinds wbinds
-      in HsAlt loc pat (HsUnGuardedAlt (deguardify_HsGuardedRhss guarded_rhss)) wbinds'
-
-deguardify_HsGuardedRhss :: [HsGuardedRhs] -> HsExp
-deguardify_HsGuardedRhss guards
+deguardifyGuards guards
     = let (guards', otherwise_expr) = findOtherwiseExpr guards
-      in deguardify_HsExp (foldr deguardify otherwise_expr guards')
+      in foldr deguardify otherwise_expr guards'
     where 
       deguardify x@(HsGuardedRhs loc stmts clause) body
           = HsIf (makeGuardExpr stmts) clause body
@@ -469,35 +497,6 @@ deguardify_HsGuardedRhss guards
                  (guards', (HsGuardedRhs _ _ last_expr):_) -> (guards', last_expr)
                  (guards', [])                             -> (guards', bottom)
 
-
--- expandListComprehensions_HsDecl :: HsDecl -> HsDecl
--- expandListComprehensions_HsDecl decl
---     = descendBi expandListComprehensions_HsExp decl
-
--- expandListComprehensions_HsExp :: HsExp -> HsExp
--- expandListComprehensions_HsExp expr
---     = case expr of
---         HsListComp e stmts -> descend expandListComprehensions_HsExp 
---                                 (expandListCompr e stmts)
---         _ -> descend expandListComprehensions_HsExp expr
-
--- expandListCompr e stmts = expand e stmts
---     where
---       expand e [] = e
---       expand e (HsQualifier b : rest)
---           = hsk_if b (expand e rest) hsk_nil
---       expand e (HsGenerator loc pat exp : rest)
---           = let argN  = (HsIdent "arg")
---                 argqN = UnQual argN
---                 fn    = hsk_lambda loc [HsPVar argN]
---                          $ hsk_case loc (HsVar argqN) 
---                                [(pat,         (expand e rest)), 
---                                 (HsPWildCard, hsk_nil)]
---             in hsk_concatMap fn exp
---       expand e (HsLetStmt _ : _) 
---           = error "Let statements not supported in List Comprehensions."
-
-
 ------------------------------------------------------------
 ------------------------------------------------------------
 --------------------------- Tests --------------------------
@@ -509,21 +508,10 @@ noLocalDecl m = True
 
 prop_NoLocalDecl mod = noLocalDecl $ preprocessHsModule mod
 
-checkDelocM :: PropertyM DelocalizerM a -> Property
+checkDelocM :: PropertyM DelocaliserM a -> Property
 checkDelocM deloc = forAll arbitrary $ \ (NonNegative gsState, delocState) ->
-              monadic (evalGensym gsState . evalDelocalizer delocState) deloc
+              monadic (fst . evalGensym gsState . evalDelocaliser delocState) deloc
 
-{-|
-  'withAddBindings' really adds the names it was given and restores the old state afterwards.
--}
-prop_withAddBindings = checkDelocM $
-                       do newNames <- pick arbitrary
-                          monitor (classify (null newNames) "trivial")
-                          oldBs <- run getBindings
-                          interBs <- run $ withAddBindings newNames getBindings
-                          QC.assert $ fromList newNames `isSubsetOf` fromList interBs
-                          newBs <- run getBindings
-                          QC.assert $ fromList oldBs == fromList newBs
                           
 
 {-|

@@ -20,7 +20,7 @@ traverseDir dirpath op = do
 parseTest =let d = "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/src_hs/UseMonads.hs" in do
   res <- parseFile d
   case res of
-    ParseOk res -> putStrLn ("OK:\n" ++ show res)
+    ParseOk res -> putStrLn ("OK:\n" ++ (prettyShow res))
     ParseFailed loc msg -> do
               putStrLn ("Failed: " ++ d)
               putStrLn ("  Message: " ++ msg)

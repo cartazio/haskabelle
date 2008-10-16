@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fallow-undecidable-instances #-}
+
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 
@@ -11,19 +13,18 @@ module Importer.Utilities.Hsk
     (
      -- * Types
      Renaming,
+     HskNames,
      -- * Functions
       srcloc2string,
       extractBindingNs,
-      letify,
       freshIdentifiers,
       bindingsFromDecls,
       renameFreeVars,
-      renameHsDecl,
-      isFreeVar,
       bindingsFromPats,
       extractFreeVarNs,
       orderDeclsBySourceLine,
       renameHsPat,
+      renameHsDecl,
       module2FilePath,
       moduleFileLocation,
       namesFromHsDecl,
@@ -38,7 +39,10 @@ module Importer.Utilities.Hsk
       moduleHierarchyDepth,
       showModule,
       typeConName,
-      returnType
+      returnType,
+      boundNames,
+      boundNamesEnv,
+      applySubst
     ) where
   
 import Maybe
@@ -46,11 +50,19 @@ import List (sort)
 import Array (inRange)
 import Char (toLower)
 
-import Control.Monad.State
+import Control.Monad.Reader
 import Data.Generics.Basics
 import Data.Generics.PlateData
 import Language.Haskell.Exts
 
+
+import Data.Generics
+import Data.Generics.Env
+
+import Data.Map (Map)
+import qualified Data.Map as Map hiding (Map)
+import Data.Set (Set)
+import qualified Data.Set as Set hiding (Set)
 
 import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates, wordsBy, trace, prettyShow')
 import Importer.Utilities.Gensym
@@ -252,11 +264,16 @@ instance HasBindings HsDecl where
 
 instance HasBindings HsBinds where
     extractBindingNs (HsBDecls decls) = extractBindingNs decls
+    extractBindingNs (HsIPBinds (HsIPBind loc _ _ : _))
+        = error $ srcloc2string loc ++ ": Implicit parameter bindings are not supported!"
+    extractBindingNs (HsIPBinds []) = []
 
 instance HasBindings HsStmt where
     extractBindingNs (HsQualifier b)         = []
     extractBindingNs (HsGenerator _ pat exp) = extractBindingNs pat
     extractBindingNs (HsLetStmt binds)       = extractBindingNs binds
+
+
 
 {-|
   This function extracts from the given Haskell pattern a list of all Haskell variables
@@ -275,31 +292,169 @@ bindingsFromDecls decls = assert (not (hasDuplicates bindings)) bindings
           isTypeSig (HsTypeSig _ _ _) = True
           isTypeSig _                 = False
 
+
+type HskNames = Set HsQName
+newtype BindingM a = BindingM (Reader HskNames a)
+    deriving (Monad, MonadReader HskNames, Functor)
+
+runBindingM :: BindingM a -> a
+runBindingM (BindingM m) = runReader m Set.empty
+
+class BindingMonad m where
+    boundNames :: m HskNames
+    isBound :: HsQName -> m Bool
+    
+
+instance MonadReader HskNames m => BindingMonad m where
+    isBound name = ask >>=  (return . Set.member name)
+    boundNames = ask
+
+type Subst = Map HsQName HsExp
+
 {-|
-  Instances of this class are supposed to be pieces of Haskell syntax that can be 
-  decorated with a let expression
+  This function extracts the set of the names that are bound by
+  the given piece of Haskell Syntax.
 -}
-class Letifiable a where
-    {-|
-      Instance declaration are supposed to define only this method. This function is used
-      by the 'letify' default definition in the case the list of bindings is non-empty.
-      This approach avoids unnecessary syntax clutter
-     -}
-    letify' :: HsBinds -> a -> a
-    {-|
-      This function decorates the given the given Haskell syntax element with a let expression
-      using the given bindings.
-     -}
-    letify  :: HsBinds -> a -> a
-    letify (HsBDecls []) body = body
-    letify bindings body      = letify' bindings body
 
-instance Letifiable HsExp where
-    letify' bindings body = HsLet bindings body
+boundNamesEnv :: EnvTrans HskNames
+boundNamesEnv = mkEa fromExp
+             `extEau` fromAlt
+             `extEau` fromDecl
+             `extEau` fromMatch
+             `extEa` fromStmts
+    where fromExp :: HsExp -> [HskNames]
+          fromExp (HsLet binds _)
+              = let bound = Set.fromList $ extractBindingNs binds
+                in [bound,bound]
+          fromExp (HsLambda _ pats _)
+              = let bound = Set.fromList $ extractBindingNs pats
+                in [Set.empty,bound, bound]
+          fromExp (HsMDo stmts)
+              = let bound = Set.fromList $ extractBindingNs stmts
+                in [bound]
+          fromExp (HsListComp _ stmts)
+              = let bound = Set.fromList $ extractBindingNs stmts
+                in [bound, Set.empty]
+          fromExp exp = uniEloc exp Set.empty
+                            
+          fromAlt :: HsAlt -> HskNames
+          fromAlt (HsAlt _ pat _ _) = Set.fromList $ extractBindingNs pat
 
-instance Letifiable HsRhs where
-    letify' bindings (HsUnGuardedRhs body)  = HsUnGuardedRhs (letify bindings body)
+          fromDecl :: HsDecl -> HskNames
+          fromDecl (HsPatBind _ _ _ whereBinds) = Set.fromList $
+                                                       extractBindingNs whereBinds
+          fromDecl _ = Set.empty
 
+          fromMatch :: HsMatch -> HskNames
+          fromMatch (HsMatch _ _ pats _ whereBinds)
+              = Set.fromList $ 
+                extractBindingNs whereBinds ++ extractBindingNs pats
+
+          fromStmts :: [HsStmt] -> [HskNames]
+          fromStmts [] = []
+          fromStmts (HsGenerator loc pat exp : _)
+              = let bound = Set.fromList $ extractBindingNs pat
+                in [Set.empty, bound]
+          fromStmts (HsQualifier _ : _)
+              = [Set.empty, Set.empty]
+          fromStmts (HsLetStmt binds : _)
+              = let bound = Set.fromList $ extractBindingNs binds
+                in [bound, bound]
+
+{-|
+  This is a monadic query function that returns
+  if the argument is a free name a singleton set
+  containing that name and otherwise an empty set.
+-}
+freeNamesLocal :: GenericQ (BindingM HskNames)
+freeNamesLocal hs = case name hs of
+                Nothing -> return Set.empty
+                Just name ->
+                    do bound <- isBound name
+                       if bound
+                         then return Set.empty
+                         else return (Set.singleton name)
+    where name :: GenericQ (Maybe HsQName)
+          name = mkQ Nothing fromExp
+                  `extQ`fromQOp
+          fromExp :: HsExp -> Maybe HsQName
+          fromExp (HsVar name) = Just name
+          fromExp _ = Nothing
+                      
+          fromQOp :: HsQOp -> Maybe HsQName
+          fromQOp (HsQVarOp name) = Just name
+          fromQOp _ = Nothing
+
+
+{-|
+  This function returns the set of names of free variables
+  in the given pieces of Haskell syntax.
+-}
+extractFreeVarNs :: Data a => a -> HskNames
+extractFreeVarNs node = runBindingM $ everythingEnv boundNamesEnv (Set.union) freeNamesLocal node
+
+
+applySubst :: Subst -> GenericT
+applySubst subst node = runBindingM $ everywhereEnv boundNamesEnv (applySubstLocal subst) node
+
+applySubstLocal :: Subst -> GenericM BindingM
+applySubstLocal subst node =
+    do bound <- boundNames
+       let apply :: GenericT
+           apply = mkT applyExp
+
+           applyExp :: HsExp -> HsExp
+           applyExp exp@(HsVar name)
+               = case doSubst name of
+                   Nothing -> exp
+                   Just new -> new
+           applyExp exp@(HsInfixApp exp1 (HsQVarOp name) exp2)
+               = case doSubst name of
+                   Nothing -> exp
+                   Just new -> HsApp (HsApp new exp1) exp2
+           applyExp exp@(HsLeftSection exp' (HsQVarOp name))
+               = case doSubst name of
+                   Nothing -> exp
+                   Just new -> (HsApp new exp')
+           applyExp exp@(HsRightSection (HsQVarOp name) exp')
+               = case doSubst name of
+                   Nothing -> exp
+                   Just new -> (HsApp (HsApp (HsVar (UnQual (HsIdent "flip"))) new) exp')
+           applyExp exp = exp
+
+           doSubst :: HsQName -> Maybe HsExp
+           doSubst  name
+                 | name `Set.member` bound
+                     = Nothing
+                 | otherwise
+                     = (Map.lookup name subst)
+       return (apply node)
+
+renameFreeVarsLocal :: [Renaming] -> GenericM BindingM
+renameFreeVarsLocal renamings node =
+    do bound <- boundNames
+       let apply :: GenericT
+           apply = mkT applyExp
+                   `extT` applyQOp
+
+           applyExp :: HsExp -> HsExp
+           applyExp (HsVar name) = HsVar (ren name)
+           applyExp exp = exp
+                      
+           applyQOp :: HsQOp -> HsQOp
+           applyQOp (HsQVarOp name) = HsQVarOp (ren name)
+           applyQOp qop = qop
+           
+           ren :: HsQName -> HsQName
+           ren name
+                 | name `Set.member` bound
+                     = name
+                 | otherwise
+                     = fromMaybe name (lookup name renamings)
+       return (apply node)
+
+renameFreeVars :: Data a => [Renaming] -> a -> a
+renameFreeVars renamings node = runBindingM $ everywhereEnv boundNamesEnv (renameFreeVarsLocal renamings) node
 
 {-|
   This type is used to describe renamings of variables.
@@ -337,240 +492,6 @@ translate renamings name
     = let (UnQual name') = qtranslate renamings (UnQual name) in name'
 
 {-|
-  This function applies the given renaming to the given qualified operator.
--}
-qoptranslate :: [Renaming] -> HsQOp -> HsQOp
-qoptranslate renamings qop
-    = case qop of HsQVarOp qname -> HsQVarOp (qtranslate renamings qname)
-                  HsQConOp qname -> HsQConOp (qtranslate renamings qname)
-
-{-|
-  This function applies the given renaming to the given unqualified operator.
--}
-optranslate :: [Renaming] -> HsOp -> HsOp
-optranslate renamings op
-    = case op of HsVarOp qname -> HsVarOp (translate renamings qname)
-                 HsConOp qname -> HsConOp (translate renamings qname)
-
-{-|
-  ???
--}
-not_supported_conversion :: (Show a) => [Char] -> a -> b
-not_supported_conversion ctx junk
-    = error ("renameFreeVars (" ++ ctx ++ "): Fall through: " ++ show junk)
-
-
-{-|
-  Instances of this class are supposed to be pieces of Haskell syntax that allow
-  variable renamings to be applied on them.
- 
-  Note: Despite the name it is plain renaming of unbound variables. No alpha-conversion!
--}
-class AlphaConvertable a where
-    renameFreeVars :: [Renaming] -> a -> a
-
-instance AlphaConvertable HsOp where
-    renameFreeVars renams op
-        = case op of HsVarOp name -> HsVarOp (translate renams name)
-                     HsConOp name -> HsConOp (translate renams name)
-
-instance AlphaConvertable HsExp where
-    renameFreeVars renams hsexp
-        = case hsexp of
-            HsVar qname -> HsVar (qtranslate renams qname)
-            HsCon qname -> HsVar (qtranslate renams qname)
-            HsLit lit   -> HsLit lit
-            HsInfixApp e1 qop e2
-                -> HsInfixApp e1' qop' e2'
-                     where e1'  = renameFreeVars renams e1
-                           qop' = qoptranslate renams qop
-                           e2'  = renameFreeVars renams e2
-            HsLeftSection e qop
-                -> HsLeftSection e' qop'
-                     where e'   = renameFreeVars renams e
-                           qop' = qoptranslate renams qop
-            HsRightSection qop e
-                -> HsRightSection qop' e'
-                     where e'   = renameFreeVars renams e
-                           qop' = qoptranslate renams qop
-            HsLambda loc pats body
-                -> HsLambda loc pats body'
-                     where body' = let boundNs = bindingsFromPats pats
-                                   in renameFreeVars (shadow boundNs renams) body
-            HsCase exp alternatives
-                -> HsCase exp' alternatives'
-                     where declNs        = bindingsFromDecls (childrenBi alternatives :: [HsDecl])
-                           renams'       = shadow declNs renams
-                           exp'          = renameFreeVars renams' exp
-                           alternatives' = map (renameFreeVars renams') alternatives
-            HsLet (HsBDecls decls) body 
-                -> HsLet (HsBDecls decls') body'
-                      where declNs  = bindingsFromDecls decls
-                            renams' = shadow declNs renams
-                            body'   = renameFreeVars renams' body
-                            decls'  = map (renameFreeVars renams') decls
-            HsRecConstr qname updates
-                -> HsRecConstr qname updates
-            HsRecUpdate exp updates
-                -> HsRecUpdate (renameFreeVars renams exp) updates
-            HsListComp e stmts
-                -> HsListComp e' stmts'
-                   where stmts'  = renameFreeVars renams stmts
-                         boundNs = concatMap extractBindingNs stmts
-                         renams' = shadow boundNs renams
-                         e'      = renameFreeVars renams' e
-            HsDo stmts
-                 -> HsDo $ renStmts renams stmts
-                   where renStmts _ [] = []
-                         renStmts renams (stmt:stmts) = 
-                             let stmt' = renameFreeVars renams stmt
-                                 binds = extractBindingNs stmt
-                                 renams' = shadow binds renams
-                                 stmts' = renStmts renams' stmts
-                             in stmt':stmts'
-            exp -> assert (isTriviallyDescendable exp)
-                     $ descend (renameFreeVars renams :: HsExp -> HsExp) exp
-{-|
-  This predicate decides whether the given Haskell expression can be traversed
-  using uniplates 'descend' function.
--}
-
-isTriviallyDescendable :: HsExp -> Bool
-isTriviallyDescendable hsexp 
-    = case hsexp of
-        HsApp      _ _   -> True
-        HsNegApp   _     -> True
-        HsIf       _ _ _ -> True
-        HsTuple    _     -> True
-        HsList     _     -> True
-        HsParen    _     -> True
-        _                -> False -- rest is not supported at the moment.
-
-instance AlphaConvertable HsStmt where
-    renameFreeVars renams stmt = 
-        case stmt of
-          HsGenerator loc pat exp ->
-              HsGenerator loc pat exp'
-                  where exp' = renameFreeVars renams exp
-          HsQualifier exp ->
-              HsQualifier exp'
-                  where exp' = renameFreeVars renams exp
-          HsLetStmt binds ->
-              HsLetStmt binds'
-                  where binds' = renameFreeVars renams binds
-
-instance AlphaConvertable HsDecl where
-    renameFreeVars renams hsdecl
-        = case hsdecl of
-            HsFunBind matchs        -> HsFunBind $ map (renameFreeVars renams) matchs
-            HsTypeSig loc names typ -> HsTypeSig loc names typ
-            HsPatBind loc pat (HsUnGuardedRhs body) binds
-                -> HsPatBind loc pat (HsUnGuardedRhs body') binds'
-                      where (HsLet binds' body') = renameFreeVars renams' (HsLet binds body)
-                            renams' = shadow (bindingsFromPats [pat]) renams
-            HsClassDecl loc ctx classN varNs fundeps class_decls
-                -> HsClassDecl loc ctx classN varNs fundeps decls'
-                      where decls'  = map (renameFreeVars renams') class_decls
-                            renams' = shadow [UnQual classN] renams
-            HsInstDecl loc ctx qname tys inst_decls
-                -> HsInstDecl loc ctx qname tys decls'
-                      where decls'  = map (renameFreeVars renams') inst_decls
-                            renams' = shadow [qname] renams
-            _   -> not_supported_conversion "HsDecl" hsdecl
-
-instance AlphaConvertable HsClassDecl where
-    renameFreeVars renams (HsClsDecl decl)
-        = HsClsDecl (renameFreeVars renams decl)
-    renameFreeVars _ junk = not_supported_conversion "HsClassDecl" junk
-
-instance AlphaConvertable HsInstDecl where
-    renameFreeVars renams (HsInsDecl decl)
-        = HsInsDecl (renameFreeVars renams decl) 
-    renameFreeVars _ junk = not_supported_conversion "HsClassDecl" junk
-
-instance AlphaConvertable HsAlt where
-    renameFreeVars renams hsalt@(HsAlt _ pat _ _)
-        = fromHsPatBind (renameFreeVars renams (toHsPatBind hsalt))
-          where
-            toHsPatBind :: HsAlt -> HsDecl
-            toHsPatBind (HsAlt loc pat guards wherebinds)
-                = HsPatBind loc pat (guards2rhs guards) wherebinds
-                  where guards2rhs (HsUnGuardedAlt body) = HsUnGuardedRhs body
-
-            fromHsPatBind (HsPatBind loc pat rhs wherebinds)
-                = HsAlt loc pat (rhs2guards rhs) wherebinds
-                  where rhs2guards (HsUnGuardedRhs body) = HsUnGuardedAlt body
-
-
-instance AlphaConvertable HsMatch where
-    renameFreeVars renams (HsMatch loc name pats rhs (HsBDecls decls))
-        = HsMatch loc name pats rhs' (HsBDecls decls')
-      where patNs  = extractBindingNs pats
-            declNs = extractBindingNs decls 
-            rhs'   = renameFreeVars (shadow ([UnQual name] ++ patNs ++ declNs) renams) rhs
-            decls' = map (renameFreeVars (shadow (UnQual name : declNs) renams)) decls
-
-instance AlphaConvertable HsBinds where
-    renameFreeVars renams (HsBDecls decls) = HsBDecls decls'
-        where declNs = extractBindingNs decls
-              decls' = map (renameFreeVars (shadow declNs renams)) decls
-    renameFreeVars _ junk = not_supported_conversion "HsBinds" junk
-
-instance AlphaConvertable HsRhs where
-    renameFreeVars renams (HsUnGuardedRhs exp)
-        = HsUnGuardedRhs (renameFreeVars renams exp)
-    renameFreeVars _ junk = not_supported_conversion "HsBinds" junk
-
-instance AlphaConvertable [HsStmt] where
-    renameFreeVars renams [] = []
-    renameFreeVars renams (HsQualifier b : rest)
-        = HsQualifier (renameFreeVars renams b) : renameFreeVars renams rest
-    renameFreeVars renams (HsGenerator loc pat exp : rest)
-        = let exp'    = renameFreeVars renams exp
-              renams' = shadow (extractBindingNs pat) renams
-              rest'   = renameFreeVars renams' rest
-          in HsGenerator loc pat exp' : rest'
-    renameFreeVars renams (HsLetStmt binds : rest)
-        = let (HsLet binds' _)  =  renameFreeVars renams (HsLet binds (HsLit (HsInt 42)))
-              renams'           =  shadow (extractBindingNs binds') renams
-              rest'             =  renameFreeVars renams' rest
-          in HsLetStmt binds' : rest'
-
-{-|
-  This function applies the given renaming to the variables bound by the given
-  declaration.
--}
-renameHsDecl :: [Renaming] -> HsDecl -> HsDecl
-
-renameHsDecl renams (HsTypeDecl loc tyconN tyvarNs typ)
-    = HsTypeDecl loc (translate renams tyconN) tyvarNs typ
-
-renameHsDecl renams (HsDataDecl loc kind context tyconN tyvarNs condecls derives)
-    = HsDataDecl loc kind context (translate renams tyconN) tyvarNs condecls derives
-
-renameHsDecl renams (HsInfixDecl loc assoc prio ops)
-    = HsInfixDecl loc assoc prio (map (optranslate renams) ops)
-
-renameHsDecl renams (HsTypeSig loc names typ)
-    = HsTypeSig loc (map (translate renams) names) typ
-
-renameHsDecl renams (HsFunBind matchs)
-    = HsFunBind (map rename matchs)
-      where rename (HsMatch loc name pats rhs wbinds)
-                = HsMatch loc (translate renams name) pats rhs wbinds
-
-renameHsDecl renams (HsPatBind loc pat rhs wbinds)
-    = HsPatBind loc (renameHsPat renams pat) rhs wbinds
-
-renameHsDecl renams (HsClassDecl loc ctx classN varNs fundeps class_decls)
-    = HsClassDecl loc ctx (translate renams classN) varNs fundeps class_decls
-
-renameHsDecl renams (HsInstDecl loc ctx classqN tys inst_decls)
-    = HsInstDecl loc ctx (qtranslate renams classqN) tys inst_decls
-
-renameHsDecl _ junk = error ("renameHsDecl: Fall through: " ++ show junk)
-
-{-|
   This function applies the given renaming to all variables in the given
   pattern.
 -}
@@ -593,33 +514,24 @@ renameHsPat renams pat
         HsPWildCard                 -> HsPWildCard
         _ -> error ("renameHsPat: Fall through: " ++ show pat)
 
-
--- Kludge.
---
-
 {-|
-  ???
+  This function applies the given renaming to names bound by the given
+  Haskell declaration (only type signatures, function and pattern bindings
+  are affected).
 -}
-isFreeVar :: (Data from , AlphaConvertable from) =>
-             HsQName -> from -> Bool
-isFreeVar (Special _) _ = False
-isFreeVar qname body
-    = occurs qname body && let body' = renameFreeVars (evalGensym 9999 (freshIdentifiers [qname])) body
-                           in not (occurs qname body')
-    where occurs qname body 
-              = let varNs   = [ qn | HsVar qn <- universeBi body ]
-                    varopNs = [ qn | HsQVarOp qn <- universeBi body ] 
-                              ++ [ qn | HsQConOp qn <- universeBi body ]
-                in qname `elem` varNs || qname `elem` varopNs
-
-
-{-|
-  ???
--}
-extractFreeVarNs :: (Data from, AlphaConvertable from) =>
-                    from -> [HsQName]
-extractFreeVarNs thing
-    = filter (flip isFreeVar thing) (universeBi thing :: [HsQName])
+renameHsDecl :: [Renaming] -> HsDecl -> HsDecl
+renameHsDecl renamings decl = 
+    case decl of
+      HsTypeSig loc names typ
+          -> HsTypeSig loc (map (translate renamings) names) typ
+      HsFunBind matches
+          -> HsFunBind (map renMatch matches)
+      HsPatBind loc pat rhs binds 
+          -> HsPatBind loc (renameHsPat renamings pat) rhs binds
+      _ -> decl
+    where renMatch :: HsMatch -> HsMatch
+          renMatch (HsMatch loc name pats rhs binds)
+                   = HsMatch loc (translate renamings name) pats rhs binds
 
 {-|
   This function compares the two given declarations w.r.t. the 
@@ -641,38 +553,3 @@ getSourceLine decl
 
 showModule :: Module -> String
 showModule (Module name) = name
-
-------------------------------------------------------------------
--- In the following we define predicates that define the supported
--- syntax fragment 
-------------------------------------------------------------------
-
-isValidInput_module :: HsModule -> [String]
-isValidInput_module (HsModule _loc _name _exp _imp decls) = concatMap isValidInput_topDecl decls
-
-isValidInput_topDecl :: HsDecl -> [String]
--- generally supported
-isValidInput_topDecl (HsTypeDecl _loc _name _args _type) = []
-isValidInput_topDecl (HsDataDecl _loc _dataOrNew _cxt _name _args _constrDecls _deriving) = []
-isValidInput_topDecl (HsInfixDecl _loc _assoc _prec _ops) = []
-isValidInput_topDecl (HsClassDecl _loc _cxt _name _args _funcDeps _decls) = []
-isValidInput_topDecl (HsInstDecl _loc _cxt _name _args _decls) = []
-isValidInput_topDecl (HsDerivDecl  _loc _cxt _name _args) = []
-isValidInput_topDecl (HsTypeSig _loc _names _type) = []
-isValidInput_topDecl (HsFunBind _matches) = []
-isValidInput_topDecl (HsPatBind _loc _pat _rhs _whereBinds) = []
--- generally unsupported
-isValidInput_topDecl (HsGDataDecl loc _dataOrNew _cxt _name _args _kind _gadtDecls) = [(srcloc2string loc) ++ ":\nGADTs are not supported"]
-isValidInput_topDecl (HsTypeFamDecl  loc _name _arg _kind) = [(srcloc2string loc) ++ ":\nType family declarations are not supported"]
-isValidInput_topDecl (HsDataFamDecl  loc _cxt _name _args _kind) = [(srcloc2string loc) ++ ":\nDatatype family declarations are not supported"]
-isValidInput_topDecl (HsTypeInsDecl  loc _type1 _type2) = [(srcloc2string loc) ++ ":\nType ins declarations are not supported"]
-isValidInput_topDecl (HsDataInsDecl  loc _dataOrNew _type _constrDecls _deriving) =  [(srcloc2string loc) ++ ":\nDatatype ins declarations are not supported"]
-isValidInput_topDecl (HsGDataInsDecl loc _dataOrNew _type _kind _gadtDecls) = [(srcloc2string loc) ++ ":\nGADT ins declarations are not supported"]
-isValidInput_topDecl (HsDefaultDecl  loc _types) = [(srcloc2string loc) ++ ":\nDefault type declarations are not supported"]
-isValidInput_topDecl (HsSpliceDecl   loc _splice) = [(srcloc2string loc) ++ ":\nSplice declarations are not supported"]
-isValidInput_topDecl (HsForImp loc _callConv _safety _string _name _type) =  [(srcloc2string loc) ++ ":\nFor imps are not supported"]
-isValidInput_topDecl (HsForExp loc _callConv _string _name _type) = [(srcloc2string loc) ++ ":\nFor exps are not supported"]
-
-
-
-

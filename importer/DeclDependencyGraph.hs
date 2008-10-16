@@ -10,6 +10,7 @@ import Maybe
 import List (groupBy, sortBy, intersect)
 
 import Data.Graph
+import qualified Data.Set as Set
 import Data.Tree
 import Language.Haskell.Exts
 
@@ -51,7 +52,7 @@ makeEdgesFromHsDecl globalEnv modul decl
                                       envN = Env.fromHsk hsqname
                                   in Env.resolveEnvName_OrLose globalEnv mID envN)
       in do defname <- namesFromHsDecl decl
-            let used_names = extractFreeVarNs decl
+            let used_names = Set.toList $ extractFreeVarNs decl
             return (decl, canonicalize defname, map canonicalize used_names)
              
 {-|

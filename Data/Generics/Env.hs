@@ -4,6 +4,24 @@
 -}
 
 module Data.Generics.Env
+    ( EnvTrans,
+      everywhereEnv,
+      everythingEnv,
+      mkE,
+      mkEa,
+      mkEu,
+      mkEau,
+      extE,
+      extEa,
+      extEu,
+      extEau,
+      liftE,
+      extByC,
+      uniE,
+      uniEloc,
+      replE,
+      accE
+    )
 where
 
 import Data.Generics
@@ -35,7 +53,16 @@ newtype EnvTrans e = EnvTrans (forall a. Data a => a -> [e -> e])
   there are immediate subterms in the argument.
 -}
 uniE :: (Data a) => (a -> b) -> (a -> [b])
-uniE query node = (flip replicate (query node) . glength) node
+uniE query node = replicate (glength node) (query node)
+
+{-|
+  This function is similar to 'uniE' but it can be used locally, i.e.,
+  in the definition of a particular environment transformer function.
+  It returns a list repeating second argument as often as
+  there are immediate subterms in first argument value the argument.
+-}
+uniEloc :: (Data a) => a -> b -> [b]
+uniEloc node env = replicate (glength node) env
 
 {-|
   This function turns constant environments into environment
@@ -74,6 +101,16 @@ mkE :: (Typeable a) => (a -> [e -> e]) ->  EnvTrans e
 mkE trans = nilE `extE` trans
 
 
+mkEu :: (Data a) => (a -> e -> e) -> EnvTrans e
+mkEu trans = mkE $ uniE trans
+
+mkEa :: (Typeable a, Monoid e) => (a -> [e]) -> EnvTrans e
+mkEa trans = mkE $ accE trans
+
+mkEau :: (Data a, Monoid e) => (a -> e) -> EnvTrans e
+mkEau trans = mkEa $ uniE trans
+
+
 {-|
   This function extends the given base transformer for environments of type @e@ by
   a function that produces a list of environment transformation function for a specific
@@ -85,6 +122,16 @@ mkE trans = nilE `extE` trans
 
 extE :: (Typeable a) => EnvTrans e -> (a -> [e -> e]) ->  EnvTrans e
 extE (EnvTrans base) trans = EnvTrans ( base `extQ` trans)
+
+extEa :: (Monoid e, Typeable a) =>
+         EnvTrans e -> (a -> [e]) -> EnvTrans e
+extEa base ext = base `extE` accE ext
+
+extEu :: (Data a) => EnvTrans e -> (a -> e -> e) -> EnvTrans e
+extEu base ext = base `extE` uniE ext
+
+extEau :: (Data a, Monoid e) => EnvTrans e -> (a -> e) -> EnvTrans e
+extEau base ext = base `extEa` uniE ext
 
 {-|
   This function takes a transformer for environments of type @c@ and
