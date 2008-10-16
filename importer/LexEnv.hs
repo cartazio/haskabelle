@@ -232,6 +232,7 @@ data Constant = Variable LexInfo
   different kinds of type declaration.
 -}
 data Type = Data  LexInfo [Constant] -- Data lexinfo [constructors]
+          | TypeDef LexInfo
           | Class LexInfo ClassInfo
           | Instance LexInfo [InstanceInfo]
   deriving (Eq, Ord, Show)
@@ -365,6 +366,7 @@ lexInfoOf identifier
       lexInfoOf_typ (Class i _)        = i
       lexInfoOf_typ (Instance i _)     = i
       lexInfoOf_typ (Data i _)         = i
+      lexInfoOf_typ (TypeDef i )         = i
 
 
 {-|
@@ -868,6 +870,7 @@ computeConstantMappings modul decl
                      in Function (makeLexInfo moduleID (fromHsk n) typ)
                  mkDataCon nameID etc
                    = error ("mkDataCon: " ++ show nameID ++ "; " ++ show etc)
+           HsTypeDecl _ typeName _ _ -> [Type (TypeDef defaultLexInfo)]
       
 {-|
   This function merges two module environments provided they have the same name (otherwise,

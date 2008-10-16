@@ -330,6 +330,9 @@ instance Printer Isa.Cmd where
           where pp Isa.AssocNone  = text ""
                 pp Isa.AssocLeft  = text "l"
                 pp Isa.AssocRight = text "r"
+    
+    pprint' (Isa.TypesCmd aliases) = text "type" <+> vcat (map pp aliases)
+        where pp (spec, typ) = pprint' spec <+> equals <+> pprint' typ
 
 instance Printer Isa.Theory where
     pprint' (Isa.Theory name) = text name

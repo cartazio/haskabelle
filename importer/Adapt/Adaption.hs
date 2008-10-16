@@ -245,8 +245,9 @@ instance Adapt Isa.Cmd where
         where setModuleID v state
                   = state { currentModuleID = v }
 
+    adapt (Isa.TypesCmd aliases) = liftM Isa.TypesCmd (mapM adpt aliases)
+        where adpt (spec,typ) = liftM2 (,) (return spec) (adaptType typ)
     adapt c@(Isa.RecordCmd _ _)      = not_implemented c
-    adapt c@(Isa.TypesCmd _)         = not_implemented c
     adapt c@(Isa.InfixDeclCmd _ _ _) = not_implemented c
     adapt c@(Isa.Comment _)          = return c
 
