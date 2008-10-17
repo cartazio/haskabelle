@@ -42,7 +42,9 @@ consts
   "Prelude.([])"        "List.Nil"
   "Prelude.(:)"         "List.Cons"
   "Prelude.(!!)"        "List.nth"
-
+  
+  "Prelude.null"	"List.null"
+  "Prelude.zip"		"List.zip"
   "Prelude.head"        "List.hd"
   "Prelude.tail"        "List.tl"
   "Prelude.map"         "List.map"
@@ -55,6 +57,7 @@ consts
   "Prelude.filter"      "List.filter"
   "Prelude.length"      "List.length"
   "Prelude.foldl"       "List.foldl"
+  "Prelude.and"		"Prelude.list_and"
   "Prelude.foldr"       "Prelude.hsk_foldr"
   "Prelude.zipWith"     "Prelude.zipWith"
 

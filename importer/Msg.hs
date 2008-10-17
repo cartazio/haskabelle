@@ -20,7 +20,7 @@ quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
 
 printEnv env = "The Global Environment looked like:\n"
-               ++ prettyShow' "globalenv" env
+        --       ++ prettyShow' "globalenv" env
 
 assoc_mismatch op1 assoc1 op2 assoc2
     = let { op1' = quote op1; assoc1' = quote assoc1; } in
@@ -45,7 +45,7 @@ duplicate_import ms
     = "Duplicate in imported modules: " ++ show ms
 
 failed_parsing loc msg
-    = srcloc2string loc ++ ": " ++ msg
+    = srcloc2string loc  -- ++ ": " ++ msg
 
 cycle_in_dependency_graph moduleNs
     = "Dependency graph is not a DAG. In particular, a cycle was found between\n"

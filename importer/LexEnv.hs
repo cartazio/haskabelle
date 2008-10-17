@@ -231,7 +231,7 @@ data Constant = Variable LexInfo
   This data structure represents identifier information for 
   different kinds of type declaration.
 -}
-data Type = Data  LexInfo [Constant] -- Data lexinfo [constructors]
+data Type = Data  LexInfo [Constant]
           | TypeDef LexInfo
           | Class LexInfo ClassInfo
           | Instance LexInfo [InstanceInfo]
@@ -869,7 +869,7 @@ computeConstantMappings modul decl
                    = let typ = foldr EnvTyFun tycon (map (\(HsUnBangedTy t) -> fromHsk t) args)
                      in Function (makeLexInfo moduleID (fromHsk n) typ)
                  mkDataCon nameID etc
-                   = error ("mkDataCon: " ++ show nameID ++ "; " ++ show etc)
+                   = error ("mkDataCon: " ++ show nameID ++ ";\n" ++ show etc)
            HsTypeDecl _ typeName _ _ -> [Type (TypeDef defaultLexInfo)]
       
 {-|
@@ -989,7 +989,7 @@ makeGlobalEnv_FromHsModules ms  custMods
     = do mapping <- mapM (\ m@(HsModule _ modul _ _ _) ->
                          do env <- makeModuleEnv_FromHsModule m
                             return (fromHsk modul,env) ) ms
-         let custMapping = map (\(m, ct) -> let mid = fromHsk m in (mid, makeModuleEnv_FromCustThy mid ct)) custMods
+         let custMapping = map (\(m, ct) -> let mid = fromHsk m in (mid, makeModuleEnv_FromCustThy mid ct)) (Map.toList custMods)
          return $ GlobalEnv $ Map.fromListWith failDups (mapping ++ custMapping)
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 

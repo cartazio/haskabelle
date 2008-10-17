@@ -36,6 +36,7 @@ module Importer.Utilities.Hsk
       hsk_pair,
       hsk_negate,
       isHaskellSourceFile,
+      isOperator,
       moduleHierarchyDepth,
       showModule,
       typeConName,
@@ -103,6 +104,14 @@ typeConName (HsTyApp (HsTyCon qname) _) =
       _                     -> Nothing
 typeConName _ = Nothing
 
+
+isHskSymbol :: Char -> Bool
+isHskSymbol = flip elem ['_', ':', '"', '[', ']', '!', '#', '$', '%', '&',
+                         '*', '+', '.', '/', '<', '=', '>', '?', '@',
+                         '\\', '^', '|', '-', '~' ]
+
+isOperator :: String -> Bool
+isOperator = all isHskSymbol
 
 {-|
   This function takes a Haskell expression and applies it to the argument

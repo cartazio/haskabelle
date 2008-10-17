@@ -46,6 +46,12 @@ where
 | "zipWith _ _ _ = Nil"
 
 
+fun list_and :: "(bool list) \<Rightarrow> bool"
+  where
+  "list_and Nil = True"
+| "list_and (True # xs) = list_and xs"
+| "list_and (False # _) = False"
+
 constdefs
   fun_app :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 10)
   "f $ x \<equiv> f x"

@@ -207,6 +207,8 @@ addPatBindsToMatch patBinds match@(HsMatch loc name pats (HsUnGuardedRhs exp) bi
           shadowPVar var@(HsPVar name) 
               | UnQual name `Set.member` boundNames = HsPWildCard
               | otherwise = var
+          shadowPVar oth = oth 
+                            
           shadow :: GenericT
           shadow = everywhere (mkT shadowPVar)
 
@@ -214,6 +216,9 @@ addPatBindsToDecl :: [HsDecl] -> HsDecl -> HsDecl
 addPatBindsToDecl patBinds (HsFunBind matches) = 
     let matches' = map (addPatBindsToMatch patBinds) matches
     in HsFunBind matches'
+addPatBindsToDecl _ decl@(HsTypeSig _ _ _) = decl
+addPatBindsToDecl patBinds decl = error $ "Function binding expected but found:\n" ++ prettyPrint decl
+     
 
 delocaliseFunDefs :: [FunDef] -> DelocaliserM [HsDecl]
 delocaliseFunDefs funDefs = 

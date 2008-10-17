@@ -52,7 +52,7 @@ import qualified Data.Map as Map hiding (Map)
   This type represents sets of custom translations, i.e., mappings from Haskell
   modules to custom theories.
 -}
-type CustomTranslations = [CustomTranslation]
+type CustomTranslations = Map Module CustomTheory
 
 {-|
   This type represents single custom translations.
@@ -195,6 +195,7 @@ noMonadConstants = ExplicitMonadConstants (Map.empty)
 -}
 getCustomTheory :: Customisations -> Module -> Maybe CustomTheory
 getCustomTheory Customisations{ customTheoryCust = custs} mod = Map.lookup mod custs
+
 
 {-|
   This function provides the path of where given custom theories was declared

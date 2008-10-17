@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <translation>
   <input>
-    <path location="src_hs/TypeDefs.hs" />
+    <path location="src_hs/" />
   </input>
   <output location="dst_thy" />
   <customisation>
@@ -25,6 +25,14 @@
       </lifts>
     </monadInstance>
     
+    <replace>
+      <module name="Text.PrettyPrint.HughesPJ" />
+      <theory name="Empty" location="Empty.thy">
+	<constants>
+	  cat comma empty parens punctuate text &lt;&gt;
+	</constants>
+      </theory>
+    </replace>
     <replace>
       <module name="Monads" />
       <theory name="Empty" location="Empty.thy">

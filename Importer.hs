@@ -9,7 +9,7 @@ module Importer (
   module Importer.IsaSyntax,
   module Importer.Printer,
   importFiles, importDir, importProject,
-  convertSingleFile, preprocessFile, 
+  preprocessFile, 
   defaultCustomisations
 ) where
 
@@ -47,27 +47,12 @@ import Importer.LexEnv
   therein and all imported modules) to a Isabelle unit. Furthermore a list of all 
   Haskell files that were converted is returned.
 -}
-convertSingleFile :: FilePath -> Conversion (IsaUnit, [FilePath])
-convertSingleFile fp
-    =do unit@(HskUnit hsmodules _ _) <- makeHskUnitFromFile fp 
-        let dependentFiles    = map moduleFileLocation hsmodules
-        custs <- getCustomisations
-        let isaUnit = convertHskUnit custs unit
-        return (isaUnit,dependentFiles)
-{-|
-  This function converts all Haskell files into Isabelle units.
--}
 convertFiles :: [FilePath] -> Conversion [IsaUnit]
-convertFiles []   = return []
-convertFiles (fp:fps)
-    = do (isaUnit,dependentFiles) <- trySingle
-                                    `catchError` (\ exc -> liftIO $ print exc >> return ([],[]))
-         units <- convertFiles (filter (`notElem` dependentFiles) fps) 
-         return  (isaUnit ++ units)
-    where trySingle
-              = do liftIO $ putStr $ "converting " ++ takeFileName fp ++ " ...\n"
-                   (unit, files) <- convertSingleFile fp
-                   return ([unit],files)
+convertFiles files
+    =do units <- parseHskFiles files 
+        custs <- getCustomisations
+        let isaUnits = map (convertHskUnit custs) units
+        return isaUnits
 
 importDir :: FilePath -> FilePath -> IO ()
 importDir file out = importProject $ defaultConfig [file] out defaultCustomisations
@@ -171,8 +156,8 @@ writeHskModule mod@(HsModule _ (Module modName) _ _ _) dir
 -}
 preprocessFile :: FilePath -> FilePath -> IO ()
 preprocessFile inFile outDir = do
-  hskUnit <- runConversion (defaultConfig [] outDir defaultCustomisations) $ makeHskUnitFromFile inFile
-  let HskUnit modules custMods env = hskUnit
+  hskUnits <- runConversion (defaultConfig [] outDir defaultCustomisations) $ parseHskFiles [inFile]
+  let [HskUnit modules custMods env] = hskUnits
   let ppModules = map preprocessHsModule modules
   let ppUnit = HskUnit ppModules custMods env
   writeHskUnit ppUnit outDir

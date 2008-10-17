@@ -51,7 +51,7 @@ convertHskUnit custs (HskUnit hsmodules custMods initialGlobalEnv)
           hskmodules     = map (toHskModule global_env_hsk) hsmodules'
           
           isathys = fst $ runConversion custs global_env_hsk $ mapM convert hskmodules 
-          custThys = nub . snd . unzip $ custMods
+          custThys = Map.elems custMods
           isaunit = IsaUnit isathys custThys (adaptGlobalEnv global_env_hsk adaptionTable)
       in
         adaptIsaUnit global_env_hsk adaptionTable isaunit
@@ -465,8 +465,10 @@ instance Convert HsDecl Isa.Cmd where
             = do classqN'   <- convert classqN
                  type'      <- convert (head tys)
                  identifier <- lookupIdentifier_Type classqN
-                 let Env.Type (Env.Class _ classinfo)  
-                                   = fromJust identifier
+                 let classinfo
+                                   = case fromJust identifier of
+                                       Env.Type (Env.Class _ classinfo) -> classinfo
+                                       t -> error $ "found:\n" ++ show t
                  let methods       = Env.methodsOf classinfo
                  let classVarN     = Env.classVarOf classinfo
                  let inst_envtype  = Env.fromHsk (head tys)
