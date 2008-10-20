@@ -224,7 +224,7 @@ data InstanceInfo = InstanceInfo { specializedTypeOf :: EnvType }
 
 data Constant = Variable LexInfo
               | Constructor Constructor
-              | Field LexInfo Constructor
+              | Field LexInfo [Constructor]
               | Function LexInfo
               | UnaryOp  LexInfo Int
               | InfixOp  LexInfo EnvAssoc Int
@@ -564,13 +564,11 @@ instance Hsk2Env HsExportSpec EnvExport where
 instance Hsk2Env HsImportDecl EnvImport where
     fromHsk (HsImportDecl { importModule=m,
                             importQualified=qual,
-                            importAs=nick,
-                            importSpecs=Nothing })
+                            importAs=nick})
         = EnvImport (fromHsk m) qual 
                     (case nick of
                        Nothing -> Nothing 
                        Just nick' -> Just $ fromHsk nick')
-    fromHsk etc = error ("Not supported yet: " ++ show etc)
 
 {-|
   Instances of this class are two types, on the one hand side Isabelle entities and on the other
@@ -884,12 +882,16 @@ computeConstantMappings modul decl
                       constructors = map (mkDataCon tycon) condecls
                       constructors' = map (Constant . Constructor) constructors
                       fields = concatMap mkRecordFields constructors
+                      fields' = mergeFields fields
                   in [Type (Data (defaultLexInfo { typeOf = tycon }) constructors)] ++ constructors'
-                         ++ fields
-               where 
+                         ++ fields'
+               where
+                 mergeFields fields = Map.elems $ Map.fromListWith mergePair fields
+                 mergePair (Constant (Field lex constrs)) (Constant (Field lex' constrs'))
+                     = (Constant (Field lex (constrs ++ constrs')))
                  mkRecordFields (SimpleConstr _) = []
                  mkRecordFields constr@(RecordConstr _ fields) = 
-                     let mkField (RecordField id ty) = Constant (Field (LexInfo id ty moduleID) constr)
+                     let mkField (RecordField id ty) = (id,Constant (Field (LexInfo id ty moduleID) [constr]))
                      in map mkField fields
                  mkTyCon name tyvarNs 
                    = EnvTyCon name $ map (EnvTyVar . fromHsk) tyvarNs
@@ -903,8 +905,6 @@ computeConstantMappings modul decl
                            mkField (n,ty) = RecordField (fromHsk n) (fromHsk ty)
                            recFields = map mkField fields'
                        in RecordConstr (makeLexInfo moduleID (fromHsk name) typ) recFields
-                 mkDataCon tycon etc
-                     = error ("mkDataCon: " ++ show tycon ++ ";\n" ++ show etc)
            HsTypeDecl _ typeName _ _ -> [Type (TypeDef defaultLexInfo)]
 
 {-|

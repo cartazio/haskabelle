@@ -364,8 +364,10 @@ instance Convert HsDecl Isa.Cmd where
                 tycon  <- convert tyconN
                 let dataTy = Isa.TyCon tycon (map Isa.TyVar tyvars)
                 decls' <- mapM cnvt decls
-                fields <- liftM concat $ mapM (extrFields dataTy) decls
-                return $ Isa.Block (Isa.DatatypeCmd (Isa.TypeSpec tyvars tycon) decls' :fields)
+                let fieldNames = concatMap extrFieldNames decls
+                fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . UnQual) (nub fieldNames)
+                let funBinds = map (mkFunBinds dataTy) fields
+                return $ Isa.Block (Isa.DatatypeCmd (Isa.TypeSpec tyvars tycon) decls' : funBinds)
               where cnvt (HsConDecl name types)
                         = do name'  <- convert name
                              tyvars <- mapM convert types
@@ -375,25 +377,23 @@ instance Convert HsDecl Isa.Cmd where
                         in do name'  <- convert name
                               tyvars <- mapM convert types
                               return $ Isa.Constructor name' tyvars
-                    extrFields :: Isa.Type -> HsConDecl -> ContextM [Isa.Cmd]
-                    extrFields _ (HsConDecl _ _) = return []
-                    extrFields dataTy (HsRecDecl conName fields) = 
-                        let fields' = flattenRecFields fields
-                            n = length fields
-                        in mapM (toFunBind conName dataTy n) (zip fields' [1..n])
-                    toFunBind :: HsName -> Isa.Type -> Int -> ((HsName, HsType),Int) -> ContextM Isa.Cmd
-                    toFunBind conName dataTy max ((name,ty),i) =
-                        do name' <- convert name
-                           conName <- convert conName
-                           ty' <- convert ty
-                           let funTy = Isa.TyFun dataTy ty'
-                               con = Isa.Var conName
-                               conArgs = replicate (i - 1) (Isa.Var (Isa.Name "_"))
-                                         ++ [Isa.Var (Isa.Name "x")]
-                                         ++ replicate (max - i) (Isa.Var (Isa.Name "_"))
-                               pat = Isa.Parenthesized $ foldl Isa.App con conArgs
-                               term = Isa.Var (Isa.Name "x")
-                           return $ Isa.FunCmd [name'] [Isa.TypeSig name' funTy] [(name', [pat], term)]
+                    extrFieldNames (HsRecDecl conName fields) = map fst $ flattenRecFields fields
+                    extrFieldNames _ = []
+                    mkFunBinds dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
+                        let binds = map (mkFunBind fname) constrs
+                            fname' = Isa.Name fname
+                            funTy = Isa.TyFun dty (Env.toIsa fty)
+                        in Isa.FunCmd [fname'] [Isa.TypeSig fname' funTy] binds
+                    mkFunBind fname (Env.RecordConstr Env.LexInfo{Env.nameOf=cname} fields) =
+                        let fname' = Isa.Name fname
+                            con = Isa.Var $ Isa.Name cname
+                            genArg (Env.RecordField n _)
+                                | n == fname = Isa.Var (Isa.Name "x")
+                                | otherwise = Isa.Var (Isa.Name "_")
+                            conArgs = map genArg fields
+                            pat = Isa.Parenthesized $ foldl Isa.App con conArgs
+                            term = Isa.Var (Isa.Name "x")
+                        in (fname', [pat], term)
 
     convert' (HsInfixDecl _loc assoc prio ops)
         = do (assocs, prios) <- mapAndUnzipM (lookupInfixOp . toHsQOp) ops 
@@ -656,23 +656,28 @@ instance Convert HsExp Isa.Term where
     convert' (HsRecUpdate exp updates@(HsFieldUpdate fname _:_)) = 
         do mbConstr <- lookupIdentifier_Constant fname
            case mbConstr of
-             Just (Env.Constant (Env.Field _ (Env.RecordConstr lexInfo recFields))) -> 
-                 let constrName = Env.nameOf lexInfo
-                     constr = Isa.Var $ Isa.Name constrName
-                     updates' = map (\(HsFieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
-                     argCount = length recFields
-                     vars =  zipWith (++) (replicate argCount "v_") (map show [0..argCount-1])
-                     toArgs ((Env.RecordField iden _),var) = 
-                         case lookup iden updates' of
-                           Nothing -> return $ Isa.Var (Isa.Name var)
-                           Just exp -> convert exp
-                     patArgs = map (Isa.Var . Isa.Name ) vars
-                     pat = foldl Isa.App constr patArgs
-                 in do recArgs <- mapM toArgs (zip recFields vars)
-                       exp' <- convert exp
-                       let res = foldl Isa.App constr recArgs
-                       return $ Isa.Case exp' [(pat, res)] 
+             Just (Env.Constant (Env.Field _ constrs)) -> 
+                 do exp' <- convert exp
+                    cases <- mapM mkCase constrs
+                    return $ Isa.Case exp' cases 
+                 where mkCase (Env.RecordConstr lexInfo recFields) = 
+                         do let constrName = Env.nameOf lexInfo
+                                constr = Isa.Var $ Isa.Name constrName
+                                updates' = map (\(HsFieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
+                                argCount = length recFields
+                            vars <- liftGensym $ mapM gensym (replicate argCount "v_") 
+                            let toArgs ((Env.RecordField iden _),var) = 
+                                    case lookup iden updates' of
+                                      Nothing -> return $ Isa.Var (Isa.Name var)
+                                      Just exp -> convert exp
+                                patArgs = map (Isa.Var . Isa.Name ) vars
+                                pat = foldl Isa.App constr patArgs
+                            recArgs <- mapM toArgs (zip recFields vars)
+                            let res = foldl Isa.App constr recArgs
+                            return (pat, res)
              _ -> die $ "Record field " ++ Msg.quote fname ++ " is not declared in environment!"
+
+
 
     convert' (HsIf t1 t2 t3)
         = do t1' <- convert t1; t2' <- convert t2; t3' <- convert t3
