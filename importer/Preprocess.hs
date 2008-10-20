@@ -101,6 +101,7 @@ delocaliseAll = everywhereEnv boundNamesEnv delocalise
 delocalise :: GenericM DelocaliserM
 delocalise = mkM delocaliseLet
              `extM` delocaliseClsDecl
+                   
 
 delocaliseClsDecl :: HsClassDecl -> DelocaliserM HsClassDecl
 delocaliseClsDecl clsDecl@(HsClsDecl decl) = 
@@ -377,6 +378,14 @@ normalizePattern (HsPInfixApp p1 qn p2)
     = let (p1', as_pats1) = normalizePattern p1
           (p2', as_pats2) = normalizePattern p2
       in (HsPInfixApp p1' qn p2', concat [as_pats1, as_pats2])
+
+normalizePattern (HsPRec name fields) = 
+    let (fields',as) = concRes $ map normField fields
+    in (HsPRec name fields', as)
+    where normField (HsPFieldPat name pat) = 
+              let (pat',as) = normalizePattern pat
+              in (HsPFieldPat name pat', as)
+          concRes res = (map fst res, concatMap snd res)
 
 normalizePattern p = error ("Pattern not supported: " ++ show p)
 

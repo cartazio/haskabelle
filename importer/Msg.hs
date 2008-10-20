@@ -45,7 +45,7 @@ duplicate_import ms
     = "Duplicate in imported modules: " ++ show ms
 
 failed_parsing loc msg
-    = srcloc2string loc  -- ++ ": " ++ msg
+    = srcloc2string loc ++ ": " ++ msg
 
 cycle_in_dependency_graph moduleNs
     = "Dependency graph is not a DAG. In particular, a cycle was found between\n"

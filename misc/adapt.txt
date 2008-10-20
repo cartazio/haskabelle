@@ -11,6 +11,7 @@ classes
   "Prelude.Num"         "Prelude.num"
 
 types
+  "Prelude.String"	"string"						
   "Prelude.Bool"        "bool"
   "Prelude.PairTyCon"   "*"
   "Prelude.ListTyCon"   "list"

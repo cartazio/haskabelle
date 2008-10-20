@@ -14,12 +14,11 @@ class print = type +
 
 class heq = type +
   fixes heq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
-
-class hneq = type +
   fixes hneq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
 
-class num = number_ring + heq + print + abs + sgn
 
+
+class num = number_ring + heq + print + abs + sgn
 (* FIXME: TODO. *)
 (*
 class enum = num +
@@ -34,6 +33,47 @@ class enum = num +
   fixes enumFromTo     :: "'a => 'a => 'a list"
   fixes enumFromThenTo :: "'a => 'a => 'a => 'a list"
 *)
+
+
+instantiation int :: abs 
+begin
+
+instance ..
+end
+
+instantiation int :: sgn
+begin
+
+instance ..
+end
+
+instantiation int :: number_ring
+begin
+
+instance ..
+end
+
+instantiation int :: heq
+begin 
+
+definition
+  "heq x y = (x = (y::int))"
+
+definition
+  "hneq x y = (x \<noteq> (y::int))"
+
+instance ..
+end
+
+instantiation int :: num
+begin
+instance ..
+end
+
+definition
+  foo :: "int \<Rightarrow> int"
+  where
+  "foo x = (1::_::num)"
 
 fun hsk_foldr :: "('b => 'a => 'a) => 'a => 'b list => 'a"
 where
@@ -55,4 +95,5 @@ fun list_and :: "(bool list) \<Rightarrow> bool"
 constdefs
   fun_app :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 10)
   "f $ x \<equiv> f x"
+
 end

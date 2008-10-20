@@ -43,7 +43,9 @@ module Importer.Utilities.Hsk
       returnType,
       boundNames,
       boundNamesEnv,
-      applySubst
+      applySubst,
+      flattenRecFields,
+      unBang
     ) where
   
 import Maybe
@@ -562,3 +564,12 @@ getSourceLine decl
 
 showModule :: Module -> String
 showModule (Module name) = name
+
+
+unBang :: HsBangType -> HsType
+unBang (HsUnBangedTy t) = t
+unBang (HsBangedTy t) = t
+
+flattenRecFields :: [([HsName],HsBangType)] -> [(HsName,HsType)]
+flattenRecFields = concatMap flatten
+    where flatten (ns,bType) = zip ns (replicate (length ns) (unBang bType))

@@ -302,8 +302,6 @@ instance Adapt Isa.Term where
     adapt (Isa.Literal lit)     = return (Isa.Literal lit)
     adapt (Isa.Var n)           = adaptName n >>= (return . Isa.Var)
     adapt (Isa.Parenthesized t) = adapt t     >>= (return . Isa.Parenthesized)
-    adapt t@(Isa.RecConstr _ _) = not_implemented t
-    adapt t@(Isa.RecUpdate _ _) = not_implemented t
 
     adapt (Isa.App t1 t2)       = do t1' <- adapt t1 ; t2' <- adapt t2
                                      return (Isa.App t1' t2')
@@ -354,6 +352,5 @@ instance Adapt Isa.Stmt where
 extractNames :: Isa.Term -> [Isa.Name]
 extractNames (Isa.Var n)                   = [n]
 extractNames (Isa.App t1 t2)               = extractNames t1 ++ extractNames t2
-extractNames (Isa.RecConstr name patterns) = [name] ++ map fst patterns
 extractNames etc = []
 

@@ -14,6 +14,8 @@ module Importer.LexEnv
       EnvName(..),
       LexInfo(..),
       EnvImport(..),
+      Constructor(..),
+      RecordField(..),
       ModuleID,
       IdentifierID,
       identifier2name,
@@ -221,17 +223,26 @@ data InstanceInfo = InstanceInfo { specializedTypeOf :: EnvType }
 -}
 
 data Constant = Variable LexInfo
+              | Constructor Constructor
+              | Field LexInfo Constructor
               | Function LexInfo
               | UnaryOp  LexInfo Int
               | InfixOp  LexInfo EnvAssoc Int
               | TypeAnnotation LexInfo 
   deriving (Eq, Ord, Show)
 
+data Constructor = SimpleConstr LexInfo
+                 | RecordConstr LexInfo [RecordField]
+  deriving (Eq, Ord, Show)
+
+data RecordField = RecordField IdentifierID EnvType
+  deriving (Eq, Ord, Show)
+
 {-|
   This data structure represents identifier information for 
   different kinds of type declaration.
 -}
-data Type = Data  LexInfo [Constant]
+data Type = Data  LexInfo [Constructor]
           | TypeDef LexInfo
           | Class LexInfo ClassInfo
           | Instance LexInfo [InstanceInfo]
@@ -358,10 +369,15 @@ lexInfoOf identifier
         Type t     -> lexInfoOf_typ t
     where
       lexInfoOf_con (Variable i)       = i
+      lexInfoOf_con (Field i _)       = i
       lexInfoOf_con (Function i)       = i
       lexInfoOf_con (UnaryOp i _)      = i
       lexInfoOf_con (InfixOp i _ _)    = i
       lexInfoOf_con (TypeAnnotation i) = i
+      lexInfoOf_con (Constructor con)  = 
+          case con of
+            SimpleConstr i -> i
+            RecordConstr i _ -> i
 
       lexInfoOf_typ (Class i _)        = i
       lexInfoOf_typ (Instance i _)     = i
@@ -380,6 +396,12 @@ updateIdentifier identifier lexinfo
         Type t     -> Type     (updateType t lexinfo)
     where 
       updateConstant (Variable _) lexinfo        = Variable lexinfo
+      updateConstant (Field _ constr) lexinfo        = Field lexinfo constr
+      updateConstant (Constructor c) lexinfo
+          = Constructor $
+            case c of
+              SimpleConstr _ -> SimpleConstr lexinfo
+              RecordConstr _ fs -> RecordConstr lexinfo fs
       updateConstant (Function _) lexinfo        = Function lexinfo
       updateConstant (UnaryOp _ p) lexinfo       = UnaryOp lexinfo p
       updateConstant (InfixOp _ a p) lexinfo     = InfixOp lexinfo a p
@@ -859,19 +881,32 @@ computeConstantMappings modul decl
            HsDataDecl _ _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
                   let tycon = mkTyCon (fromHsk name) tyvarNs
-                      constructors  = map (mkDataCon tycon) condecls
-                      constructors' = map Constant constructors
+                      constructors = map (mkDataCon tycon) condecls
+                      constructors' = map (Constant . Constructor) constructors
+                      fields = concatMap mkRecordFields constructors
                   in [Type (Data (defaultLexInfo { typeOf = tycon }) constructors)] ++ constructors'
+                         ++ fields
                where 
+                 mkRecordFields (SimpleConstr _) = []
+                 mkRecordFields constr@(RecordConstr _ fields) = 
+                     let mkField (RecordField id ty) = Constant (Field (LexInfo id ty moduleID) constr)
+                     in map mkField fields
                  mkTyCon name tyvarNs 
                    = EnvTyCon name $ map (EnvTyVar . fromHsk) tyvarNs
+                 mkDataCon :: EnvType -> HsQualConDecl -> Constructor
                  mkDataCon tycon (HsQualConDecl _ _ _ (HsConDecl n args))
-                   = let typ = foldr EnvTyFun tycon (map (\(HsUnBangedTy t) -> fromHsk t) args)
-                     in Function (makeLexInfo moduleID (fromHsk n) typ)
-                 mkDataCon nameID etc
-                   = error ("mkDataCon: " ++ show nameID ++ ";\n" ++ show etc)
+                     = let typ = foldr EnvTyFun tycon (map (fromHsk. unBang) args)
+                       in SimpleConstr (makeLexInfo moduleID (fromHsk n) typ)
+                 mkDataCon tycon (HsQualConDecl _ _ _ (HsRecDecl name fields))
+                     = let fields' = flattenRecFields fields
+                           typ = foldr EnvTyFun tycon (map (fromHsk. snd) fields')
+                           mkField (n,ty) = RecordField (fromHsk n) (fromHsk ty)
+                           recFields = map mkField fields'
+                       in RecordConstr (makeLexInfo moduleID (fromHsk name) typ) recFields
+                 mkDataCon tycon etc
+                     = error ("mkDataCon: " ++ show tycon ++ ";\n" ++ show etc)
            HsTypeDecl _ typeName _ _ -> [Type (TypeDef defaultLexInfo)]
-      
+
 {-|
   This function merges two module environments provided they have the same name (otherwise,
   an exception is thrown). Duplicates in the resulting imports and exports are removed, and 
@@ -1062,8 +1097,8 @@ computeExportedNames moduleID globalEnv
                     EnvExportAll qn 
                         -> case Importer.LexEnv.lookupType moduleID qn globalEnv of
                              Just t@(Type (Data _ constructors))
-                                 -> let id_of i = nameOf (lexInfoOf i)
-                                    in id_of t : map (id_of . Constant) constructors
+                                 -> let id_of = nameOf . lexInfoOf
+                                    in id_of t : map (id_of . Constant . Constructor) constructors
                              etc -> error ("Internal error (computeExportedNames): " ++ show etc)
                     EnvExportMod m
                                            -- export everything:

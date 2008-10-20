@@ -360,19 +360,40 @@ instance Convert HsDecl Isa.Cmd where
     convert' (HsDataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
         = let strip (HsQualConDecl _loc _FIXME _context decl) = decl
               decls = map strip condecls
-          in if isRecDecls decls then
-                 makeRecordCmd tyconN tyvarNs decls
-             else do tyvars <- mapM convert tyvarNs
-                     tycon  <- convert tyconN
-                     decls' <- mapM cnvt decls
-                     return (Isa.DatatypeCmd (Isa.TypeSpec tyvars tycon) decls')
-                 where cnvt (HsConDecl name types)
-                           = do name'  <- convert name
-                                tyvars <- mapM convert types
-                                return $ Isa.Constructor name' tyvars
-                       cnvt junk = pattern_match_exhausted ("Internal Error: " ++
-                                         "HsRecDecl should have been dealt with elsewhere already.")
-                                        junk
+          in do tyvars <- mapM convert tyvarNs
+                tycon  <- convert tyconN
+                let dataTy = Isa.TyCon tycon (map Isa.TyVar tyvars)
+                decls' <- mapM cnvt decls
+                fields <- liftM concat $ mapM (extrFields dataTy) decls
+                return $ Isa.Block (Isa.DatatypeCmd (Isa.TypeSpec tyvars tycon) decls' :fields)
+              where cnvt (HsConDecl name types)
+                        = do name'  <- convert name
+                             tyvars <- mapM convert types
+                             return $ Isa.Constructor name' tyvars
+                    cnvt (HsRecDecl name fields) = 
+                        let types = map snd (flattenRecFields fields)
+                        in do name'  <- convert name
+                              tyvars <- mapM convert types
+                              return $ Isa.Constructor name' tyvars
+                    extrFields :: Isa.Type -> HsConDecl -> ContextM [Isa.Cmd]
+                    extrFields _ (HsConDecl _ _) = return []
+                    extrFields dataTy (HsRecDecl conName fields) = 
+                        let fields' = flattenRecFields fields
+                            n = length fields
+                        in mapM (toFunBind conName dataTy n) (zip fields' [1..n])
+                    toFunBind :: HsName -> Isa.Type -> Int -> ((HsName, HsType),Int) -> ContextM Isa.Cmd
+                    toFunBind conName dataTy max ((name,ty),i) =
+                        do name' <- convert name
+                           conName <- convert conName
+                           ty' <- convert ty
+                           let funTy = Isa.TyFun dataTy ty'
+                               con = Isa.Var conName
+                               conArgs = replicate (i - 1) (Isa.Var (Isa.Name "_"))
+                                         ++ [Isa.Var (Isa.Name "x")]
+                                         ++ replicate (max - i) (Isa.Var (Isa.Name "_"))
+                               pat = Isa.Parenthesized $ foldl Isa.App con conArgs
+                               term = Isa.Var (Isa.Name "x")
+                           return $ Isa.FunCmd [name'] [Isa.TypeSig name' funTy] [(name', [pat], term)]
 
     convert' (HsInfixDecl _loc assoc prio ops)
         = do (assocs, prios) <- mapAndUnzipM (lookupInfixOp . toHsQOp) ops 
@@ -524,6 +545,19 @@ instance Convert HsPat Isa.Pat where
                   = do pat1' <- convertHsPat pat1
                        pats' <- mapM convertHsPat pats
                        return $ foldl HsApp (HsApp (HsCon qname) pat1') pats'
+
+              convertHsPat (HsPRec qname fields) = 
+                  do mbConstr <- lookupIdentifier_Constant qname
+                     case mbConstr of
+                       Just (Env.Constant (Env.Constructor (Env.RecordConstr _ recFields))) -> 
+                               let fields' = map (\(HsPFieldPat name pat) -> (Env.fromHsk name, pat)) fields
+                                   toSimplePat (Env.RecordField iden _) = 
+                                       case lookup iden fields' of
+                                         Nothing -> HsPWildCard
+                                         Just pat -> pat
+                                   recArgs = map toSimplePat recFields
+                               in convertHsPat (HsPApp qname recArgs)
+                       _ -> die $ "Record constructor " ++ Msg.quote qname ++ " is not declared in environment!"
                               
               convertHsPat junk = pattern_match_exhausted 
                                 "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" 
@@ -606,15 +640,39 @@ instance Convert HsExp Isa.Term where
              g <- liftGensym (genIsaName (Isa.Name "arg"))
              return (makeLambda [g] $ Isa.App (Isa.App qop' (Isa.Var g)) e')
 
-    convert' (HsRecConstr qname updates)
-        = do qname'   <- convert qname
-             updates' <- mapM convert updates
-             return $ Isa.RecConstr qname' updates'
+    convert' (HsRecConstr qname updates) = 
+        do mbConstr <- lookupIdentifier_Constant qname
+           case mbConstr of
+             Just (Env.Constant (Env.Constructor (Env.RecordConstr _ recFields))) -> 
+                 let updates' = map (\(HsFieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
+                     toSimplePat (Env.RecordField iden _) = 
+                         case lookup iden updates' of
+                           Nothing -> HsVar (UnQual (HsIdent "undefined"))
+                           Just exp -> exp
+                     recArgs = map toSimplePat recFields
+                 in convert' $ foldl HsApp (HsCon qname) recArgs
+             _ -> die $ "Record constructor " ++ Msg.quote qname ++ " is not declared in environment!"
 
-    convert' (HsRecUpdate exp updates)
-        = do exp'     <- convert exp
-             updates' <- mapM convert updates
-             return $ Isa.RecUpdate exp' updates'
+    convert' (HsRecUpdate exp updates@(HsFieldUpdate fname _:_)) = 
+        do mbConstr <- lookupIdentifier_Constant fname
+           case mbConstr of
+             Just (Env.Constant (Env.Field _ (Env.RecordConstr lexInfo recFields))) -> 
+                 let constrName = Env.nameOf lexInfo
+                     constr = Isa.Var $ Isa.Name constrName
+                     updates' = map (\(HsFieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
+                     argCount = length recFields
+                     vars =  zipWith (++) (replicate argCount "v_") (map show [0..argCount-1])
+                     toArgs ((Env.RecordField iden _),var) = 
+                         case lookup iden updates' of
+                           Nothing -> return $ Isa.Var (Isa.Name var)
+                           Just exp -> convert exp
+                     patArgs = map (Isa.Var . Isa.Name ) vars
+                     pat = foldl Isa.App constr patArgs
+                 in do recArgs <- mapM toArgs (zip recFields vars)
+                       exp' <- convert exp
+                       let res = foldl Isa.App constr recArgs
+                       return $ Isa.Case exp' [(pat, res)] 
+             _ -> die $ "Record field " ++ Msg.quote fname ++ " is not declared in environment!"
 
     convert' (HsIf t1 t2 t3)
         = do t1' <- convert t1; t2' <- convert t2; t3' <- convert t3
@@ -721,24 +779,6 @@ makePatternMatchingLambda patterns theBody
                 = do g <- liftGensym (genIsaName (Isa.Name "arg"))
                      return $ Isa.Lambda g (Isa.Case (Isa.Var g) [(pat, body)])
 
-{-|
-  This predicates decides whether the given constructor declarations are a
-  pure ADT declaration (value @False@) or a pure record declaration (value
-  @True@). If they define a mixture of both an exception is thrown.
--}
-isRecDecls :: [HsConDecl] -> Bool
-isRecDecls decls
-    = case decls of
-        -- Haskell allows that a data declaration may be mixed up
-        -- arbitrarily by normal data constructor declarations and
-        -- record declarations.  As HOL does not support that kind of
-        -- mishmash, we require that a data declaration either
-        -- consists of exactly one record definition, or arbitrarily
-        -- many data constructor definitions.
-        (HsRecDecl _ _):rest -> assert (null rest) True
-        decls                -> assert (all (not.isRecDecl) decls) False
-    where isRecDecl (HsRecDecl _ _) = True
-          isRecDecl _               = False
 
 makeRecordCmd :: HsName  -- ^type constructor
               -> [HsName] -- ^type variable arguments to the constructor
