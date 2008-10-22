@@ -22,7 +22,9 @@ module Importer.Utilities.Hsk
       renameFreeVars,
       bindingsFromPats,
       extractFreeVarNs,
+      extractDataConNs,
       extractTypeConNs,
+      extractImplDeclNs,
       orderDeclsBySourceLine,
       renameHsPat,
       renameHsDecl,
@@ -396,6 +398,33 @@ freeNamesLocal hs = case name hs of
           fromQOp :: HsQOp -> Maybe HsQName
           fromQOp (HsQVarOp name) = Just name
           fromQOp _ = Nothing
+
+
+{-|
+  This function extracts names that are implicitly declared, such as data constructors
+  and record fields.
+-}
+extractImplDeclNs :: HsDecl -> HskNames
+extractImplDeclNs decl@(HsDataDecl _ _ _ _ _ _ _) =
+    everything Set.union (mkQ Set.empty fromConDecl) decl
+    where fromConDecl (HsConDecl name _) = Set.singleton (UnQual name)
+          fromConDecl (HsRecDecl name fields) = 
+              Set.singleton (UnQual name) 
+                     `Set.union` Set.fromList (map UnQual (concatMap fst fields))
+
+extractImplDeclNs _ = Set.empty
+
+{-|
+  This function extracts the names of data constructors used
+  in patters from the given piece of Haskell syntax.
+-}
+
+extractDataConNs :: Data a => a -> HskNames
+extractDataConNs node = everything Set.union (mkQ Set.empty fromPat) node
+    where fromPat (HsPApp name _) = Set.singleton name
+          fromPat (HsPRec name _) = Set.singleton name
+          fromPat (HsPInfixApp _ name _) = Set.singleton name
+          fromPat _ = Set.empty
 
 {-|
   This function extracts the names of type constructors in the given piece of

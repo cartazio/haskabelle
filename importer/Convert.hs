@@ -291,7 +291,7 @@ generateRecordAccessors (HsDataDecl _loc _kind _context tyconN tyvarNs condecls 
                             fname' = Isa.Name fname
                             funTy = Isa.TyFun dty (Env.toIsa fty)
                         in Isa.FunCmd [fname'] [Isa.TypeSig fname' funTy] binds
-                    mkFunBind fname (Env.RecordConstr Env.LexInfo{Env.nameOf=cname} fields) =
+                    mkFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
                             con = Isa.Var $ Isa.Name cname
                             genArg (Env.RecordField n _)
@@ -580,7 +580,7 @@ instance Convert HsPat Isa.Pat where
               convertHsPat (HsPRec qname fields) = 
                   do mbConstr <- lookupIdentifier_Constant qname
                      case mbConstr of
-                       Just (Env.Constant (Env.Constructor (Env.RecordConstr _ recFields))) -> 
+                       Just (Env.Constant (Env.Constructor (Env.RecordConstr _ _ recFields))) -> 
                                let fields' = map (\(HsPFieldPat name pat) -> (Env.fromHsk name, pat)) fields
                                    toSimplePat (Env.RecordField iden _) = 
                                        case lookup iden fields' of
@@ -674,7 +674,7 @@ instance Convert HsExp Isa.Term where
     convert' (HsRecConstr qname updates) = 
         do mbConstr <- lookupIdentifier_Constant qname
            case mbConstr of
-             Just (Env.Constant (Env.Constructor (Env.RecordConstr _ recFields))) -> 
+             Just (Env.Constant (Env.Constructor (Env.RecordConstr _ _ recFields))) -> 
                  let updates' = map (\(HsFieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
                      toSimplePat (Env.RecordField iden _) = 
                          case lookup iden updates' of
@@ -691,7 +691,7 @@ instance Convert HsExp Isa.Term where
                  do exp' <- convert exp
                     cases <- mapM mkCase constrs
                     return $ Isa.Case exp' cases 
-                 where mkCase (Env.RecordConstr lexInfo recFields) = 
+                 where mkCase (Env.RecordConstr _ lexInfo recFields) = 
                          do let constrName = Env.nameOf lexInfo
                                 constr = Isa.Var $ Isa.Name constrName
                                 updates' = map (\(HsFieldUpdate name exp) -> (Env.fromHsk name, exp)) updates

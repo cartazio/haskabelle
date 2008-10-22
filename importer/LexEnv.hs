@@ -19,6 +19,7 @@ module Importer.LexEnv
       ModuleID,
       IdentifierID,
       identifier2name,
+      getDepDataType,
       fromHsk,
       toHsk,
       fromIsa,
@@ -231,8 +232,8 @@ data Constant = Variable LexInfo
               | TypeAnnotation LexInfo 
   deriving (Eq, Ord, Show)
 
-data Constructor = SimpleConstr LexInfo
-                 | RecordConstr LexInfo [RecordField]
+data Constructor = SimpleConstr {constrTypeName :: EnvName, constrLexInfo :: LexInfo}
+                 | RecordConstr {constrTypeName :: EnvName, constrLexInfo :: LexInfo, constrFields :: [RecordField]}
   deriving (Eq, Ord, Show)
 
 data RecordField = RecordField IdentifierID EnvType
@@ -376,13 +377,25 @@ lexInfoOf identifier
       lexInfoOf_con (TypeAnnotation i) = i
       lexInfoOf_con (Constructor con)  = 
           case con of
-            SimpleConstr i -> i
-            RecordConstr i _ -> i
+            SimpleConstr _ i -> i
+            RecordConstr _ i _ -> i
 
       lexInfoOf_typ (Class i _)        = i
       lexInfoOf_typ (Instance i _)     = i
       lexInfoOf_typ (Data i _)         = i
       lexInfoOf_typ (TypeDef i )         = i
+
+
+
+getDepDataType :: GlobalE -> ModuleID -> EnvName -> Maybe EnvName
+getDepDataType env mod  name = 
+    case lookupConstant mod name env of
+      Nothing -> Nothing
+      Just (Constant c) ->
+          case c of
+            Field _ (constr:_) -> Just $ constrTypeName constr
+            Constructor constr -> Just $ constrTypeName constr
+            _ -> Nothing
 
 
 {-|
@@ -400,8 +413,8 @@ updateIdentifier identifier lexinfo
       updateConstant (Constructor c) lexinfo
           = Constructor $
             case c of
-              SimpleConstr _ -> SimpleConstr lexinfo
-              RecordConstr _ fs -> RecordConstr lexinfo fs
+              SimpleConstr dataTy _ -> SimpleConstr dataTy lexinfo
+              RecordConstr dataTy _ fs -> RecordConstr dataTy lexinfo fs
       updateConstant (Function _) lexinfo        = Function lexinfo
       updateConstant (UnaryOp _ p) lexinfo       = UnaryOp lexinfo p
       updateConstant (InfixOp _ a p) lexinfo     = InfixOp lexinfo a p
@@ -889,22 +902,24 @@ computeConstantMappings modul decl
                  mergeFields fields = Map.elems $ Map.fromListWith mergePair fields
                  mergePair (Constant (Field lex constrs)) (Constant (Field lex' constrs'))
                      = (Constant (Field lex (constrs ++ constrs')))
-                 mkRecordFields (SimpleConstr _) = []
-                 mkRecordFields constr@(RecordConstr _ fields) = 
+                 mkRecordFields (SimpleConstr _ _) = []
+                 mkRecordFields constr@(RecordConstr _ _ fields) = 
                      let mkField (RecordField id ty) = (id,Constant (Field (LexInfo id ty moduleID) [constr]))
                      in map mkField fields
                  mkTyCon name tyvarNs 
                    = EnvTyCon name $ map (EnvTyVar . fromHsk) tyvarNs
+                 conNe = case fromHsk conN of
+                           EnvUnqualName name -> EnvQualName moduleID name
                  mkDataCon :: EnvType -> HsQualConDecl -> Constructor
                  mkDataCon tycon (HsQualConDecl _ _ _ (HsConDecl n args))
                      = let typ = foldr EnvTyFun tycon (map (fromHsk. unBang) args)
-                       in SimpleConstr (makeLexInfo moduleID (fromHsk n) typ)
+                       in SimpleConstr conNe (makeLexInfo moduleID (fromHsk n) typ)
                  mkDataCon tycon (HsQualConDecl _ _ _ (HsRecDecl name fields))
                      = let fields' = flattenRecFields fields
                            typ = foldr EnvTyFun tycon (map (fromHsk. snd) fields')
                            mkField (n,ty) = RecordField (fromHsk n) (fromHsk ty)
                            recFields = map mkField fields'
-                       in RecordConstr (makeLexInfo moduleID (fromHsk name) typ) recFields
+                       in RecordConstr conNe (makeLexInfo moduleID (fromHsk name) typ) recFields
            HsTypeDecl _ typeName _ _ -> [Type (TypeDef defaultLexInfo)]
 
 {-|

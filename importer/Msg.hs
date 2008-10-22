@@ -20,7 +20,7 @@ quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
 
 printEnv env = "The Global Environment looked like:\n"
-        --       ++ prettyShow' "globalenv" env
+               ++ prettyShow' "globalenv" env
 
 assoc_mismatch op1 assoc1 op2 assoc2
     = let { op1' = quote op1; assoc1' = quote assoc1; } in

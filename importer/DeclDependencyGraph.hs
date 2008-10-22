@@ -10,7 +10,8 @@ import Maybe
 import List (groupBy, sortBy, intersect)
 
 import Data.Graph
-import qualified Data.Set as Set
+import Data.Set (Set)
+import qualified Data.Set as Set hiding (Set)
 import Data.Tree
 import Language.Haskell.Exts
 
@@ -42,6 +43,7 @@ makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
     where declDepGraph = graphFromEdges
                            $ handleDuplicateEdges
                                $ concatMap (makeEdgesFromHsDecl globalEnv modul) decls
+
 {-|
   This function constructs the outgoing edges of the given declaration in the given environment
   module.
@@ -51,12 +53,15 @@ makeEdgesFromHsDecl globalEnv modul decl
     = let canonicalize hsqname = (let mID  = Env.fromHsk modul
                                       envN = Env.fromHsk hsqname
                                   in Env.resolveEnvName_OrLose globalEnv mID envN)
-      in do defname <- namesFromHsDecl decl
-            let used_names = Set.toList $ extractFreeVarNs decl
-                usedTypes = case decl of
-                              HsDataDecl _ _ _ _ _ _ _ -> Set.toList $ extractTypeConNs decl
-                              _ -> []
-            return (decl, canonicalize defname, map canonicalize (used_names ++ usedTypes))
+          names = map canonicalize $ (namesFromHsDecl decl)
+          used_names = map canonicalize $ Set.toList (extractFreeVarNs decl) ++ Set.toList (extractDataConNs decl)
+          implTypes =  catMaybes $
+                       map (Env.getDepDataType globalEnv (Env.fromHsk modul)) used_names
+          usedTypes = case decl of
+                        HsDataDecl _ _ _ _ _ _ _
+                            -> map canonicalize $ Set.toList $ extractTypeConNs decl
+                        _ -> []
+      in [(decl, name , used_names ++ usedTypes ++ implTypes) | name <- names]
              
 {-|
   ???
