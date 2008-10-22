@@ -53,7 +53,10 @@ makeEdgesFromHsDecl globalEnv modul decl
                                   in Env.resolveEnvName_OrLose globalEnv mID envN)
       in do defname <- namesFromHsDecl decl
             let used_names = Set.toList $ extractFreeVarNs decl
-            return (decl, canonicalize defname, map canonicalize used_names)
+                usedTypes = case decl of
+                              HsDataDecl _ _ _ _ _ _ _ -> Set.toList $ extractTypeConNs decl
+                              _ -> []
+            return (decl, canonicalize defname, map canonicalize (used_names ++ usedTypes))
              
 {-|
   ???

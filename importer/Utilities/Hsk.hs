@@ -22,6 +22,7 @@ module Importer.Utilities.Hsk
       renameFreeVars,
       bindingsFromPats,
       extractFreeVarNs,
+      extractTypeConNs,
       orderDeclsBySourceLine,
       renameHsPat,
       renameHsDecl,
@@ -396,10 +397,19 @@ freeNamesLocal hs = case name hs of
           fromQOp (HsQVarOp name) = Just name
           fromQOp _ = Nothing
 
+{-|
+  This function extracts the names of type constructors in the given piece of
+  Haskell syntax
+-}
+extractTypeConNs :: Data a => a -> HskNames
+extractTypeConNs node = everything Set.union (mkQ Set.empty fromType) node
+    where fromType :: HsType -> HskNames
+          fromType (HsTyCon name) = Set.singleton name
+          fromType _ = Set.empty
 
 {-|
   This function returns the set of names of free variables
-  in the given pieces of Haskell syntax.
+  in the given piece of Haskell syntax.
 -}
 extractFreeVarNs :: Data a => a -> HskNames
 extractFreeVarNs node = runBindingM $ everythingEnv boundNamesEnv (Set.union) freeNamesLocal node

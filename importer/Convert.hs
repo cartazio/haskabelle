@@ -268,6 +268,62 @@ pattern_match_exhausted :: (Show a) => String -> a -> ContextM t
 pattern_match_exhausted str obj 
     = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
 
+
+{-|
+  This function generates the accessor functions for the given Haskell
+  data type declaration.
+-}
+generateRecordAccessors :: HsDecl -> ContextM [Isa.Cmd]
+generateRecordAccessors (HsDataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
+        = let strip (HsQualConDecl _loc _FIXME _context decl) = decl
+              decls = map strip condecls
+          in do tyvars <- mapM convert tyvarNs
+                tycon  <- convert tyconN
+                let dataTy = Isa.TyCon tycon (map Isa.TyVar tyvars)
+                let fieldNames = concatMap extrFieldNames decls
+                fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . UnQual) (nub fieldNames)
+                let funBinds = map (mkFunBinds dataTy) fields
+                return funBinds
+              where extrFieldNames (HsRecDecl conName fields) = map fst $ flattenRecFields fields
+                    extrFieldNames _ = []
+                    mkFunBinds dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
+                        let binds = map (mkFunBind fname) constrs
+                            fname' = Isa.Name fname
+                            funTy = Isa.TyFun dty (Env.toIsa fty)
+                        in Isa.FunCmd [fname'] [Isa.TypeSig fname' funTy] binds
+                    mkFunBind fname (Env.RecordConstr Env.LexInfo{Env.nameOf=cname} fields) =
+                        let fname' = Isa.Name fname
+                            con = Isa.Var $ Isa.Name cname
+                            genArg (Env.RecordField n _)
+                                | n == fname = Isa.Var (Isa.Name "x")
+                                | otherwise = Isa.Var (Isa.Name "_")
+                            conArgs = map genArg fields
+                            pat = Isa.Parenthesized $ foldl Isa.App con conArgs
+                            term = Isa.Var (Isa.Name "x")
+                        in (fname', [pat], term)
+
+{-|
+  This function converts a Haskell data type declaration into a
+  Isabelle data type definition .
+-}
+convertDataDecl :: HsDecl -> ContextM Isa.DatatypeDef
+convertDataDecl (HsDataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
+    = let strip (HsQualConDecl _loc _FIXME _context decl) = decl
+          decls = map strip condecls
+      in do tyvars <- mapM convert tyvarNs
+            tycon  <- convert tyconN
+            decls' <- mapM cnvt decls
+            return $ Isa.DatatypeDef (Isa.TypeSpec tyvars tycon) decls'
+              where cnvt (HsConDecl name types)
+                        = do name'  <- convert name
+                             tyvars <- mapM convert types
+                             return $ Isa.Constructor name' tyvars
+                    cnvt (HsRecDecl name fields) = 
+                        let types = map snd (flattenRecFields fields)
+                        in do name'  <- convert name
+                              tyvars <- mapM convert types
+                              return $ Isa.Constructor name' tyvars
+
 {-|
   Instances of this class constitute pairs of types s.t. the first one
   (a Haskell entity) can be converted into the last one (an Isabelle entity).
@@ -296,13 +352,22 @@ instance Convert HskDependentDecls Isa.Cmd where
     -- definitions that are dependent on each other.)
     convert' (HskDependentDecls [])  = return (Isa.Block [])
     convert' (HskDependentDecls [d]) = convert d
-    convert' (HskDependentDecls decls)
-        = assert (all isFunBind decls)
-            $ do funcmds <- mapM convert decls
-                 let (names, sigs, eqs) = unzip3 (map splitFunCmd funcmds)
-                 return (Isa.FunCmd names sigs (concat eqs))
+    convert' (HskDependentDecls decls@(decl:_))
+        | isFunBind decl
+            = assert (all isFunBind decls)
+              $ do funcmds <- mapM convert decls
+                   let (names, sigs, eqs) = unzip3 (map splitFunCmd funcmds)
+                   return (Isa.FunCmd names sigs (concat eqs))
+        | isDataDecl decl
+            = assert (all isDataDecl decls)
+              $ do dataDefs <- mapM convertDataDecl decls
+                   accCmds <- mapM generateRecordAccessors decls
+                   return $ Isa.Block (Isa.DatatypeCmd dataDefs : concat accCmds)
+
         where isFunBind (HsFunBind _) = True
               isFunBind _             = False
+              isDataDecl (HsDataDecl _ _ _ _ _ _ _) = True
+              isDataDecl _ = False
               splitFunCmd (Isa.FunCmd [n] [s] eqs) = (n, s, eqs)
 
 instance Convert HsModule Isa.Cmd where
@@ -357,44 +422,10 @@ instance Convert HsDecl Isa.Cmd where
              typ'   <- convert typ
              return (Isa.TypesCmd [(Isa.TypeSpec tyvars tycon, typ')])
                                 
-    convert' (HsDataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
-        = let strip (HsQualConDecl _loc _FIXME _context decl) = decl
-              decls = map strip condecls
-          in do tyvars <- mapM convert tyvarNs
-                tycon  <- convert tyconN
-                let dataTy = Isa.TyCon tycon (map Isa.TyVar tyvars)
-                decls' <- mapM cnvt decls
-                let fieldNames = concatMap extrFieldNames decls
-                fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . UnQual) (nub fieldNames)
-                let funBinds = map (mkFunBinds dataTy) fields
-                return $ Isa.Block (Isa.DatatypeCmd (Isa.TypeSpec tyvars tycon) decls' : funBinds)
-              where cnvt (HsConDecl name types)
-                        = do name'  <- convert name
-                             tyvars <- mapM convert types
-                             return $ Isa.Constructor name' tyvars
-                    cnvt (HsRecDecl name fields) = 
-                        let types = map snd (flattenRecFields fields)
-                        in do name'  <- convert name
-                              tyvars <- mapM convert types
-                              return $ Isa.Constructor name' tyvars
-                    extrFieldNames (HsRecDecl conName fields) = map fst $ flattenRecFields fields
-                    extrFieldNames _ = []
-                    mkFunBinds dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
-                        let binds = map (mkFunBind fname) constrs
-                            fname' = Isa.Name fname
-                            funTy = Isa.TyFun dty (Env.toIsa fty)
-                        in Isa.FunCmd [fname'] [Isa.TypeSig fname' funTy] binds
-                    mkFunBind fname (Env.RecordConstr Env.LexInfo{Env.nameOf=cname} fields) =
-                        let fname' = Isa.Name fname
-                            con = Isa.Var $ Isa.Name cname
-                            genArg (Env.RecordField n _)
-                                | n == fname = Isa.Var (Isa.Name "x")
-                                | otherwise = Isa.Var (Isa.Name "_")
-                            conArgs = map genArg fields
-                            pat = Isa.Parenthesized $ foldl Isa.App con conArgs
-                            term = Isa.Var (Isa.Name "x")
-                        in (fname', [pat], term)
-
+    convert' decl@(HsDataDecl _ _ _ _ _ _ _) = 
+        do dataDef <- convertDataDecl decl
+           accCmds <- generateRecordAccessors decl
+           return $ Isa.Block (Isa.DatatypeCmd [dataDef] : accCmds)
     convert' (HsInfixDecl _loc assoc prio ops)
         = do (assocs, prios) <- mapAndUnzipM (lookupInfixOp . toHsQOp) ops 
              assert (all (== assoc) assocs && all (== prio) prios) 

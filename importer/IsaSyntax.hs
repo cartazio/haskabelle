@@ -38,6 +38,9 @@ type OpName    = Name
 -}
 type ClassName = Name
 
+data DatatypeDef = DatatypeDef TypeSpec [ConSpec]
+                   deriving (Eq,Show, Data, Typeable)
+
 {-|
   This type represents Isabelle commands.
 -}
@@ -47,7 +50,7 @@ data Cmd = Block [Cmd]  -- ^a block of commands
          {-|
            A data type command: @datatype ('a, 'b) "typeconstr" = Constr1 | Constr2 "'a list" 'b@
           -}
-         | DatatypeCmd TypeSpec [ConSpec]
+         | DatatypeCmd [DatatypeDef]
          
          {-|
            Record type declaration:

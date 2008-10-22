@@ -232,6 +232,15 @@ class Printer a where
                      in doc
 
 
+instance Printer Isa.DatatypeDef where
+    pprint' (Isa.DatatypeDef tyspec dataspecs)
+        = pprint' tyspec 
+          <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
+                                  (map ppconstr dataspecs))
+          where ppconstr (Isa.Constructor con types) 
+                    = hsep $ pprint' con : map pprint' types
+
+
 instance Printer Isa.Cmd where
     pprint' (Isa.Comment string) = empty -- blankline $ comment string
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
@@ -248,13 +257,11 @@ instance Printer Isa.Cmd where
         where
           isStandardTheory (Isa.Theory n) = n `elem` used_thy_names
 
-    pprint' (Isa.DatatypeCmd tyspec dataspecs)
-        = blankline $
-          text "datatype" <+> pprint' tyspec 
-          <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
-                                  (map ppconstr dataspecs))
-          where ppconstr (Isa.Constructor con types) 
-                    = hsep $ pprint' con : map pprint' types
+    pprint' (Isa.DatatypeCmd (def:defs)) = 
+        let fstDef = text "datatype" <+> pprint' def
+            restDefs = map ((text "and     " <+>) . pprint') defs
+        in blankline $ vcat (fstDef:restDefs)
+          
 
     pprint' (Isa.RecordCmd tyspec conspecs)
         = blankline $

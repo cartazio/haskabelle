@@ -232,6 +232,15 @@ not_implemented x = error ("Adaption not implemented yet for\n  " ++ prettyShow'
 class Adapt a where
     adapt  :: a -> AdaptM a
 
+instance Adapt Isa.DatatypeDef where
+    adapt (Isa.DatatypeDef sig@(Isa.TypeSpec tyvarNs tycoN) constrs)    
+        = shadowing (tycoN:tyvarNs) $
+            do constrs' <- mapM adpt constrs
+               return (Isa.DatatypeDef sig constrs')
+        where adpt (Isa.Constructor name types)
+                  = do types' <- mapM adaptType types
+                       return (Isa.Constructor name types')
+
 instance Adapt Isa.Cmd where
     adapt (Isa.Block cmds)       
         = mapM adapt cmds >>= (return . Isa.Block)
@@ -251,13 +260,8 @@ instance Adapt Isa.Cmd where
     adapt c@(Isa.InfixDeclCmd _ _ _) = not_implemented c
     adapt c@(Isa.Comment _)          = return c
 
-    adapt (Isa.DatatypeCmd sig@(Isa.TypeSpec tyvarNs tycoN) constrs)    
-        = shadowing (tycoN:tyvarNs) $
-            do constrs' <- mapM adpt constrs
-               return (Isa.DatatypeCmd sig constrs')
-        where adpt (Isa.Constructor name types)
-                  = do types' <- mapM adaptType types
-                       return (Isa.Constructor name types')
+    adapt (Isa.DatatypeCmd defs)    
+        = liftM Isa.DatatypeCmd $ mapM adapt defs
                            
     adapt (Isa.FunCmd funNs typesigs defs)
         = do funNs' <- mapM adaptName funNs
