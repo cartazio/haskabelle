@@ -330,25 +330,25 @@ type Subst = Map HsQName HsExp
   the given piece of Haskell Syntax.
 -}
 
-boundNamesEnv :: EnvTrans HskNames
-boundNamesEnv = mkEa fromExp
-             `extEau` fromAlt
-             `extEau` fromDecl
-             `extEau` fromMatch
-             `extEa` fromStmts
-    where fromExp :: HsExp -> [HskNames]
+boundNamesEnv :: (Monad m) => EnvTrans m HskNames
+boundNamesEnv = mkE fromExp
+             `extE` fromAlt
+             `extE` fromDecl
+             `extE` fromMatch
+             `extE` fromStmts
+    where fromExp :: HsExp -> Envs HskNames
           fromExp (HsLet binds _)
               = let bound = Set.fromList $ extractBindingNs binds
-                in [bound,bound]
+                in Envs [bound,bound]
           fromExp (HsLambda _ pats _)
               = let bound = Set.fromList $ extractBindingNs pats
-                in [Set.empty,bound, bound]
+                in Envs [Set.empty,bound, bound]
           fromExp (HsMDo stmts)
               = let bound = Set.fromList $ extractBindingNs stmts
-                in [bound]
+                in Envs [bound]
           fromExp (HsListComp _ stmts)
               = let bound = Set.fromList $ extractBindingNs stmts
-                in [bound, Set.empty]
+                in Envs [bound, Set.empty]
           fromExp exp = uniEloc exp Set.empty
                             
           fromAlt :: HsAlt -> HskNames
@@ -364,16 +364,16 @@ boundNamesEnv = mkEa fromExp
               = Set.fromList $ 
                 extractBindingNs whereBinds ++ extractBindingNs pats
 
-          fromStmts :: [HsStmt] -> [HskNames]
-          fromStmts [] = []
+          fromStmts :: [HsStmt] -> Envs HskNames
+          fromStmts [] = Envs []
           fromStmts (HsGenerator loc pat exp : _)
               = let bound = Set.fromList $ extractBindingNs pat
-                in [Set.empty, bound]
+                in Envs [Set.empty, bound]
           fromStmts (HsQualifier _ : _)
-              = [Set.empty, Set.empty]
+              = Envs [Set.empty, Set.empty]
           fromStmts (HsLetStmt binds : _)
               = let bound = Set.fromList $ extractBindingNs binds
-                in [bound, bound]
+                in Envs [bound, bound]
 
 {-|
   This is a monadic query function that returns

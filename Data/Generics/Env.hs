@@ -8,19 +8,11 @@ module Data.Generics.Env
       everywhereEnv,
       everythingEnv,
       mkE,
-      mkEa,
-      mkEu,
-      mkEau,
       extE,
-      extEa,
-      extEu,
-      extEau,
       liftE,
       extByC,
-      uniE,
       uniEloc,
-      replE,
-      accE
+      Envs(..)
     )
 where
 
@@ -45,15 +37,19 @@ instance Component (a, b) b where
   Elements of this type define how environments of type @e@ are changed
   during the generic traversal of a data structure.
 -}
-newtype EnvTrans e = EnvTrans (forall a. Data a => a -> [e -> e])
+newtype EnvTrans m e = EnvTrans (forall a. Data a => a -> m [e -> e])
+data Envs e = Envs [e]
+data Update e = Set e | Keep
 
 {-|
   This function turns a simple query function into a function
   that returns a list repeating the original result as often as
   there are immediate subterms in the argument.
 -}
-uniE :: (Data a) => (a -> b) -> (a -> [b])
-uniE query node = replicate (glength node) (query node)
+uniE :: (Monad m, Data a) => (a -> m b) -> (a -> m (Envs b))
+uniE query node =
+    do res <- query node
+       return $ Envs $ replicate (glength node) res
 
 {-|
   This function is similar to 'uniE' but it can be used locally, i.e.,
@@ -61,77 +57,121 @@ uniE query node = replicate (glength node) (query node)
   It returns a list repeating second argument as often as
   there are immediate subterms in first argument value the argument.
 -}
-uniEloc :: (Data a) => a -> b -> [b]
-uniEloc node env = replicate (glength node) env
+uniEloc :: (Data a) => a -> b -> Envs b
+uniEloc node env = Envs $ replicate (glength node) env
+
+{-|
+  This function turns pure environment transformer into monadic ones.
+-}
+pureE :: Monad m => (a -> e) -> (a -> m e)
+pureE pure node = return (pure node)
+
+updateE :: Monad m => (a -> m (Envs (Update e))) -> (a -> m (Envs (e -> e)))
+updateE upd node = 
+    do Envs res <- upd node
+       return $ Envs $ map apply res
+    where apply Keep x = x
+          apply (Set x) _ = x
 
 {-|
   This function turns constant environments into environment
   transformations that accumulate the environment values.
 -}
-accE :: (Monoid e) => (a -> [e]) -> (a -> [e -> e])
-accE accum node = map (flip mappend) (accum node)
+accE :: (Monad m, Monoid e) => (a -> m (Envs e)) -> (a -> m (Envs (e -> e)))
+accE accum node =
+    do Envs res <- accum node 
+       return $ Envs $ map (flip mappend) res
 
 {-|
   This function turns constant environments into environment
   transformations that replace the current environment with a new
   value (for @Just@) or keep it (for @Nothing@)
 -}
-replE :: (a -> [Maybe e]) -> (a -> [e -> e])
-replE repl node = map replMb (repl node)
+replE :: (Monad m) => (a -> m (Envs (Maybe e))) -> (a -> m (Envs (e -> e)))
+replE repl node =
+    do Envs res <- repl node
+       return $ Envs $ map replMb res
     where replMb Nothing    old = old
           replMb (Just new) _   = new
-
 
 {-|
   This transformer for environments of type @e@ will result in no changes to
   the environment during the generic traversal.
 -}
 
-nilE :: EnvTrans e
-nilE = EnvTrans (flip replicate id. glength)
+nilE :: (Monad m) => EnvTrans m e
+nilE = EnvTrans (return . flip replicate id. glength)
 
 {-|
   This function constructs a transformer for environments of type @e@ from
-  a function that produces a list of environment transformation function for a specific
+  a function that produces an transformation for a specific
   type @a@. The environment transformations from the list are applied to the respective immediate
   subterm of the data type @a@, i.e., the first element is applied to the first component
   of the type etc. For all other types the environment is left unchanged.
 -}
-mkE :: (Typeable a) => (a -> [e -> e]) ->  EnvTrans e
+mkE :: (EnvFunction b e, Monad m, Data a) => (a -> b) ->  EnvTrans m e
 mkE trans = nilE `extE` trans
 
-
-mkEu :: (Data a) => (a -> e -> e) -> EnvTrans e
-mkEu trans = mkE $ uniE trans
-
-mkEa :: (Typeable a, Monoid e) => (a -> [e]) -> EnvTrans e
-mkEa trans = mkE $ accE trans
-
-mkEau :: (Data a, Monoid e) => (a -> e) -> EnvTrans e
-mkEau trans = mkEa $ uniE trans
+{-|
+  This function constructs a transformer for environments of type @e@ from
+  a monadic function that produces an environment transformation for a specific
+  type @a@. The environment transformations from the list are applied to the respective immediate
+  subterm of the data type @a@, i.e., the first element is applied to the first component
+  of the type etc. For all other types the environment is left unchanged.
+-}
+mkEm :: (EnvFunction b e, Monad m, Data a) => (a -> m b) ->  EnvTrans m e
+mkEm trans = nilE `extEm` trans
 
 
 {-|
   This function extends the given base transformer for environments of type @e@ by
-  a function that produces a list of environment transformation function for a specific
+  a function that produces an environment transformation for a specific
   type @a@. The environment transformations from the list are applied to the respective
   successor of the data type @a@, i.e., the first element is applied to the first component
   of the type etc. For all other types the environment is transformed as by the
   base transformer that was given to this function.
 -}
 
-extE :: (Typeable a) => EnvTrans e -> (a -> [e -> e]) ->  EnvTrans e
-extE (EnvTrans base) trans = EnvTrans ( base `extQ` trans)
+extE :: (EnvFunction b e, Monad m, Data a) => EnvTrans m e -> (a -> b) ->  EnvTrans m e
+extE base trans = extEm base (pureE trans)
 
-extEa :: (Monoid e, Typeable a) =>
-         EnvTrans e -> (a -> [e]) -> EnvTrans e
-extEa base ext = base `extE` accE ext
+{-|
+  This function extends the given base transformer for environments of type @e@ by
+  a monadic function that produces an environment transformation for a specific
+  type @a@. The environment transformations from the list are applied to the respective
+  successor of the data type @a@, i.e., the first element is applied to the first component
+  of the type etc. For all other types the environment is transformed as by the
+  base transformer that was given to this function.
+-}
 
-extEu :: (Data a) => EnvTrans e -> (a -> e -> e) -> EnvTrans e
-extEu base ext = base `extE` uniE ext
+extEm :: (EnvFunction b e, Monad m, Data a) => EnvTrans m e -> (a -> m b) ->  EnvTrans m e
+extEm (EnvTrans base) trans = EnvTrans ( base `extQ` ext)
+    where ext node = do Envs res <- toEnvFunction trans node
+                        return res
 
-extEau :: (Data a, Monoid e) => EnvTrans e -> (a -> e) -> EnvTrans e
-extEau base ext = base `extEa` uniE ext
+
+
+class EnvFunction b e where
+    toEnvFunction :: (Monad m, Data a) => (a -> m b) -> (a -> m (Envs (e -> e)))
+
+instance EnvFunction (Envs(e -> e)) e where
+    toEnvFunction = id
+
+instance EnvFunction (e -> e) e where
+    toEnvFunction = uniE
+
+instance EnvFunction (Envs( Update e)) e where
+    toEnvFunction = updateE
+
+instance EnvFunction (Update e) e where
+    toEnvFunction = updateE . uniE
+
+instance (Monoid e) => EnvFunction (Envs e) e where
+    toEnvFunction = accE
+
+instance (Monoid e) => EnvFunction e e where
+    toEnvFunction = accE . uniE
+
 
 {-|
   This function takes a transformer for environments of type @c@ and
@@ -140,9 +180,11 @@ extEau base ext = base `extEa` uniE ext
   @c@ component of @e@.
 -}
 
-liftE :: Component e c => EnvTrans c -> EnvTrans e
+liftE :: (Monad m, Component e c) => EnvTrans m c -> EnvTrans m e
 liftE (EnvTrans query) = (EnvTrans query')
-    where query' node = map liftC (query node)
+    where query' node =
+              do res <- query node
+                 return $ map liftC res
 
 {-|
   This function extends a transformer for environments of type @e@
@@ -150,9 +192,12 @@ liftE (EnvTrans query) = (EnvTrans query')
   of $e$. 
 -}
 
-extByC :: Component e c => EnvTrans e -> EnvTrans c -> EnvTrans e
+extByC :: (Monad m, Component e c) => EnvTrans m e -> EnvTrans m c -> EnvTrans m e
 extByC (EnvTrans base) (EnvTrans ext) = (EnvTrans query)
-    where query node = zipWith (.) (base node) (map liftC (ext node))
+    where query node =
+              do extRes <- ext node
+                 baseRes <-base node
+                 return $ zipWith (.) baseRes (map liftC extRes)
 
 
 {-|
@@ -161,10 +206,11 @@ extByC (EnvTrans base) (EnvTrans ext) = (EnvTrans query)
   as generated by the given environment transformer.
 -}
 everywhereEnv :: MonadReader e m =>
-                 EnvTrans e -> GenericM m -> GenericM m
+                 EnvTrans m e -> GenericM m -> GenericM m
 everywhereEnv transArg@(EnvTrans envTrans) f node = 
-    let trans = envTrans node
-    in gmapEnvT trans (everywhereEnv transArg f) node >>= f
+    do trans <- envTrans node
+       node' <- gmapEnvT trans (everywhereEnv transArg f) node
+       f node'
 
 {-|
   This function summarises the queried results collected by
@@ -173,12 +219,12 @@ everywhereEnv transArg@(EnvTrans envTrans) f node =
 -}
 
 everythingEnv :: MonadReader e m =>
-                 EnvTrans e -> (q -> q -> q) -> GenericQ (m q) -> GenericQ (m q)
+                 EnvTrans m e -> (q -> q -> q) -> GenericQ (m q) -> GenericQ (m q)
 everythingEnv transArg@(EnvTrans envTrans) combine f node =
-    let trans = envTrans node
-    in do children <- gmapEnvQ trans (everythingEnv transArg combine f) node
-          current <- f node
-          return $ foldl combine current children
+    do trans <- envTrans node
+       children <- gmapEnvQ trans (everythingEnv transArg combine f) node
+       current <- f node
+       return $ foldl combine current children
         
 {-|
   This function checks that the given node has the same number of immediate subterms as
