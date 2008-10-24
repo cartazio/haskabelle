@@ -282,15 +282,18 @@ generateRecordAccessors (HsDataDecl _loc _kind _context tyconN tyvarNs condecls 
                 let dataTy = Isa.TyCon tycon (map Isa.TyVar tyvars)
                 let fieldNames = concatMap extrFieldNames decls
                 fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . UnQual) (nub fieldNames)
-                let funBinds = map (mkFunBinds dataTy) fields
+                let funBinds = map (mkFunBinds (length decls) dataTy) fields
                 return funBinds
               where extrFieldNames (HsRecDecl conName fields) = map fst $ flattenRecFields fields
                     extrFieldNames _ = []
-                    mkFunBinds dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
+                    mkFunBinds numCon dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
                         let binds = map (mkFunBind fname) constrs
                             fname' = Isa.Name fname
                             funTy = Isa.TyFun dty (Env.toIsa fty)
-                        in Isa.FunCmd [fname'] [Isa.TypeSig fname' funTy] binds
+                            def = if numCon > length constrs
+                                  then [(fname', [Isa.Var (Isa.Name "_")], Isa.Var (Isa.Name "arbitrary"))]
+                                  else []
+                        in Isa.FunCmd [fname'] [Isa.TypeSig fname' funTy] (binds ++ def)
                     mkFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
                             con = Isa.Var $ Isa.Name cname
