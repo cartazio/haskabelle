@@ -330,7 +330,7 @@ type Subst = Map HsQName HsExp
   the given piece of Haskell Syntax.
 -}
 
-boundNamesEnv :: (Monad m) => EnvTrans m HskNames
+boundNamesEnv :: (Monad m) => EnvDef m HskNames
 boundNamesEnv = mkE fromExp
              `extE` fromAlt
              `extE` fromDecl
