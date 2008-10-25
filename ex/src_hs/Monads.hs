@@ -1,5 +1,6 @@
 module Monads
     ( module Control.Monad.State,
+      throwError,
       module Monads)
 where
 

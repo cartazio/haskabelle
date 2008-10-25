@@ -573,6 +573,7 @@ parseDoSyntaxElem el =
 parseMonConstantsElem :: Element -> XMLReader MonadConstants
 parseMonConstantsElem = return . ExplicitMonadConstants . Map.fromList . pair . words . strContent
     where pair [] = []
+          pair [_] = fail "Monad constants have to be defined in pairs!"
           pair (a:b:rest) = (a,b) : pair rest
 
 

@@ -410,7 +410,7 @@ instance Printer Isa.Literal where
     -- would come up with a too general type, resulting in
     -- non-workingness.
     pprint' (Isa.Int i)      = let cc = colon <> colon in
-                               parens $ integer i <> cc <> text "_" <> cc <> text "num"
+                               parens $ integer i --  <> cc <> text "_" <> cc <> text "num"
     pprint' (Isa.Char ch)    = text "CHR " <+> quotes (quotes (char ch))
     pprint' (Isa.String str) = quotes . quotes . text $ str
 

@@ -13,16 +13,19 @@ fun2 (C v1 v2 v3) = C v2 v1 "foo"
 
 update2 x = x{common = 'a'}
 
+constr :: MyRecord
+constr = A{ aField1 = 1, common = '2'}
+
 getChar :: MyRecord -> Char
 getChar = common
 
 update :: MyRecord -> MyRecord
 update x = x{aField2 = "foo"}
 
-fun :: MyRecord -> Int
-fun a@A{aField1 = val} = val
-fun b@B{bField3 = val} = val
-fun (C v1 v2 v3) = 1
+pattern :: MyRecord -> Int
+pattern A{aField1 = val} = val
+pattern B{bField3 = val} = val
+pattern (C v1 v2 v3) = 1
 
 foo :: MyRecord -> Int
 foo a = aField1 a

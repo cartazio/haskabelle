@@ -681,7 +681,7 @@ instance Convert HsExp Isa.Term where
                  let updates' = map (\(HsFieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
                      toSimplePat (Env.RecordField iden _) = 
                          case lookup iden updates' of
-                           Nothing -> HsVar (UnQual (HsIdent "undefined"))
+                           Nothing -> HsVar (UnQual (HsIdent "arbitrary"))
                            Just exp -> exp
                      recArgs = map toSimplePat recFields
                  in convert' $ foldl HsApp (HsCon qname) recArgs
@@ -691,9 +691,18 @@ instance Convert HsExp Isa.Term where
         do mbConstr <- lookupIdentifier_Constant fname
            case mbConstr of
              Just (Env.Constant (Env.Field _ constrs)) -> 
+                 assert (not (null constrs)) $
                  do exp' <- convert exp
                     cases <- mapM mkCase constrs
-                    return $ Isa.Case exp' cases 
+                    let dataTyN = Env.constrTypeName (head constrs)
+                    mbType <- lookupIdentifier_Type' dataTyN
+                    totalConstrs <- case mbType of 
+                                   Just (Env.Type (Env.Data _ cs)) -> return cs
+                                   _ -> die $ "data type " ++ Msg.quote dataTyN ++ " is not declared in environment!"
+                    let def = if length constrs == length totalConstrs
+                              then []
+                              else [(Isa.Var (Isa.Name "_"), Isa.Var (Isa.Name "arbitrary"))]
+                    return $ Isa.Case exp' (cases ++ def)
                  where mkCase (Env.RecordConstr _ lexInfo recFields) = 
                          do let constrName = Env.nameOf lexInfo
                                 constr = Isa.Var $ Isa.Name constrName
@@ -895,6 +904,15 @@ lookupIdentifier_Constant qname
          modul     <- queryContext currentModule
          return (Env.lookupConstant (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
 
+{-|
+  This function looks up the lexical information for the given
+  type identifier.
+-}
+lookupIdentifier_Type' :: Env.EnvName -> ContextM (Maybe Env.Identifier)
+lookupIdentifier_Type' envName
+    = do globalEnv <- queryContext globalEnv
+         modul     <- queryContext currentModule
+         return (Env.lookupType (Env.fromHsk modul) envName globalEnv)
 {-|
   This function looks up the lexical information for the given
   type identifier.

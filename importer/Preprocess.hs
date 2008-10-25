@@ -196,10 +196,12 @@ addPatBindsToMatch patBinds match@(HsMatch loc name pats (HsUnGuardedRhs exp) bi
     = let neededPatBinds = filter patBindNeeded patBinds
           shadowedPatBinds = map shadowPatBind neededPatBinds
           rhs' = HsUnGuardedRhs (HsLet (HsBDecls shadowedPatBinds) exp)
-      in HsMatch loc name pats rhs' binds
+      in if null neededPatBinds
+         then match
+         else HsMatch loc name pats rhs' binds
     where patBindNeeded patBind
-              = Set.null ( Set.fromList (extractBindingNs patBind)
-                           `Set.intersection` extractFreeVarNs patBind )
+              = not (Set.null ( Set.fromList (extractBindingNs patBind)
+                                `Set.intersection` extractFreeVarNs exp ))
           boundNames = Set.fromList (extractBindingNs pats)
           shadowPatBind :: HsDecl -> HsDecl
           shadowPatBind (HsPatBind loc pat rhs binds) 
