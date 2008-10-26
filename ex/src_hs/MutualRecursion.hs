@@ -18,8 +18,8 @@ data Bexp = Equal Exp Exp | Greater Exp Exp
 
 
 
-iseven 0 = True
-iseven n = isodd (n-1)
+extract x = x {a = True}
 
-isodd 0 = False
-isodd n = iseven (n-1)
+
+data Record = Record{a :: Bool, b :: Int}
+

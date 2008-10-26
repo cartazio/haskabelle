@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <translation>
   <input>
-    <path location="src_hs/UseMonads.hs" />
+    <path location="src_hs/MutualRecursion.hs" />
   </input>
   <output location="dst_thy" />
   <customisation>
@@ -29,16 +29,8 @@
     </monadInstance>
     
     <replace>
-      <module name="Text.PrettyPrint.HughesPJ" />
-      <theory name="Empty" location="Empty.thy">
-	<constants>
-	  cat comma empty parens punctuate text &lt;&gt;
-	</constants>
-      </theory>
-    </replace>
-    <replace>
       <module name="Monads" />
-      <theory name="Empty" location="Empty.thy">
+      <theory name="Monads" location="Monads.thy">
 	<monads>
 	  MyStateM MyErrorM
 	</monads>

@@ -54,7 +54,7 @@ makeEdgesFromHsDecl globalEnv modul decl
                                       envN = Env.fromHsk hsqname
                                   in Env.resolveEnvName_OrLose globalEnv mID envN)
           names = map canonicalize $ (namesFromHsDecl decl)
-          used_names = map canonicalize $ Set.toList (extractFreeVarNs decl) ++ Set.toList (extractDataConNs decl)
+          used_names = map canonicalize $ Set.toList (extractFreeVarNs decl) ++ Set.toList (extractDataConNs decl) ++ Set.toList (extractFieldNs decl)
           implTypes =  catMaybes $
                        map (Env.getDepDataType globalEnv (Env.fromHsk modul)) used_names
           usedTypes = case decl of

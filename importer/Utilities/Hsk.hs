@@ -21,6 +21,7 @@ module Importer.Utilities.Hsk
       bindingsFromDecls,
       renameFreeVars,
       bindingsFromPats,
+      extractFieldNs,
       extractFreeVarNs,
       extractDataConNs,
       extractTypeConNs,
@@ -443,6 +444,15 @@ extractTypeConNs node = everything Set.union (mkQ Set.empty fromType) node
 extractFreeVarNs :: Data a => a -> HskNames
 extractFreeVarNs node = runBindingM $ everythingEnv boundNamesEnv (Set.union) freeNamesLocal node
 
+{-|
+  This function extracts all used field labels
+-}
+extractFieldNs :: Data a => a -> HskNames
+extractFieldNs node = everything Set.union (mkQ Set.empty fromPat `extQ` fromExp) node
+    where fromPat :: HsPatField -> HskNames
+          fromPat (HsPFieldPat field _) = Set.singleton field
+          fromExp :: HsFieldUpdate -> HskNames
+          fromExp (HsFieldUpdate field _) = Set.singleton field
 
 applySubst :: Subst -> GenericT
 applySubst subst node = runBindingM $ everywhereEnv boundNamesEnv (applySubstLocal subst) node
