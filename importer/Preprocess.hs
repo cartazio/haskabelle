@@ -171,7 +171,6 @@ delocalize_HsExp (HsCase body alternatives)
          (alternatives', decls) <- liftM (\(xs, ys) -> (xs, concat ys))
                                       $ mapAndUnzipM delocalize_HsAlt alternatives
          return (HsCase body' alternatives', localdecls ++ decls)
-    where
 
 delocalize_HsExp exp = descendM (\(e, ds) -> do (e', ds') <- delocalize_HsExp e
                                                 return (e', ds++ds')) 
@@ -254,6 +253,7 @@ checkForRecursiveBinds bindings
         []  -> bindings
         d:_ -> error (Msg.recursive_bindings_disallowed (getSrcLoc d))
 
+
 -- Closures over variables can obviously not be delocalized, as for instance
 --
 --    foo x = let bar y = y * x 
@@ -265,7 +265,6 @@ checkForRecursiveBinds bindings
 --
 --    foo x  = bar0 42
 --
-
 checkForClosures :: [HsQName] -> [HsDecl] -> [HsDecl]
 checkForClosures closedNs decls 
     = map check decls
@@ -394,17 +393,31 @@ normalizeNames_HsDecl decl
 ---- Deguardification
 
 deguardify_HsDecl :: HsDecl -> HsDecl
+deguardify_HsDecl decl 
+    = case checkGuardConsistency decl of
+        HsFunBind matchs -> HsFunBind $ map deguardify_HsMatch matchs
+            where deguardify_HsMatch (HsMatch loc name pats rhs where_binds)
+                      = HsMatch loc name pats 
+                                (deguardify_HsRhs rhs)
+                                (deguardify_HsBinds where_binds)
+        _ -> descend deguardify_HsDecl (descendBi deguardify_HsExp decl)
 
-deguardify_HsDecl d@(HsFunBind matchs)
-    = HsFunBind (map deguardify_HsMatch matchs)
-    where deguardify_HsMatch (HsMatch loc name pats rhs where_binds)
-              = HsMatch loc name pats (deguardify_HsRhs rhs) (deguardify_HsBinds where_binds)
+checkGuardConsistency :: HsDecl -> HsDecl
+checkGuardConsistency (HsFunBind matchs)
+    = HsFunBind $ do (HsMatch l n ps rhs (HsBDecls localdecls), followingMatchs) 
+                         <- zip matchs (tails (tail matchs))
+                     let localdecls' = map checkGuardConsistency localdecls
+                     case areGuardsComplete (get_guards rhs) of
+                       True      -> return $ HsMatch l n ps rhs (HsBDecls localdecls')
+                       False | null followingMatchs 
+                                 -> return $ HsMatch l n ps rhs (HsBDecls localdecls')
+                             | otherwise
+                                 -> error (Msg.found_inconsistency_in_guards l)
+      where get_guards (HsUnGuardedRhs _) = []
+            get_guards (HsGuardedRhss gs) = gs
+checkGuardConsistency decl = decl
 
--- deguardify_HsDecl (HsPatBind)
-
-deguardify_HsDecl decl = descend deguardify_HsDecl (descendBi deguardify_HsExp decl)
-
-
+         
 deguardify_HsRhs (HsUnGuardedRhs body)
     = HsUnGuardedRhs (deguardify_HsExp body)
 deguardify_HsRhs (HsGuardedRhss guards)
@@ -429,23 +442,40 @@ deguardify_HsAlt (HsAlt loc pat (HsGuardedAlts guarded_alts) wbinds)
 
 deguardify_HsGuardedRhss :: [HsGuardedRhs] -> HsExp
 deguardify_HsGuardedRhss guards
-    = let (guards', otherwise_expr) = findOtherwiseExpr guards
+    = let (guards', otherwise_expr) = find_otherwise_expr guards
       in deguardify_HsExp (foldr deguardify otherwise_expr guards')
     where 
       deguardify x@(HsGuardedRhs loc stmts clause) body
-          = HsIf (makeGuardExpr stmts) clause body
+          = HsIf (make_guard_expr stmts) clause body
    
-      makeGuardExpr stmts = foldl1 andify (map expify stmts)
+      make_guard_expr stmts = foldl1 andify (map expify stmts)
           where expify (HsQualifier exp) = exp
                 andify e1 e2 
                     = HsInfixApp e1 (HsQVarOp (Qual (Module "Prelude") (HsSymbol "&&"))) e2
 
-      findOtherwiseExpr guards
-          = let otherwise_stmt = HsQualifier (HsVar (UnQual (HsIdent "otherwise")))
-                true_stmt      = HsQualifier (HsVar (UnQual (HsIdent "True")))
-                bottom         = HsVar (Qual (Module "Prelude") (HsSymbol "_|_"))
-            in case break (\(HsGuardedRhs _ stmts _) 
+      find_otherwise_expr guards
+          = let bottom = HsVar (Qual (Module "Prelude") (HsSymbol "_|_"))
+            in case splitGuards guards of
+                 (guards', Just (HsGuardedRhs _ _ last_expr)) -> (guards', last_expr)
+                 (guards', Nothing)                           -> (guards', bottom)
+                 
+-- Returns (real guards, `otherwise' guard if there).
+--
+splitGuards :: [HsGuardedRhs] -> ([HsGuardedRhs], Maybe HsGuardedRhs)
+splitGuards guards
+    = let otherwise_stmt = HsQualifier (HsVar (UnQual (HsIdent "otherwise")))
+          true_stmt      = HsQualifier (HsVar (UnQual (HsIdent "True")))
+      in case break (\(HsGuardedRhs _ stmts _) 
                                -> stmts `elem` [[otherwise_stmt], [true_stmt]])
                           guards of
-                 (guards', (HsGuardedRhs _ _ last_expr):_) -> (guards', last_expr)
-                 (guards', [])                             -> (guards', bottom)
+           (gs, other:_) -> (gs, Just other)
+           (gs, [])      -> (gs, Nothing)
+
+-- Do the guards contain an `otherwise'?
+--
+areGuardsComplete :: [HsGuardedRhs] -> Bool
+areGuardsComplete guards
+    = case splitGuards guards of
+        (_, Just _)   -> True
+        ([], Nothing) -> True -- no guards alltogether
+        (_, Nothing)  -> False

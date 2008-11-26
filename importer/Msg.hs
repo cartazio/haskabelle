@@ -100,3 +100,6 @@ recursive_bindings_disallowed srcloc
 
 forward_bindings_disallowed srcloc
     = srcloc2string srcloc ++ ": " ++ "Forward references to bindings disallowed."
+
+found_inconsistency_in_guards srcloc
+    = srcloc2string srcloc ++ ": " ++ "Guard inconsistency."
