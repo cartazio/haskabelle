@@ -1,18 +1,29 @@
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
+
+    Description:
+
+       Various normaliziations of the Haskell AST:
+
+          * delocalization
+
+          * expansion of pattern guards
+
+          * renaming of identifiers if they'd clash with Isabelle
+
+          * expansion of as-patterns
 -}
 
-module Importer.Preprocess where -- (preprocessHsModule) where
+module Importer.Preprocess (preprocessHsModule) where
 
 import Maybe
-import List
+import List (partition, intersect, tails)
 import Control.Monad.State
+import Data.Generics.Biplate
+
 import Language.Haskell.Exts
 
-import Data.Generics.Biplate
-import Data.Generics.Str
-
-import Importer.Utilities.Misc -- (concatMapM, assert)
+import Importer.Utilities.Misc (concatMapM, assert, trace, prettyShow')
 import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
 
@@ -39,9 +50,9 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
 --  Since Isabelle/HOL does not really support local function
 --  declarations, we convert the Haskell AST to an equivalent AST
 --  where every local function declaration is made a global
---  declaration. This includes where as well as let expressions.
+--  declaration. This includes `where' as well as `let' expressions.
 --
---  Additionally, all variables defined in a where clause
+--  Additionally, all variables defined in a `where' clause
 --  are converted to an equivalent let expression.
 
 
@@ -143,17 +154,17 @@ delocalize_HsGuardedRhs (HsGuardedRhs loc stmts clause_body)
 delocalize_HsAlt (HsAlt loc pat (HsUnGuardedAlt body) wbinds)
     = withBindings (extractBindingNs pat)
         $ do (body', localdecls) <- delocalize_HsExp (letify wbinds body)
-             return (HsAlt loc pat (HsUnGuardedAlt body') (HsBDecls []), localdecls)                              
+             return (HsAlt loc pat (HsUnGuardedAlt body') (HsBDecls []), localdecls)
 
 delocalize_HsExp (HsLet binds body)
     -- The let expression in Isabelle/HOL supports simple pattern matching. So we
     -- differentiate between pattern and other (e.g. function) bindings; the first
     -- ones are kept, the latter ones are converted to global bindings.
-    = let (patBinds, otherBinds) = splitPatBinds binds
+    = let (patBinds, otherBinds) = splitPatBinds $ checkBindings binds
       in withBindings (extractBindingNs patBinds)
-         $ do (otherBinds', decls, renamings) <- delocalize_HsBinds otherBinds
-              (body', moredecls)              <- delocalize_HsExp (renameFreeVars renamings body)
-              return (letify (renameFreeVars renamings patBinds) body', decls ++ moredecls)
+           $ do (otherBinds', decls, renamings) <- delocalize_HsBinds otherBinds
+                (body', moredecls)              <- delocalize_HsExp (renameFreeVars renamings body)
+                return (letify (renameFreeVars renamings patBinds) body', decls ++ moredecls)
 
 delocalize_HsExp (HsCase body alternatives)
     = do (body', localdecls)    <- delocalize_HsExp body
@@ -166,9 +177,6 @@ delocalize_HsExp exp = descendM (\(e, ds) -> do (e', ds') <- delocalize_HsExp e
                                                 return (e', ds++ds')) 
                          (exp, [])
 
-
-isHsPatBind (HsPatBind _ _ _ _) = True
-isHsPatBind _ = False
 
 -- Partitions HsBinds into (pattern bindings, other bindings).
 splitPatBinds :: HsBinds -> (HsBinds, HsBinds)
@@ -190,10 +198,61 @@ splitPatBinds (HsBDecls decls)
           split decl = (Nothing, Nothing, Just decl)
 splitPatBinds junk = error ("splitPatBinds: Fall through. " ++ show junk)
 
+getPatDecls :: HsBinds -> [HsDecl]
+getPatDecls bindings
+    = let HsBDecls patdecls = fst (splitPatBinds bindings) in patdecls
+
 flattenHsTypeSig :: HsDecl -> [HsDecl]
 flattenHsTypeSig (HsTypeSig loc names typ)
     = map (\n -> HsTypeSig loc [n] typ) names
 
+-- `let' in Haskell is actually a letrec, but Isar/HOL does not allow
+-- recursive let expressions. We hence check the bindings in question
+-- whether or not we can deal with them.
+--
+checkBindings :: HsBinds -> HsBinds
+checkBindings bindings
+    = checkForRecursiveBinds . checkForForwardRefs $ bindings
+
+-- Check for forward references, e.g. prohibit
+--
+--    let a = b * 42 
+--        b = 23 in ... 
+-- 
+-- as `b' is referenced before its binding is established.
+--
+-- Notice that do allow forward referencing to functions like for
+-- instance in
+--
+--    let a x = 32 + b x
+--        b y = c (- y)
+--        c z = 42 * z in ...
+-- 
+-- We can allow this because the function will be globalized, and
+-- hence moved out of the `let' expression.
+--
+checkForForwardRefs bindings
+    = let vardecls = getPatDecls bindings
+      in case filter (\(decl, forwardNss) -> any (`elem` concat forwardNss) $ extractFreeVarNs decl)
+                $ zip vardecls
+                      -- These are the consecutively following binding names:
+                      (tails (map extractBindingNs vardecls))
+      of []          -> bindings
+         (decl, _):_ -> error (Msg.forward_bindings_disallowed (getSrcLoc decl))
+
+-- Check for recursive binding attempts, e.g. prohibit
+--
+--    let ones = 1 : ones in ...
+--
+-- For the same reasons as above (forward refs), we do all recursive
+-- local function definitions.
+--
+checkForRecursiveBinds bindings
+    = let find_recursive_binds = filter (\d -> any (`elem` extractBindingNs d) 
+                                                 $ extractVarNs d)
+      in case find_recursive_binds (getPatDecls bindings) of
+        []  -> bindings
+        d:_ -> error (Msg.recursive_bindings_disallowed (getSrcLoc d))
 
 -- Closures over variables can obviously not be delocalized, as for instance
 --
@@ -263,8 +322,10 @@ normalizePattern :: HsPat -> (HsPat, [(HsName, HsPat)])
 normalizePattern p@(HsPVar _)    = (p, [])
 normalizePattern p@(HsPLit _)    = (p, [])
 normalizePattern p@(HsPWildCard) = (p, [])
-normalizePattern (HsPNeg p)      = let (p', as_pats) = normalizePattern p in (HsPNeg p', as_pats)
-normalizePattern (HsPParen p)    = let (p', as_pats) = normalizePattern p in (HsPParen p', as_pats)
+normalizePattern (HsPNeg p)      = let (p', as_pats) = normalizePattern p 
+                                   in (HsPNeg p', as_pats)
+normalizePattern (HsPParen p)    = let (p', as_pats) = normalizePattern p 
+                                   in (HsPParen p', as_pats)
 
 normalizePattern (HsPAsPat n pat) 
     = (HsPVar n, [(n, pat)])
@@ -376,41 +437,15 @@ deguardify_HsGuardedRhss guards
    
       makeGuardExpr stmts = foldl1 andify (map expify stmts)
           where expify (HsQualifier exp) = exp
-                andify e1 e2 = HsInfixApp e1 (HsQVarOp (Qual (Module "Prelude") (HsSymbol "&&"))) e2
+                andify e1 e2 
+                    = HsInfixApp e1 (HsQVarOp (Qual (Module "Prelude") (HsSymbol "&&"))) e2
 
       findOtherwiseExpr guards
           = let otherwise_stmt = HsQualifier (HsVar (UnQual (HsIdent "otherwise")))
                 true_stmt      = HsQualifier (HsVar (UnQual (HsIdent "True")))
                 bottom         = HsVar (Qual (Module "Prelude") (HsSymbol "_|_"))
-            in case break (\(HsGuardedRhs _ stmts _) -> stmts `elem` [[otherwise_stmt], [true_stmt]])
+            in case break (\(HsGuardedRhs _ stmts _) 
+                               -> stmts `elem` [[otherwise_stmt], [true_stmt]])
                           guards of
                  (guards', (HsGuardedRhs _ _ last_expr):_) -> (guards', last_expr)
                  (guards', [])                             -> (guards', bottom)
-
-
--- expandListComprehensions_HsDecl :: HsDecl -> HsDecl
--- expandListComprehensions_HsDecl decl
---     = descendBi expandListComprehensions_HsExp decl
-
--- expandListComprehensions_HsExp :: HsExp -> HsExp
--- expandListComprehensions_HsExp expr
---     = case expr of
---         HsListComp e stmts -> descend expandListComprehensions_HsExp 
---                                 (expandListCompr e stmts)
---         _ -> descend expandListComprehensions_HsExp expr
-
--- expandListCompr e stmts = expand e stmts
---     where
---       expand e [] = e
---       expand e (HsQualifier b : rest)
---           = hsk_if b (expand e rest) hsk_nil
---       expand e (HsGenerator loc pat exp : rest)
---           = let argN  = (HsIdent "arg")
---                 argqN = UnQual argN
---                 fn    = hsk_lambda loc [HsPVar argN]
---                          $ hsk_case loc (HsVar argqN) 
---                                [(pat,         (expand e rest)), 
---                                 (HsPWildCard, hsk_nil)]
---             in hsk_concatMap fn exp
---       expand e (HsLetStmt _ : _) 
---           = error "Let statements not supported in List Comprehensions."

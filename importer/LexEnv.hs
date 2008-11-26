@@ -1,7 +1,10 @@
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
+    
+    Description:
 
-Definition of a Global Environment for identifier resolution and information retrieval.
+       Definition of a Global Environment for identifier resolution
+       and information retrieval.
 -}
 
 module Importer.LexEnv where

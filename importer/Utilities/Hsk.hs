@@ -7,7 +7,7 @@ Auxiliary.
 module Importer.Utilities.Hsk (module Importer.Utilities.Hsk) where
   
 import Maybe
-import List (sort)
+import List (sort, sortBy)
 import Array (inRange)
 import Char (toLower)
 
@@ -357,24 +357,26 @@ renameHsPat renams pat
 --
 isFreeVar (Special _) _ = False
 isFreeVar qname body
-    = occurs qname body && let body' = renameFreeVars (evalGensym 9999 (freshIdentifiers [qname])) body
-                           in not (occurs qname body')
-    where occurs qname body 
-              = let varNs   = [ qn | HsVar qn <- universeBi body ]
-                    varopNs = [ qn | HsQVarOp qn <- universeBi body ] 
-                              ++ [ qn | HsQConOp qn <- universeBi body ]
-                in qname `elem` varNs || qname `elem` varopNs
+    = qname `elem` extractVarNs body 
+      && let body' = renameFreeVars (evalGensym 9999 (freshIdentifiers [qname])) body
+         in qname `notElem` extractVarNs body'
+
+extractVarNs thing
+    = let varNs   = [ qn | HsVar qn <- universeBi thing ]
+          varopNs = [ qn | HsQVarOp qn <- universeBi thing ] 
+                    ++ [ qn | HsQConOp qn <- universeBi thing ]
+      in varNs ++ varopNs
+                
 
 extractFreeVarNs thing
     = filter (flip isFreeVar thing) (universeBi thing :: [HsQName])
 
 orderDeclsBySourceLine :: HsDecl -> HsDecl -> Ordering
 orderDeclsBySourceLine decl1 decl2
-    = compare (getSourceLine decl1) (getSourceLine decl2) 
+    = compare (srcLine . getSrcLoc $ decl1) (srcLine . getSrcLoc $ decl2) 
 
-getSourceLine :: HsDecl -> Int
-getSourceLine decl
-    = let srclocs = childrenBi decl :: [SrcLoc]
-          lines   = map srcLine srclocs
-      in head (sort lines)
-
+getSrcLoc :: HsDecl -> SrcLoc
+getSrcLoc decl
+    = head . sortBy compareLines $ (childrenBi decl :: [SrcLoc])
+    where compareLines loc1 loc2 
+              = compare (srcLine loc1) (srcLine loc2)
