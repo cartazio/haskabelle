@@ -402,6 +402,15 @@ deguardify_HsDecl decl
                                 (deguardify_HsBinds where_binds)
         _ -> descend deguardify_HsDecl (descendBi deguardify_HsExp decl)
 
+-- We cannot rewrite all guard scenarios into a nested IF expressions.
+-- For example,
+--
+--    foo x [] | x > 0 = True
+--    foo x [y]        = False
+--    foo x ys         = True
+--
+-- cannot easily be rewritten. Catch against that.
+-- 
 checkGuardConsistency :: HsDecl -> HsDecl
 checkGuardConsistency (HsFunBind matchs)
     = HsFunBind $ do (HsMatch l n ps rhs (HsBDecls localdecls), followingMatchs) 
