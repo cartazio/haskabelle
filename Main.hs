@@ -17,10 +17,8 @@ import Importer.Configuration
 
 import Importer.Preprocess
 
-main = runTest
-
-main' :: IO ()
-main' = do
+main :: IO ()
+main = do
   progname <- getProgName
   args     <- getArgs
   mainProgArgs progname args

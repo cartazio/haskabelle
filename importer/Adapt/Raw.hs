@@ -1,6 +1,3 @@
--- THIS IS A GENERATED FILE - DO NOT EDIT!
--- $Id$
-
 module Importer.Adapt.Raw where
 
 import Importer.Adapt.Common

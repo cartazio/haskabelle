@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <translation>
   <input>
-    <path location="src_hs/MutualRecursion.hs" />
+    <path location="src_hs/Guards.hs" />
   </input>
   <output location="dst_thy" />
   <customisation>

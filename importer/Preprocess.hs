@@ -495,7 +495,7 @@ deguardifyAlts (HsGuardedAlts guards) =
     deguardifyGuards .
     (map (\(HsGuardedAlt l ss e) -> HsGuardedRhs l ss e)) $
     guards
-
+deguardifyGuards :: [HsGuardedRhs] -> HsExp
 deguardifyGuards guards
     = let (guards', otherwise_expr) = findOtherwiseExpr guards
       in foldr deguardify otherwise_expr guards'
@@ -516,7 +516,11 @@ deguardifyGuards guards
             in case break (\(HsGuardedRhs _ stmts _) -> stmts `elem` [[otherwise_stmt], [true_stmt]])
                           guards of
                  (guards', (HsGuardedRhs _ _ last_expr):_) -> (guards', last_expr)
-                 (guards', [])                             -> (guards', bottom)
+                 (guards', [])                             ->
+                     let HsGuardedRhs srcLoc _ _ = last guards'
+                     in error $ srcloc2string srcLoc ++ ": "
+                            ++ "Guards can be translated only if they are closed"
+                            ++ " with a trivial guard, i.e., True or otherwise."
 
 ------------------------------------------------------------
 ------------------------------------------------------------

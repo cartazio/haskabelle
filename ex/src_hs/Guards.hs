@@ -1,4 +1,3 @@
-
 module Guards where
 
 import Nats
@@ -26,3 +25,9 @@ foomb mb = case mb of
                  | eq_nat n three       -> zero
                  | less_nat n three     -> one
                  | greater_nat n three  -> two
+
+fallthrough n = case n of
+                  n | eq_nat n (Suc Zero_nat) -> zero
+                  Zero_nat -> one
+                  _ -> two
+                       

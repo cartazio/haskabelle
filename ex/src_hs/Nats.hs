@@ -23,7 +23,7 @@ greater_nat m n = not (less_eq_nat m n);
 mina :: Nat -> Nat -> Nat;
 mina a b = (if less_eq_nat a b then a else b);
 
-nat_rec :: forall t. t -> (Nat -> t -> t) -> Nat -> t;
+nat_rec :: t -> (Nat -> t -> t) -> Nat -> t;
 nat_rec f1 f2 (Suc n) = f2 n (nat_rec f1 f2 n);
 nat_rec f1 f2 Zero_nat = f1;
 
@@ -33,7 +33,7 @@ one_nat = Suc Zero_nat;
 maxa :: Nat -> Nat -> Nat;
 maxa a b = (if less_eq_nat a b then b else a);
 
-nat_case :: forall t. t -> (Nat -> t) -> Nat -> t;
+nat_case :: t -> (Nat -> t) -> Nat -> t;
 nat_case f1 f2 Zero_nat = f1;
 nat_case f1 f2 (Suc n) = f2 n;
 
