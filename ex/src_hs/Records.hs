@@ -20,7 +20,7 @@ getChar :: MyRecord -> Char
 getChar = common
 
 update :: MyRecord -> MyRecord
-update x = x{aField2 = "foo"}
+update x = x{aField2 = "foo", aField1 = 1 }
 
 pattern :: MyRecord -> Int
 pattern A{aField1 = val} = val

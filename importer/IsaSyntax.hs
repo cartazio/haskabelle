@@ -76,6 +76,18 @@ data Cmd = Block [Cmd]  -- ^a block of commands
          | TypesCmd [(TypeSpec, Type)]
          
          {-|
+           Primitive recursive function definition:
+           
+           @
+           primrec add :: "nat => nat => nat"
+           where
+                "add 0 y = y"
+              | "add (Suc x) y = Suc (add x y)"
+           @
+          -}
+         | PrimrecCmd [VarName] [TypeSig] [(VarName, [Pat], Term)]
+         
+         {-|
            Function definition:
            
            @

@@ -277,12 +277,13 @@ pattern_match_exhausted str obj
     = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
 
 
+          
 {-|
-  This function generates the accessor functions for the given Haskell
-  data type declaration.
+  This function generates the auxiliary functions for the given Haskell
+  data type declaration. This includes accessor functions and update functions
 -}
-generateRecordAccessors :: HsDecl -> ContextM [Isa.Cmd]
-generateRecordAccessors (HsDataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
+generateRecordAux :: HsDecl -> ContextM [Isa.Cmd]
+generateRecordAux (HsDataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
         = let strip (HsQualConDecl _loc _FIXME _context decl) = decl
               decls = map strip condecls
           in do tyvars <- mapM convert tyvarNs
@@ -290,19 +291,17 @@ generateRecordAccessors (HsDataDecl _loc _kind _context tyconN tyvarNs condecls 
                 let dataTy = Isa.TyCon tycon (map Isa.TyVar tyvars)
                 let fieldNames = concatMap extrFieldNames decls
                 fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . UnQual) (nub fieldNames)
-                let funBinds = map (mkFunBinds (length decls) dataTy) fields
+                let funBinds = map (mkAFunBinds (length decls) dataTy) fields
+                               ++ map (mkUFunBinds (length decls) dataTy) fields
                 return funBinds
               where extrFieldNames (HsRecDecl conName fields) = map fst $ flattenRecFields fields
                     extrFieldNames _ = []
-                    mkFunBinds numCon dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
-                        let binds = map (mkFunBind fname) constrs
+                    mkAFunBinds numCon dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
+                        let binds = map (mkAFunBind fname) constrs
                             fname' = Isa.Name fname
                             funTy = Isa.TyFun dty (Env.toIsa fty)
-                            def = if numCon > length constrs
-                                  then [(fname', [Isa.Var (Isa.Name "_")], Isa.Var (Isa.Name "arbitrary"))]
-                                  else []
-                        in Isa.FunCmd [fname'] [Isa.TypeSig fname' funTy] (binds ++ def)
-                    mkFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
+                        in Isa.PrimrecCmd [fname'] [Isa.TypeSig fname' funTy] binds
+                    mkAFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
                             con = Isa.Var $ Isa.Name cname
                             genArg (Env.RecordField n _)
@@ -312,6 +311,28 @@ generateRecordAccessors (HsDataDecl _loc _kind _context tyconN tyvarNs condecls 
                             pat = Isa.Parenthesized $ foldl Isa.App con conArgs
                             term = Isa.Var (Isa.Name "x")
                         in (fname', [pat], term)
+                    mkUFunBinds numCon dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
+                        let uname = "update_" ++ fname
+                            binds = map (mkUFunBind fname uname) constrs
+                            uname' = Isa.Name uname
+                            funTy = Isa.TyFun (Env.toIsa fty) (Isa.TyFun dty dty)
+                        in Isa.PrimrecCmd [uname'] [Isa.TypeSig uname' funTy] binds
+                    mkUFunBind fname uname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
+                        let uname' = Isa.Name uname
+                            con = Isa.Var $ Isa.Name cname
+                            genPatArg (i,(Env.RecordField n _))
+                                | n == fname = Isa.Var (Isa.Name "_")
+                                | otherwise = Isa.Var (Isa.Name ("f" ++ show i))
+                            genTermArg (i,(Env.RecordField n _))
+                                | n == fname = Isa.Var (Isa.Name "x")
+                                | otherwise = Isa.Var (Isa.Name ("f" ++ show i))
+                            patArgs = map genPatArg (zip [1..] fields)
+                            termArgs = map genTermArg (zip [1..] fields)
+                            pat = Isa.Parenthesized $ foldl Isa.App con patArgs
+                            term = Isa.Parenthesized $ foldl Isa.App con termArgs
+                            arg = Isa.Var (Isa.Name "x")
+                        in (uname', [arg,pat], term)
+
 
 {-|
   This function converts a Haskell data type declaration into a
@@ -372,8 +393,8 @@ instance Convert HskDependentDecls Isa.Cmd where
         | isDataDecl decl
             = assert (all isDataDecl decls)
               $ do dataDefs <- mapM convertDataDecl decls
-                   accCmds <- mapM generateRecordAccessors decls
-                   return $ Isa.Block (Isa.DatatypeCmd dataDefs : concat accCmds)
+                   auxCmds <- mapM generateRecordAux decls
+                   return $ Isa.Block (Isa.DatatypeCmd dataDefs : concat auxCmds)
 
         where isFunBind (HsFunBind _) = True
               isFunBind _             = False
@@ -435,7 +456,7 @@ instance Convert HsDecl Isa.Cmd where
                                 
     convert' decl@(HsDataDecl _ _ _ _ _ _ _) = 
         do dataDef <- convertDataDecl decl
-           accCmds <- generateRecordAccessors decl
+           accCmds <- generateRecordAux decl
            return $ Isa.Block (Isa.DatatypeCmd [dataDef] : accCmds)
     convert' (HsInfixDecl _loc assoc prio ops)
         = do (assocs, prios) <- mapAndUnzipM (lookupInfixOp . toHsQOp) ops 
@@ -695,40 +716,20 @@ instance Convert HsExp Isa.Term where
                  in convert' $ foldl HsApp (HsCon qname) recArgs
              _ -> die $ "Record constructor " ++ Msg.quote qname ++ " is not declared in environment!"
 
-    convert' (HsRecUpdate exp updates@(HsFieldUpdate fname _:_)) = 
-        do mbConstr <- lookupIdentifier_Constant fname
-           case mbConstr of
-             Just (Env.Constant (Env.Field _ constrs)) -> 
-                 assert (not (null constrs)) $
-                 do exp' <- convert exp
-                    cases <- mapM mkCase constrs
-                    let dataTyN = Env.constrTypeName (head constrs)
-                    mbType <- lookupIdentifier_Type' dataTyN
-                    totalConstrs <- case mbType of 
-                                   Just (Env.Type (Env.Data _ cs)) -> return cs
-                                   _ -> die $ "data type " ++ Msg.quote dataTyN ++ " is not declared in environment!"
-                    let def = if length constrs == length totalConstrs
-                              then []
-                              else [(Isa.Var (Isa.Name "_"), Isa.Var (Isa.Name "arbitrary"))]
-                    return $ Isa.Case exp' (cases ++ def)
-                 where mkCase (Env.RecordConstr _ lexInfo recFields) = 
-                         do let constrName = Env.nameOf lexInfo
-                                constr = Isa.Var $ Isa.Name constrName
-                                updates' = map (\(HsFieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
-                                argCount = length recFields
-                            vars <- liftGensym $ mapM gensym (replicate argCount "v_") 
-                            let toArgs ((Env.RecordField iden _),var) = 
-                                    case lookup iden updates' of
-                                      Nothing -> return $ Isa.Var (Isa.Name var)
-                                      Just exp -> convert exp
-                                patArgs = map (Isa.Var . Isa.Name ) vars
-                                pat = foldl Isa.App constr patArgs
-                            recArgs <- mapM toArgs (zip recFields vars)
-                            let res = foldl Isa.App constr recArgs
-                            return (pat, res)
-             _ -> die $ "Record field " ++ Msg.quote fname ++ " is not declared in environment!"
-
-
+    convert' (HsRecUpdate exp updates) = 
+        do exp' <- convert exp
+           fstupd:upds <- mapM convUpd updates
+           let updateFunction = Isa.Parenthesized (foldr comp fstupd upds)
+           return $ Isa.App updateFunction exp'
+       where comp a b = Isa.App (Isa.App (Isa.Var (Isa.Name "o")) a) b
+             convUpd (HsFieldUpdate fname fexp) =
+                                do fexp' <- convert fexp
+                                   let ufun = Isa.Var (Isa.Name ("update_" ++ unqual fname))
+                                   return $ Isa.App ufun fexp'
+             unqual (Qual _ n) = uname n
+             unqual (UnQual n) = uname n
+             uname (HsIdent n) = n
+             uname (HsSymbol n) = n
 
     convert' (HsIf t1 t2 t3)
         = do t1' <- convert t1; t2' <- convert t2; t3' <- convert t3

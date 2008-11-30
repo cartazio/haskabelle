@@ -1,8 +1,6 @@
 Name:		Hsimp
 Version:	0.2
 Cabal-Version:  >= 1.2
-License:	BSD3
-License-File:	LICENSE
 Author:		Patrick Bahr
 Homepage:	
 Category:	Language

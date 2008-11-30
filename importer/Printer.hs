@@ -288,25 +288,11 @@ instance Printer Isa.Cmd where
                    let lookup = (\n -> lookupIdentifier thy n env)
                    pprint' pat <+> equals <+> parensIf (isCompound term lookup) (pprint' term)
 
+    pprint' (Isa.PrimrecCmd fnames tysigs equations)
+        = printFunDef "primrec" fnames tysigs equations
+
     pprint' (Isa.FunCmd fnames tysigs equations)
-        = blankline $
-          text "fun" <+> vcat (punctuate (text " and ") (map ppHeader (zip fnames tysigs))) $$
-          text "where" $$
-          vcat (zipWith (<+>) (space : repeat (char '|'))
-                              (map ppEquation equations))
-          where 
-            ppHeader (fn, sig)
-                | isEmptySig sig = pprint' fn
-                | otherwise      = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
-            ppEquation (fname, pattern, term) 
-                = do thy <- queryPP currentTheory 
-                     env <- queryPP globalEnv
-                     let lookup = (\n -> lookupIdentifier thy n env)
-                     maybeWithinHOL $
-                       pprint' fname <+> 
-                       hsep (map pprint' pattern) <+> 
-                       equals <+> 
-                       parensIf (isCompound term lookup) (pprint' term)
+        = printFunDef "fun" fnames tysigs equations
 
     pprint' (Isa.ClassCmd classN superclassNs typesigs)
         = blankline $
@@ -342,6 +328,26 @@ instance Printer Isa.Cmd where
     
     pprint' (Isa.TypesCmd aliases) = text "type" <+> vcat (map pp aliases)
         where pp (spec, typ) = pprint' spec <+> equals <+> pprint' typ
+
+printFunDef cmd fnames tysigs equations
+    = blankline $
+      text cmd <+> vcat (punctuate (text " and ") (map ppHeader (zip fnames tysigs))) $$
+      text "where" $$
+      vcat (zipWith (<+>) (space : repeat (char '|'))
+            (map ppEquation equations))
+    where 
+      ppHeader (fn, sig)
+          | isEmptySig sig = pprint' fn
+          | otherwise      = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
+      ppEquation (fname, pattern, term) 
+          = do thy <- queryPP currentTheory 
+               env <- queryPP globalEnv
+               let lookup = (\n -> lookupIdentifier thy n env)
+               maybeWithinHOL $
+                              pprint' fname <+> 
+                              hsep (map pprint' pattern) <+> 
+                              equals <+> 
+                              parensIf (isCompound term lookup) (pprint' term)
 
 instance Printer Isa.Theory where
     pprint' (Isa.Theory name) = text name
@@ -412,7 +418,8 @@ instance Printer Isa.Literal where
     -- would come up with a too general type, resulting in
     -- non-workingness.
     pprint' (Isa.Int i)      = let cc = colon <> colon in
-                               parens $ integer i --  <> cc <> text "_" <> cc <> text "num"
+                               integer i
+                               -- parens $ integer i  <> cc <> text "_" <> cc <> text "num"
     pprint' (Isa.Char ch)    = text "CHR " <+> quotes (quotes (char ch))
     pprint' (Isa.String str) = quotes . quotes . text $ str
 

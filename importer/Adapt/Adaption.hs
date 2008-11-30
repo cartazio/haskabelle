@@ -275,6 +275,19 @@ instance Adapt Isa.Cmd where
                                              do body' <- adapt body ; return (funN', pats', body'))
                                 defs
                   return (Isa.FunCmd funNs' typesigs' defs')
+         
+    adapt (Isa.PrimrecCmd funNs typesigs defs)
+        = do funNs' <- mapM adaptName funNs
+             typesigs' <- mapM adapt typesigs
+             shadowing funNs $
+               do defs' <- mapM (\(funN, pats, body)
+                                     -> do funN' <- adaptName funN
+                                           assert (funN `elem` funNs && funN' `elem` funNs') $ return ()
+                                           pats' <- mapM adapt pats
+                                           shadowing (concatMap extractNames pats') $
+                                             do body' <- adapt body ; return (funN', pats', body'))
+                                defs
+                  return (Isa.PrimrecCmd funNs' typesigs' defs')
 
     adapt (Isa.DefinitionCmd name typesig (pat, term))
         = do typesig' <- adapt typesig
