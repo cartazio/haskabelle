@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 

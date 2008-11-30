@@ -1,3 +1,11 @@
+{-# LANGUAGE 
+  MultiParamTypeClasses,
+  FunctionalDependencies,
+  FlexibleContexts,
+  FlexibleInstances,
+  TypeSynonymInstances,
+  GeneralizedNewtypeDeriving #-}
+
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 

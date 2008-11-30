@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternGuards #-}
+
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 

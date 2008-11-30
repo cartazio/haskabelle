@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fglasgow-exts -XTemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {-|
   This module provides data generators as used by /QuickCheck/ for types from external
@@ -56,8 +56,107 @@ $(deriveArbitrary_shrink ''SrcLoc
 
 $(deriveGenForConstrs "typeSigDecl" ['HsTypeSig])
 
+{-|
+  HsBinds
+-}
+$(deriveArbitraryForConstrs ['HsBDecls])
+
+{-|
+  HsLiteral
+-}
+$(deriveArbitraryForConstrs ['HsChar,'HsString, 'HsInt])
+
+{-|
+  HsPat
+-}
+$(deriveArbitraryForConstrs [
+   'HsPVar,
+   'HsPLit,
+   'HsPNeg,
+   'HsPInfixApp,
+   'HsPApp,
+   'HsPTuple,
+   'HsPList,
+   'HsPParen,
+   'HsPRec,
+   'HsPAsPat,
+   'HsPWildCard
+--   'HsPIrrPat,
+--   'HsPatTypeSig
+  ])
+
+{-|
+  HsClassDecl
+-}
+$(deriveArbitraryForConstrs [
+   'HsClsDecl
+--   'HsClsDataFam,
+--   'HsClsTyFam,
+--   'HsClsTyDef
+   ])
+
+{-|
+  HsExp
+-}
+$(deriveArbitraryForConstrs [
+   'HsVar,
+   'HsIPVar,
+   'HsCon,
+   'HsLit,
+   'HsInfixApp,
+   'HsApp,
+   'HsNegApp,
+   'HsLambda,
+   'HsLet,
+   'HsDLet,
+   'HsWith,
+   'HsIf,
+   'HsCase,
+   'HsDo,
+   'HsMDo,
+   'HsTuple,
+   'HsList,
+   'HsParen,
+   'HsLeftSection,
+   'HsRightSection,
+   'HsRecConstr,
+   'HsRecUpdate,
+   'HsEnumFrom,
+   'HsEnumFromTo,
+   'HsEnumFromThen,
+   'HsEnumFromThenTo,
+   'HsListComp,
+   'HsExpTypeSig
+--   'HsAsPat,
+--   'HsWildCard,
+--   'HsIrrPat,
+
+-- Post-ops for parsing left sections and regular patterns. Not to be left in the final tree.
+--   'HsPostOp,
+
+-- HaRP
+--   'HsSeqRP,
+--   'HsGuardRP,
+--   'HsEitherRP,
+--   'HsCAsRP,
+    
+-- Template Haskell
+--   'HsVarQuote,
+--   'HsTypQuote,
+--   'HsBracketExp,
+--   'HsSpliceExp,
+    
+-- Hsx
+--   'HsXTag,
+--   'HsXETag,
+--   'HsXPcdata,
+--   'HsXExpTag,
+--   'HsXRPats
+   ])
+
 $(deriveArbitraryAll [
 --   ''SrcLoc,
+   ''HsRhs,
    ''Module,
    ''HsSpecialCon,
    ''HsQName,
@@ -76,13 +175,10 @@ $(deriveArbitraryAll [
    ''HsQualConDecl,
    ''HsMatch,
    ''HsIPBind,
-   ''HsBinds,
    ''HsDecl,
    ''HsModule,
-   ''HsClassDecl,
    ''HsInstDecl,
    ''HsBangType,
-   ''HsRhs,
    ''HsGuardedRhs,
    ''HsType,
    ''HsBoxed,
@@ -90,15 +186,12 @@ $(deriveArbitraryAll [
    ''HsKind,
    ''HsFunDep,
    ''HsAsst,
-   ''HsLiteral,
-   ''HsExp,
    ''HsXName,
    ''HsXAttr,
    ''HsBracket,
    ''HsSplice,
    ''HsSafety,
    ''HsCallConv,
-   ''HsPat,
    ''HsPXAttr,
    ''HsRPatOp,
    ''HsRPat,

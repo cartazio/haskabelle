@@ -1,3 +1,10 @@
+{-# LANGUAGE
+  MultiParamTypeClasses,
+  FlexibleContexts,
+  TypeSynonymInstances,
+  GeneralizedNewtypeDeriving #-}
+
+
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 

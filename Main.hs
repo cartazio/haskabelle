@@ -14,8 +14,13 @@ import System.Environment(getArgs, getProgName)
 import System.Directory
 import Importer.Configuration
 
-main :: IO ()
-main = do
+
+import Importer.Preprocess
+
+main = runTest
+
+main' :: IO ()
+main' = do
   progname <- getProgName
   args     <- getArgs
   mainProgArgs progname args

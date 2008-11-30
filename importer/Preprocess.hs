@@ -1,10 +1,13 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 -}
 
 module Importer.Preprocess
     (
-     preprocessHsModule
+     preprocessHsModule,
+     runTest
     )where
 
 import Maybe
@@ -500,7 +503,9 @@ deguardifyGuards guards
       deguardify x@(HsGuardedRhs loc stmts clause) body
           = HsIf (makeGuardExpr stmts) clause body
    
-      makeGuardExpr stmts = foldl1 andify (map expify stmts)
+      makeGuardExpr stmts = if null stmts
+                            then (HsVar (UnQual (HsIdent "True")))
+                            else foldl1 andify (map expify stmts)
           where expify (HsQualifier exp) = exp
                 andify e1 e2 = HsInfixApp e1 (HsQVarOp (Qual (Module "Prelude") (HsSymbol "&&"))) e2
 
@@ -519,14 +524,40 @@ deguardifyGuards guards
 ------------------------------------------------------------
 ------------------------------------------------------------
 
+runTest = quickCheck prop_NoWhereDecls
+
+onlyPatBinds (HsBDecls binds) = all isPat binds
+    where isPat HsPatBind{} = True
+          isPat HsTypeSig{} = True
+          isPat _ = False
+noPatBinds (HsBDecls binds) = all noPat binds
+    where noPat HsPatBind{} = False
+          noPat _ = True
+
+
+prop_splitPatBindsCorrect binds = let (pat,nonPat) = splitPatBinds binds
+                                  in onlyPatBinds pat && noPatBinds nonPat
+
 noLocalDecl :: HsModule -> Bool
 noLocalDecl m = True
+
+
+hasWhereDecls :: Data a => a -> Bool
+hasWhereDecls node = everything (||) (mkQ False fromDecl `extQ` fromMatch) node
+    where fromDecl (HsPatBind _ _ _ binds) = isNonEmpty binds
+          fromDecl _ = False
+          fromMatch (HsMatch _ _ _ _ binds) = isNonEmpty binds
+          isNonEmpty (HsBDecls binds) = not (null binds)
+          isNonEmpty (HsIPBinds binds) = not (null binds)
+
+prop_NoWhereDecls mod = not $ hasWhereDecls $ preprocessHsModule mod
 
 prop_NoLocalDecl mod = noLocalDecl $ preprocessHsModule mod
 
 checkDelocM :: PropertyM DelocaliserM a -> Property
 checkDelocM deloc = forAll arbitrary $ \ (NonNegative gsState, delocState) ->
               monadic (fst . evalGensym gsState . evalDelocaliser delocState) deloc
+
 
                           
 

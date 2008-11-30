@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 {-|
   This module provides functionality to read configurations from an XML 
   file into a data structure and to access this data structure.

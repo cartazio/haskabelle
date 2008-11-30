@@ -1,4 +1,5 @@
-{-# OPTIONS_GHC -fglasgow-exts -XTemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 {-|
   This module provides template functions to derive instance declarations of data types for the class 'Arbitrary'.
 -}
@@ -7,6 +8,7 @@ module Importer.Test.Utils
     ( -- * Deriving Functions
       deriveArbitrary,
       deriveArbitraryAll,
+      deriveArbitraryForConstrs,
       deriveArbitrary_shrink,
       deriveGenForConstrs
       
@@ -162,24 +164,37 @@ deriveArbitraryAll = liftM concat . mapM deriveArbitrary
 -}
 deriveGenForConstrs :: String -> [Name] -> Q [Dec]
 deriveGenForConstrs genName constrNs
-    = do let defName = mkName genName
-         if (null constrNs) then report False "List of constructors must not be empty!" >> return [] else do
+    = do (_,constrs) <- getConstrs constrNs
+         liftM (:[]) $ generateGenDecl (mkName genName) constrs
+
+
+deriveArbitraryForConstrs :: [Name] -> Q[Dec]
+deriveArbitraryForConstrs constrNs =
+    do (dt,constrs') <- getConstrs constrNs
+       TyConI (DataD _cxt name args constrs _deriving) <- abstractNewtypeQ $ reify dt
+       let complType = foldl1 AppT (ConT name : map VarT args)
+       let classType = AppT (ConT ''Arbitrary) complType
+       arbitraryDecl <- generateArbitraryDecl constrs'
+       shrinkDecl <- generateShrinkDecl constrs
+       return $ [InstanceD [] classType [arbitraryDecl, shrinkDecl]]
+
+--------------------------
+-- Internal definitions --
+--------------------------
+
+getConstrs :: [Name] -> Q (Name,[Con])
+getConstrs constrNs
+    = do if (null constrNs) then report False "List of constructors must not be empty!" >> return undefined else do
            (typeName, typeConstrs) <- getTypeConstrs $ head constrNs
            let maybeConstrs = map (`lookupConstr` typeConstrs) constrNs
            let confl = notFound maybeConstrs constrNs
            when (not $ null confl) $ fail $ (show $ head confl) ++ " is not a constructor for " ++ (show typeName) ++"!"
-           let constrs = map fromJust maybeConstrs                     
-           liftM (:[]) $ generateGenDecl (mkName genName) constrs
+           return (typeName, map fromJust maybeConstrs)
     where notFound :: [Maybe Con] -> [Name] -> [Name]
           notFound cons names = foldr (\ e l -> case e of
                                                (Nothing, name) -> name : l
                                                (Just _,_) -> l
                                     ) []  $ zip cons names
---------------------------
--- Internal definitions --
---------------------------
-
-
 {-|
   This function provides the name and the arity of the given data constructor.
 -}

@@ -1,3 +1,10 @@
+{-# LANGUAGE
+  UndecidableInstances,
+  ExistentialQuantification,
+  MultiParamTypeClasses, 
+  RankNTypes, 
+  FlexibleInstances #-}
+
 {-|
   This module provides traversal schemes for SYB that enable access to
   modular defined environment information.

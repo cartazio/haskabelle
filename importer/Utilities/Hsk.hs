@@ -1,4 +1,7 @@
-{-# OPTIONS_GHC -fallow-undecidable-instances #-}
+{-# LANGUAGE
+  UndecidableInstances,
+  FlexibleInstances,
+  GeneralizedNewtypeDeriving #-}
 
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
