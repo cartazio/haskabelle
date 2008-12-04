@@ -668,7 +668,7 @@ convertPat (HsPRec qname fields) =
                           Just pat -> convertPat pat
                 recArgs <- mapM toSimplePat recFields
                 qname' <- liftConvert $ convert qname
-                return $ foldl Isa.App (Isa.Var qname') recArgs
+                return $ Isa.Parenthesized (foldl Isa.App (Isa.Var qname') recArgs)
          _ -> liftConvert . die $ "Record constructor " ++ Msg.quote qname ++ " is not declared in environment!"
 
 convertPat (HsPAsPat name pat) = 

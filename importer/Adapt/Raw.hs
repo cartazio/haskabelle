@@ -50,6 +50,7 @@ raw_adaption_table = [(Haskell "Prelude.Show" (Class (RawClassInfo { superclasse
   (Haskell "Prelude.zipWith" Function, Isabelle "Prelude.zipWith" Function),
   (Haskell "Prelude.Nothing" Function, Isabelle "Datatype.option.None" Function),
   (Haskell "Prelude.Just" Function, Isabelle "Datatype.option.Some" Function),
+  (Haskell "Prelude.(())" Function, Isabelle "Product_Type.Unity" Function),
   (Haskell "Prelude.(+)" Function, Isabelle "+" (InfixOp LeftAssoc 65)),
   (Haskell "Prelude.(*)" Function, Isabelle "*" (InfixOp LeftAssoc 70)),
   (Haskell "Prelude.negate" Function, Isabelle "HOL.uminus_class.uminus" Function),

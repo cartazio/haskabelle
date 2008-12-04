@@ -65,6 +65,8 @@ consts
 
   "Prelude.Nothing"     "None"
   "Prelude.Just"        "Some"
+  
+  "Prelude.(())"	"Unity"
 
   "Prelude.(+)"         "HOL.plus"
   "Prelude.(*)"         "HOL.times"

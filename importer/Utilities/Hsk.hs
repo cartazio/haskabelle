@@ -599,7 +599,10 @@ renameHsPat renams pat
         HsPList  pats               -> HsPList (map (renameHsPat renams) pats)
         HsPParen pat                -> HsPParen (renameHsPat renams pat)
         HsPWildCard                 -> HsPWildCard
-        HsPAsPat name pat'           -> HsPAsPat (translate renams name) (renameHsPat renams pat')
+        HsPAsPat name pat'          -> HsPAsPat (translate renams name) (renameHsPat renams pat')
+        HsPRec name fields          -> HsPRec name fields'
+                                       where fields' = map ren fields
+                                             ren (HsPFieldPat n p) = HsPFieldPat n (renameHsPat renams p)
         _ -> error ("renameHsPat: Fall through: " ++ show pat)
 
 {-|
