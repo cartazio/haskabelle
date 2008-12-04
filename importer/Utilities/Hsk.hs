@@ -38,9 +38,12 @@ module Importer.Utilities.Hsk
       string2HsName,
       extractSuperclassNs,
       extractMethodSigs,
+      hskPNil,
+      hskPCons,
       hsk_nil,
       hsk_cons,
       hsk_pair,
+      hskPPair,
       hsk_negate,
       isHaskellSourceFile,
       isOperator,
@@ -133,6 +136,19 @@ hsk_apply fn_expr args
 {-|
   The Haskell empty list.
 -}
+hskPNil :: HsPat
+hskPNil = HsPList []
+
+{-|
+  The Haskell list constructor. This function takes two Haskell expressions and applies
+  the list constructor @(:)@ to it.
+-}
+hskPCons :: HsPat -> HsPat -> HsPat
+hskPCons x y = HsPApp (Special HsCons) [x, y]
+
+{-|
+  The Haskell empty list.
+-}
 hsk_nil :: HsExp
 hsk_nil             = HsList []
 
@@ -142,6 +158,13 @@ hsk_nil             = HsList []
 -}
 hsk_cons :: HsExp -> HsExp -> HsExp
 hsk_cons x y        = HsApp (HsApp (HsCon (Special HsCons)) x) y
+
+{-|
+  The Haskell pair constructor. This function takes two Haskell expressions and applies
+  the pair constructor @(,)@ to them.
+-}
+hskPPair :: HsPat -> HsPat -> HsPat
+hskPPair x y = HsPApp (Special (HsTupleCon 2)) [x, y]
 
 {-|
   The Haskell pair constructor. This function takes two Haskell expressions and applies
@@ -298,7 +321,8 @@ instance HasBindings HsStmt where
   that are bound by the pattern.
 -}
 bindingsFromPats          :: [HsPat] -> [HsQName]
-bindingsFromPats pattern  = [ UnQual n | HsPVar n <- universeBi pattern ] 
+bindingsFromPats pattern  = [ UnQual n | HsPVar n <- universeBi pattern ]
+                            ++ [ UnQual n | HsPAsPat n _ <- universeBi pattern ]
 
 {-|
   This function extracts the variables bound by the given declaration.
@@ -575,6 +599,7 @@ renameHsPat renams pat
         HsPList  pats               -> HsPList (map (renameHsPat renams) pats)
         HsPParen pat                -> HsPParen (renameHsPat renams pat)
         HsPWildCard                 -> HsPWildCard
+        HsPAsPat name pat'           -> HsPAsPat (translate renams name) (renameHsPat renams pat')
         _ -> error ("renameHsPat: Fall through: " ++ show pat)
 
 {-|

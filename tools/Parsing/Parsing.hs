@@ -17,7 +17,7 @@ traverseDir dirpath op = do
                 op f
                 traverseDir f op
 
-parseTest =let d = "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/src_hs/UseMonads.hs" in do
+parseTest =let d = "/home/paba/studies/NICTA/hsimp/workspace/nicta/ex/src_hs/AsPatterns.hs" in do
   res <- parseFile d
   case res of
     ParseOk res -> putStrLn ("OK:\n" ++ (prettyShow res))

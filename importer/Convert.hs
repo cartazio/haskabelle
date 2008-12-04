@@ -19,9 +19,10 @@ module Importer.Convert (
 import Language.Haskell.Exts
 
 import Data.List
-import Monad
 import Maybe
 
+import Control.Monad
+import Control.Monad.Writer
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -495,12 +496,17 @@ instance Convert HsDecl Isa.Cmd where
              name'      <- convert' (names!!0)
              fsig'      <- (case ftype of Nothing -> return Isa.TyNone
                                           Just t  -> convert' t) >>= (return . Isa.TypeSig name')
-             fname'     <- convert (names!!0)           
-             patterns'  <- mapM (mapM convert) patterns  -- each pattern is itself a list of HsPat.
+             fname'     <- convert (names!!0)          
+             -- each pattern is itself a list of HsPat. 
+             patsNames  <- mapM (mapM convert) patterns
+             let patsNames' = map unzip patsNames
+                 patterns'  = map fst patsNames'
+                 aliases    = map (concat.snd) patsNames'
              bodies'    <- withFunctionType' ftype $
                                 mapM convert bodies
+             let bodies'' = zipWith mkSimpleLet aliases bodies'
              thy        <- queryContext theory
-             return $ Isa.FunCmd [fname'] [fsig'] (zip3 (cycle [fname']) patterns' bodies')
+             return $ Isa.FunCmd [fname'] [fsig'] (zip3 (repeat fname') patterns' bodies'')
        where splitMatch (HsMatch _loc name patterns (HsUnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of HsBDecls [] -> True; _ -> False
@@ -509,14 +515,15 @@ instance Convert HsDecl Isa.Cmd where
         = case pattern of
             pat@(HsPVar name) 
                 -> do name' <- convert name
-                      pat'  <- convert pat
+                      (pat', aliases)  <- convert pat
                       rhs'  <- convert rhs
+                      let rhs'' = mkSimpleLet aliases rhs'
                       ftype <- lookupType (UnQual name)
                       sig'  <- -- trace (prettyShow' "ftype" ftype)$
                                (case ftype of 
                                   Nothing -> return Isa.TyNone
                                   Just t  -> convert' t) >>= (return . Isa.TypeSig name') 
-                      return $ Isa.DefinitionCmd name' sig' (pat', rhs')
+                      return $ Isa.DefinitionCmd name' sig' (pat', rhs'')
             _   -> dieWithLoc loc (Msg.complex_toplevel_patbinding)
     
     convert' decl@(HsClassDecl _ ctx classN _ _ class_decls)
@@ -581,50 +588,106 @@ instance Convert HsBinds [Isa.Cmd] where
     convert' (HsBDecls decls) = mapM convert decls
     convert' junk = pattern_match_exhausted "HsBinds -> Isa.Cmd" junk
 
+mkList :: [Isa.Term] -> Isa.Term
+mkList = foldr
+         (\x xs -> Isa.App (Isa.App (Isa.Var (Isa.Name "List.Cons")) x) xs)
+         (Isa.Var (Isa.Name "List.Nil"))
 
--- As we convert to Isa.Term anyway, we can translate each HsPat
--- type to a HsExp first, and then convert that in order to
--- reduce some code bloat. (Although it comes at cost of making
--- backtraces a bit confusing perhaps.)
---
-instance Convert HsPat Isa.Pat where
-    convert' (HsPWildCard) = return $ Isa.Var (Isa.Name "_")
-    convert' anything      = convertHsPat anything >>= convert
-        where convertHsPat :: HsPat -> ContextM HsExp
-              convertHsPat (HsPLit literal) = return $ HsLit literal
-              convertHsPat (HsPVar name)    = return $ HsVar (UnQual name)
-              convertHsPat (HsPList pats)   = liftM HsList  $ mapM convertHsPat pats
-              convertHsPat (HsPTuple pats)  = liftM HsTuple $ mapM convertHsPat pats
-              convertHsPat (HsPParen pat)   = liftM HsParen $ convertHsPat pat
-              convertHsPat (HsPWildCard)    = return HsWildCard
-                                              
-              convertHsPat (HsPInfixApp pat1 qname pat2)
-                  = do pat1' <- convertHsPat pat1
-                       pat2' <- convertHsPat pat2
-                       return $ HsInfixApp pat1' (HsQConOp qname) pat2'
+mkSimpleLet :: [(Isa.Name, Isa.Term)] -> Isa.Term -> Isa.Term
+mkSimpleLet [] body = body
+mkSimpleLet binds body = Isa.Let binds' body
+    where binds' = map (\(a,b) -> (Isa.Var a, b)) binds
 
-              convertHsPat (HsPApp qname []) = return (HsCon qname)
-              convertHsPat (HsPApp qname (pat1:pats))
-                  = do pat1' <- convertHsPat pat1
-                       pats' <- mapM convertHsPat pats
-                       return $ foldl HsApp (HsApp (HsCon qname) pat1') pats'
+type PatternE = Bool
+type PatternO = [(Isa.Name,Isa.Term)]
 
-              convertHsPat (HsPRec qname fields) = 
-                  do mbConstr <- lookupIdentifier_Constant qname
-                     case mbConstr of
-                       Just (Env.Constant (Env.Constructor (Env.RecordConstr _ _ recFields))) -> 
-                               let fields' = map (\(HsPFieldPat name pat) -> (Env.fromHsk name, pat)) fields
-                                   toSimplePat (Env.RecordField iden _) = 
-                                       case lookup iden fields' of
-                                         Nothing -> HsPWildCard
-                                         Just pat -> pat
-                                   recArgs = map toSimplePat recFields
-                               in convertHsPat (HsPApp qname recArgs)
-                       _ -> die $ "Record constructor " ++ Msg.quote qname ++ " is not declared in environment!"
-                              
-              convertHsPat junk = pattern_match_exhausted 
-                                "HsPat -> Isa.Term (convertHsPat: HsPat -> HsExp)" 
-                                junk
+newtype PatternM a = PatternM ((ReaderT PatternE (WriterT PatternO ContextM)) a)
+    deriving (Monad, MonadReader PatternE, MonadWriter PatternO, Functor)
+
+runPatternM :: PatternM a -> ContextM (a,PatternO)
+runPatternM (PatternM pm) =  (runWriterT (runReaderT pm False))
+
+liftConvert :: ContextM a -> PatternM a
+liftConvert = PatternM . lift . lift
+
+withAsPattern :: PatternM a -> PatternM a
+withAsPattern = local (const True)
+
+isInsideAsPattern :: PatternM Bool
+isInsideAsPattern = ask
+
+addAlias :: (Isa.Name, Isa.Term) -> PatternM ()
+addAlias = tell . (:[])
+
+convertPat :: HsPat -> PatternM Isa.Pat
+convertPat (HsPVar name) = 
+    do name' <- liftConvert $ convert name
+       return (Isa.Var name')
+convertPat (HsPLit lit) = 
+    do lit' <- liftConvert $ convert lit
+       return (Isa.Literal lit')
+              
+convertPat infixapp@HsPInfixApp{} = 
+    do (HsPInfixApp p1 qname p2) <- liftConvert $ fixOperatorFixities' infixapp
+       p1' <- convertPat p1 
+       qname'   <- liftConvert $ convert qname
+       p2' <- convertPat p2
+       return (Isa.App (Isa.App (Isa.Var qname') p1') p2')
+
+convertPat (HsPApp qname pats) = 
+    do qname' <- liftConvert $ convert qname
+       pats' <- mapM convertPat pats
+       return $ foldl Isa.App (Isa.Var qname') pats'
+       
+convertPat (HsPTuple comps) = 
+    convertPat (foldr hskPPair (HsPParen (last comps)) (init comps))
+
+convertPat (HsPList []) =
+    do list_datacon_name <- liftConvert $ convert (Special HsListCon)
+       return (Isa.Var list_datacon_name)
+
+convertPat (HsPList els) =
+    convertPat $ foldr hskPCons hskPNil els
+
+convertPat (HsPParen pat) = 
+    do pat' <- convertPat pat
+       return (Isa.Parenthesized pat')
+
+convertPat (HsPRec qname fields) = 
+    do mbConstr <- liftConvert $ lookupIdentifier_Constant qname
+       case mbConstr of
+         Just (Env.Constant (Env.Constructor (Env.RecordConstr _ _ recFields))) -> 
+             do isAs <- isInsideAsPattern
+                let fields' = map (\(HsPFieldPat name pat) -> (Env.fromHsk name, pat)) fields
+                    toSimplePat (Env.RecordField iden _) = 
+                        case lookup iden fields' of
+                          Nothing -> if isAs
+                                     then liftConvert . liftGensym . liftM Isa.Var . liftM Isa.Name $
+                                          gensym "a"
+                                     else return (Isa.Var (Isa.Name "_"))
+                          Just pat -> convertPat pat
+                recArgs <- mapM toSimplePat recFields
+                qname' <- liftConvert $ convert qname
+                return $ foldl Isa.App (Isa.Var qname') recArgs
+         _ -> liftConvert . die $ "Record constructor " ++ Msg.quote qname ++ " is not declared in environment!"
+
+convertPat (HsPAsPat name pat) = 
+    do name' <- liftConvert $ convert name
+       pat' <- withAsPattern $ convertPat pat
+       addAlias (name', pat')
+       return pat'
+convertPat (HsPWildCard) = 
+    do isAs <- isInsideAsPattern
+       if isAs
+         then liftConvert . liftGensym . liftM Isa.Var . liftM Isa.Name $
+              gensym "a"
+         else return (Isa.Var (Isa.Name "_"))
+
+convertPat junk = liftConvert $ pattern_match_exhausted 
+                  "HsPat -> Isa.Term" 
+                  junk
+instance Convert HsPat (Isa.Pat, [(Isa.Name, Isa.Term)]) where
+    convert'  = runPatternM . convertPat
 
 instance Convert HsRhs Isa.Term where
     convert' (HsUnGuardedRhs exp) = convert exp
@@ -639,7 +702,10 @@ instance Convert HsFieldUpdate (Isa.Name, Isa.Term) where
 
 instance Convert HsAlt (Isa.Term, Isa.Term) where
     convert' (HsAlt _loc pat (HsUnGuardedAlt exp) _wherebinds)
-        = do pat' <- convert pat; exp' <- convert exp; return (pat', exp')
+        = do (pat',aliases) <- convert pat
+             exp' <- convert exp
+             let exp'' = mkSimpleLet aliases exp'
+             return (pat', exp'')
     convert' junk 
         = pattern_match_exhausted "HsAlt -> (Isa.Term, Isa.Term)" junk
 
@@ -668,10 +734,6 @@ instance Convert HsExp Isa.Term where
         = do exp1' <- convert exp1
              exp2' <- withPossibleLift exp1 $ convert exp2
              return (Isa.App exp1' exp2')
-          where cnv app@(HsCon (Special (HsTupleCon n)))
-                    | n < 2  = die ("Internal Error, (HsTupleCon " ++ show n ++ ")")
-                    | n == 2 = convert app         -- pairs can be dealt with the usual way. 
-                    | n > 2  = makeTupleDataCon n
 
     convert' infixapp@(HsInfixApp _ _ _)
         = do (HsInfixApp exp1 op exp2) <- fixOperatorFixities infixapp
@@ -741,10 +803,13 @@ instance Convert HsExp Isa.Term where
              return $ Isa.Case exp' alts'
 
     convert' x@(HsLambda _loc pats body)
-        = do pats'  <- mapM convert pats
+        = do patsNames  <- mapM convert pats
+             let (pats', aliases) = unzip patsNames
+                 aliases' = concat aliases
              body'  <- convert body
-             if all isVar pats' then return $ makeLambda [n | Isa.Var n <- pats'] body'
-                                else makePatternMatchingLambda pats' body'
+             let body'' = mkSimpleLet aliases' body'
+             if all isVar pats' then return $ makeLambda [n | Isa.Var n <- pats'] body''
+                                else makePatternMatchingLambda pats' body''
           where isVar (Isa.Var _)   = True
                 isVar _             = False
 
@@ -752,10 +817,12 @@ instance Convert HsExp Isa.Term where
         = let (_, patbindings) = partition isTypeSig bindings
           in assert (all isPatBinding patbindings)
              $ do let (pats, rhss) = unzip (map (\(HsPatBind _ pat rhs _) -> (pat, rhs)) patbindings)
-                  pats' <- mapM convert pats
+                  patsNames <- mapM convert pats
+                  let (pats', aliases) = unzip patsNames
                   rhss' <- mapM convert rhss
+                  let rhss'' = zipWith mkSimpleLet aliases rhss'
                   body' <- convert body
-                  return (Isa.Let (zip pats' rhss') body')
+                  return (Isa.Let (zip pats' rhss'') body')
           where isTypeSig (HsTypeSig _ _ _)      = True
                 isTypeSig _                      = False
                 isPatBinding (HsPatBind _ _ _ (HsBDecls [])) = True
@@ -763,16 +830,19 @@ instance Convert HsExp Isa.Term where
                 
     convert' (HsListComp e stmts) 
         = do e'     <- convert e
-             stmts' <- mapM convertListCompStmt stmts
+             stmts' <- liftM concat $ mapM convertListCompStmt stmts
              return (Isa.ListComp e' stmts')
-        where convertListCompStmt (HsQualifier b)     = convert b >>= (return . Isa.Guard)
-              convertListCompStmt (HsGenerator _ p e) = do p' <- convert p
+        where convertListCompStmt (HsQualifier b)     = convert b >>= (return . (:[]) . Isa.Guard)
+              convertListCompStmt (HsGenerator _ p e) = do (p',as) <- convert p
+                                                           let gens = mkSimpleGens as
                                                            e' <- convert e
-                                                           return (Isa.Generator (p', e'))
+                                                           return $ [Isa.Generator (p', e')] ++ gens
+                                                                  
               convertListCompStmt (HsLetStmt _)
                   = die "Let statements not supported in List Comprehensions."
+              mkSimpleGens = map (\(n,t) -> Isa.Generator (Isa.Var n, mkList [t]))
     convert' (HsDo stmts)
-        = do isaStmts <- mapM convert stmts
+        = do isaStmts <- liftM concat $ mapM convert stmts
              mbDo <- getCurrentMonadDoSyntax
              case mbDo of
                Nothing -> die "Do syntax is used without sufficient type information!"
@@ -781,15 +851,33 @@ instance Convert HsExp Isa.Term where
 
     convert' junk = pattern_match_exhausted "HsExp -> Isa.Term" junk
 
-instance Convert HsStmt Isa.Stmt where
+instance Convert HsStmt [Isa.Stmt] where
 
-    convert' (HsGenerator _ pat exp) = liftM2 Isa.DoGenerator (convert pat) (convert exp)
-    convert' (HsQualifier exp) = liftM Isa.DoQualifier (convert exp)
+    convert' (HsGenerator _ pat exp) = 
+        do exp' <- convert exp
+           (pat', aliases) <- convert pat
+           aliases' <- mkDoLet aliases
+           return (Isa.DoGenerator pat' exp' : aliases')
+    convert' (HsQualifier exp) = liftM ( (:[]) . Isa.DoQualifier) (convert exp)
     convert' (HsLetStmt binds) =
         case binds of
           HsBDecls [HsPatBind _ pat (HsUnGuardedRhs exp) _] ->
-              liftM2 Isa.DoGenerator (convert pat) (convert (HsApp (HsVar (UnQual (HsIdent "return"))) exp))
+              do exp' <- convert exp
+                 (pat', aliases) <- convert pat
+                 aliases' <- mkDoLet aliases
+                 ret <- mkReturn
+                 return (Isa.DoGenerator pat' (Isa.App ret exp') : aliases')
+             -- liftM2 Isa.DoGenerator (convert pat) (convert (HsApp (HsVar (UnQual (HsIdent "return"))) exp))
           def -> pattern_match_exhausted "HsStmt -> Isa.Stmt" def
+
+mkReturn :: ContextM Isa.Term
+mkReturn = convert . HsVar . UnQual .HsIdent $ "return"
+
+mkDoLet :: [(Isa.Name, Isa.Term)] -> ContextM [Isa.Stmt]
+mkDoLet aliases = 
+    do ret <- mkReturn
+       let mkSingle (name, term) = Isa.DoGenerator (Isa.Var name) (Isa.App ret term)
+       return $ map mkSingle aliases
 
 {-|
   We desugare lambda expressions to true unary functions, i.e. to
@@ -896,6 +984,32 @@ fixOperatorFixities app@(HsInfixApp (HsInfixApp e1 op1 e2) op2 e3)
                                                "(AssocNone should have already been normalized away.)")
 fixOperatorFixities nonNestedInfixApp = return nonNestedInfixApp
 
+
+{-|
+  Hsx parses every infix application simply from left to right without
+  taking operator associativity or binding priority into account. So
+  we gotta fix that up ourselves. (We also properly consider infix
+  declarations to get user defined operator right.)
+-}
+fixOperatorFixities' :: HsPat -> ContextM HsPat
+fixOperatorFixities' app@(HsPInfixApp (HsPInfixApp e1 op1 e2) op2 e3)
+    = do (assoc1', prio1)  <- lookupInfixOpName op1
+         (assoc2', prio2)  <- lookupInfixOpName op2
+         let assoc1 = normalizeAssociativity assoc1'
+         let assoc2 = normalizeAssociativity assoc2'
+         case prio1 `compare` prio2 of
+           GT -> return app
+           LT -> liftM (HsPInfixApp e1 op1) (fixOperatorFixities' (HsPInfixApp e2 op2 e3))
+           EQ -> if assoc2 /= assoc1 then
+                     die (Msg.assoc_mismatch op1 assoc1 op2 assoc2)
+                 else case assoc2 of
+                        HsAssocLeft  -> return app
+                        HsAssocRight -> return (HsPInfixApp e1 op1 (HsPInfixApp e2 op2 e3))
+                        HsAssocNone  -> die ("fixupOperatorFixities: Internal error " ++
+                                               "(AssocNone should have already been normalized away.)")
+fixOperatorFixities' nonNestedInfixApp = return nonNestedInfixApp
+
+
 {-|
   Enforces left associativity as default.
 -}
@@ -931,21 +1045,31 @@ lookupIdentifier_Type qname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
          return (Env.lookupType (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
+
 {-|
   This function looks up the fixity declaration for the given
   infix operator.
 -}
 lookupInfixOp :: HsQOp -> ContextM (HsAssoc, Int)
-lookupInfixOp qop
-    = do identifier <- lookupIdentifier_Constant (qop2name qop)
+lookupInfixOp = lookupInfixOpName . qop2name
+    where qop2name (HsQVarOp n) = n
+          qop2name (HsQConOp n) = n
+{-|
+  This function looks up the fixity declaration for the given
+  infix operator.
+-}
+lookupInfixOpName :: HsQName -> ContextM (HsAssoc, Int)
+lookupInfixOpName qname
+    = do identifier <- lookupIdentifier_Constant (qname)
          case identifier of
            Just (Env.Constant (Env.InfixOp _ envassoc prio)) 
                    -> return (Env.toHsk envassoc, prio)
            Nothing -> do globalEnv <- queryContext globalEnv;
-                         warn (Msg.missing_infix_decl qop globalEnv)
+                         warn (Msg.missing_infix_decl qname globalEnv)
                          return (HsAssocLeft, 9) -- default values in Haskell98
     where qop2name (HsQVarOp n) = n
           qop2name (HsQConOp n) = n
+
 
 {-|
   This function looks up the type for the given identifier.

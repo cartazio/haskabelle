@@ -54,9 +54,7 @@ preprocessHsModule (HsModule loc modul exports imports topdecls)
             ((topdecls2 ,topdecls2'), gensymcount) 
                          = runGensym 0 (evalDelocaliser Set.empty (delocaliseAll topdecls1))
             topdecls3    = topdecls2 ++ topdecls2'
-            topdecls4    = map normalizePatterns_HsDecl topdecls3
-            topdecls5    = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls4) 
---          modul'      = (let (Module n) = modul in Module (normalizeModuleName n))
+            topdecls4    = evalGensym gensymcount (mapM normalizeNames_HsDecl topdecls3)
 
 
 {-|
@@ -312,89 +310,6 @@ flattenHsTypeSig :: HsDecl -> [HsDecl]
 flattenHsTypeSig (HsTypeSig loc names typ)
     = map (\n -> HsTypeSig loc [n] typ) names
 
-
----- Normalization of As-patterns
-
-normalizePatterns_HsDecl :: HsDecl -> HsDecl
-
-normalizePatterns_HsDecl (HsFunBind matchs)
-    = HsFunBind (map normalizePatterns_HsMatch matchs)
-    where
-      normalizePatterns_HsMatch (HsMatch loc name pats (HsUnGuardedRhs body) where_binds)
-          = let (pats', as_bindings) = unzip (map normalizePattern pats) in
-            let body' = normalizePatterns_HsExp (makeCase loc (concat as_bindings) body)
-            in HsMatch loc name pats' (HsUnGuardedRhs body') where_binds
-
-normalizePatterns_HsDecl decl 
-    = descendBi normalizePatterns_HsExp decl
-
-
-normalizePatterns_HsExp :: HsExp -> HsExp
-
-normalizePatterns_HsExp (HsCase exp alts)
-    = HsCase exp (map normalizePatterns_HsAlt alts)
-    where
-      normalizePatterns_HsAlt (HsAlt loc pat (HsUnGuardedAlt clause_body) where_binds)
-          = let (pat', as_bindings) = normalizePattern pat in
-            let clause_body'   = normalizePatterns_HsExp 
-                                   $ if (null as_bindings) then clause_body
-                                     else (makeCase loc as_bindings clause_body)
-                 in HsAlt loc pat' (HsUnGuardedAlt clause_body') where_binds
-
-normalizePatterns_HsExp (HsLambda loc pats body)
-    = let (pats', as_bindings) = unzip (map normalizePattern pats) in
-      let body' = normalizePatterns_HsExp (makeCase loc (concat as_bindings) body)
-      in HsLambda loc pats' body'
-
-normalizePatterns_HsExp exp = descend normalizePatterns_HsExp exp
-
-
-makeCase :: SrcLoc -> [(HsName, HsPat)] -> HsExp -> HsExp
-makeCase _ [] body = body
-makeCase loc bindings body
-    = let (names, pats) = unzip bindings
-      in HsCase (HsTuple (map (HsVar . UnQual) names))
-           [HsAlt loc (HsPTuple pats) (HsUnGuardedAlt body) (HsBDecls [])]
-
-normalizePattern :: HsPat -> (HsPat, [(HsName, HsPat)])
-
-normalizePattern p@(HsPVar _)    = (p, [])
-normalizePattern p@(HsPLit _)    = (p, [])
-normalizePattern p@(HsPWildCard) = (p, [])
-normalizePattern (HsPNeg p)      = let (p', as_pats) = normalizePattern p in (HsPNeg p', as_pats)
-normalizePattern (HsPParen p)    = let (p', as_pats) = normalizePattern p in (HsPParen p', as_pats)
-
-normalizePattern (HsPAsPat n pat) 
-    = (HsPVar n, [(n, pat)])
-
-normalizePattern (HsPTuple pats)  
-    = let (pats', as_pats) = unzip (map normalizePattern pats)
-      in (HsPTuple pats', concat as_pats)
-
-normalizePattern (HsPList pats)
-    = let (pats', as_pats) = unzip (map normalizePattern pats)
-      in (HsPList pats', concat as_pats)
-
-normalizePattern (HsPApp qn pats) 
-    = let (pats', as_pats) = unzip (map normalizePattern pats)
-      in (HsPApp qn pats', concat as_pats)
-
-normalizePattern (HsPInfixApp p1 qn p2)
-    = let (p1', as_pats1) = normalizePattern p1
-          (p2', as_pats2) = normalizePattern p2
-      in (HsPInfixApp p1' qn p2', concat [as_pats1, as_pats2])
-
-normalizePattern (HsPRec name fields) = 
-    let (fields',as) = concRes $ map normField fields
-    in (HsPRec name fields', as)
-    where normField (HsPFieldPat name pat) = 
-              let (pat',as) = normalizePattern pat
-              in (HsPFieldPat name pat', as)
-          concRes res = (map fst res, concatMap snd res)
-
-normalizePattern p = error ("Pattern not supported: " ++ show p)
-
-
 ---- Normalization of names.
 --
 -- Function definitions are restricted in Isar/HOL such that names of
@@ -469,12 +384,14 @@ whereToLetMatch match@(HsMatch loc name pat rhs binds)
               in HsMatch loc name pat rhs' (HsBDecls [])
 
 whereToLetAlt :: HsAlt -> HsAlt
-whereToLetAlt (HsAlt loc pat alt binds) = 
-    case alt of
-      HsGuardedAlts _ -> assert False undefined
-      HsUnGuardedAlt exp -> 
-          let alt' = HsUnGuardedAlt $ HsLet binds exp
-          in HsAlt loc pat alt' (HsBDecls [])
+whereToLetAlt orig@(HsAlt loc pat alt binds) 
+    | isEmptyBinds binds = orig
+    | otherwise =
+        case alt of
+          HsGuardedAlts _ -> assert False undefined
+          HsUnGuardedAlt exp -> 
+              let alt' = HsUnGuardedAlt $ HsLet binds exp
+              in HsAlt loc pat alt' (HsBDecls [])
 
 
 ---- Deguardification
