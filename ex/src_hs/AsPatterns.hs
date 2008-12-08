@@ -20,3 +20,8 @@ unsound l@([]) = 1 : l
 
 record :: MyRecord -> MyRecord
 record a@A{one = []} = a
+
+
+long :: Show a => [a] -> String
+long l@(_:_:_) = show l ++ " is long enough!"
+long l         = show l ++ " is too short!"

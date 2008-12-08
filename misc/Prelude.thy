@@ -96,4 +96,5 @@ constdefs
   fun_app :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 10)
   "f $ x \<equiv> f x"
 
+
 end

@@ -96,7 +96,7 @@ writeCustomTheory cust =
   @/\<theory name\>/.thy@ in the current directory.
 -}
 writeTheory :: Cmd ->  GlobalE -> Conversion ()
-writeTheory thy@(TheoryCmd (Theory thyname) _) env 
+writeTheory thy@(TheoryCmd (Theory thyname)_ _) env 
     = do let content = render (pprint thy env)
          let dstName = content `seq` map (\c -> if c == '.' then '_' else c) thyname ++ ".thy"
          outLoc <- getOutputDir

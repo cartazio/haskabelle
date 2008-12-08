@@ -245,12 +245,12 @@ instance Adapt Isa.Cmd where
     adapt (Isa.Block cmds)       
         = mapM adapt cmds >>= (return . Isa.Block)
 
-    adapt (Isa.TheoryCmd thy cmds)   
+    adapt (Isa.TheoryCmd thy imps cmds)   
         = do old_mID <- query currentModuleID
              set (setModuleID $ Just (Env.fromIsa thy))
              cmds'   <- mapM adapt cmds
              set (setModuleID old_mID)
-             return (Isa.TheoryCmd thy cmds')
+             return (Isa.TheoryCmd thy imps cmds')
         where setModuleID v state
                   = state { currentModuleID = v }
 

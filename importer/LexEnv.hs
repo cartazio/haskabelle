@@ -50,6 +50,7 @@ module Importer.LexEnv
       augmentGlobalEnv,
       updateGlobalEnv,
       updateIdentifier,
+      renameModules,
       environmentOf,
       makeGlobalEnv,
       lookupConstant,
@@ -810,7 +811,10 @@ data EnvImport = EnvImport ModuleID Bool (Maybe ModuleID)
   This includes the name of the module, a list of its imports, a list of its exports
   and its lexical environment.
 -}
-data ModuleE = ModuleEnv ModuleID [EnvImport] [EnvExport] LexE
+data ModuleE = ModuleEnv{ moduleEName :: ModuleID,
+                          moduleEImports :: [EnvImport],
+                          moduleEExports :: [EnvExport],
+                          moduleELex :: LexE }
   deriving (Show)
 
 {-|
@@ -991,6 +995,13 @@ initialGlobalEnv :: GlobalE
 initialGlobalEnv = GlobalEnv 
                      $ Map.singleton prelude 
                            (ModuleEnv prelude [] [] (LexEnv (Map.empty) (Map.empty)))
+
+renameModules :: (ModuleID -> Maybe ModuleID) -> GlobalE -> GlobalE
+renameModules ren (GlobalEnv env) = GlobalEnv . Map.fromList . map rename . Map.toList $ env
+    where rename orig@(name, mod) = case ren name of
+                                 Nothing -> orig
+                                 Just newName -> (newName, mod{moduleEName = newName})
+
 {-|
   This function constructs a global environment from a function generating the imports for a
   module name, a predicate identifying identifiers that should be exported, and a list of
@@ -1051,7 +1062,8 @@ makeGlobalEnv_FromHsModules ms  custMods
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
 makeModuleEnv_FromCustThy :: ModuleID -> CustomTheory -> ModuleE
-makeModuleEnv_FromCustThy mod custThy = ModuleEnv mod [] (customExportList mod custThy) (customLexEnv mod custThy)
+makeModuleEnv_FromCustThy mod custThy = 
+    ModuleEnv mod [] (customExportList mod custThy) (customLexEnv mod custThy)
 
 {-|
   This method builds the union of two global environments, prioritising the first one.

@@ -47,7 +47,7 @@ data DatatypeDef = DatatypeDef TypeSpec [ConSpec]
   This type represents Isabelle commands.
 -}
 data Cmd = Block [Cmd]  -- ^a block of commands
-         | TheoryCmd Theory [Cmd]  -- ^the command introducing a theory
+         | TheoryCmd Theory [Theory] [Cmd]  -- ^the command introducing a theory
          
          {-|
            A data type command: @datatype ('a, 'b) "typeconstr" = Constr1 | Constr2 "'a list" 'b@

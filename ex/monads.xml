@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<translation>
+  <input>
+    <path location="src_hs/UseMonads.hs" />
+  </input>
+  <output location="dst_thy" />
+  <customisation>
+    
+    <monadInstance name="StateM">
+      <doSyntax>do od</doSyntax>
+      <constants>
+	when when
+	return return
+	liftM liftM
+      </constants>
+    </monadInstance>
+    
+    <monadInstance name="ErrorM">
+      <doSyntax>doE odE</doSyntax>
+      <constants>
+	when whenE
+	throwError throwError
+	return returnE
+	liftM liftME
+      </constants>
+      <lifts>
+	<lift from="StateM" by="lift" />
+      </lifts>
+    </monadInstance>
+    
+    <replace>
+      <module name="Monads" />
+      <theory name="StateMonads" location="StateMonads.thy">
+	<monads>
+	  StateM ErrorM
+	</monads>
+	<constants>
+	  get put
+	</constants>
+      </theory>
+    </replace>
+  </customisation>
+</translation>

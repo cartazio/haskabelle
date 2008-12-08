@@ -35,6 +35,7 @@ import Importer.DeclDependencyGraph
 
 import Importer.Adapt.Mapping (makeAdaptionTable_FromHsModules, extractHskEntries)
 import Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit)
+import Importer.Adapt.Raw (used_thy_names)
 
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.Msg as Msg
@@ -61,7 +62,8 @@ convertHskUnit custs (HskUnit hsmodules custMods initialGlobalEnv)
           
           isathys = fst $ runConversion custs global_env_hsk $ mapM convert hskmodules 
           custThys = Map.elems custMods
-          isaunit = IsaUnit isathys custThys (adaptGlobalEnv global_env_hsk adaptionTable)
+          adaptedEnv = adaptGlobalEnv global_env_hsk adaptionTable
+          isaunit = IsaUnit isathys custThys adaptedEnv
       in
         adaptIsaUnit global_env_hsk adaptionTable isaunit
     where 
@@ -193,6 +195,8 @@ getCurrentMonadDoSyntax =
 -}
 newtype ContextM v = ContextM (ReaderT Customisations (StateT Context GensymM) v)
     deriving (Monad, MonadState Context, Functor, MonadReader Customisations)
+
+queryCustomisations = ask
 
 {-|
   This function lifts a gensym computation to a context computation
@@ -375,9 +379,22 @@ class Show a => Convert a b | a -> b where
 instance Convert HskModule Isa.Cmd where
     convert' (HskModule _loc modul dependentDecls)
         = do thy <- convert modul
+             env <- queryContext globalEnv
+             custs <- queryCustomisations
+             let imps  = filter (not . isStandardTheory) (lookupImports thy env custs)
              withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
                $ do cmds <- mapM convert dependentDecls
-                    return (Isa.TheoryCmd thy cmds)
+                    return (Isa.TheoryCmd thy imps cmds)
+        where isStandardTheory (Isa.Theory n) = n `elem` used_thy_names
+
+
+lookupImports :: Isa.Theory -> Env.GlobalE -> Customisations -> [Isa.Theory]
+lookupImports thy globalEnv custs
+    = map (rename .(\(Env.EnvImport name _ _) ->  Env.toIsa name))
+        $ Env.lookupImports_OrLose (Env.fromIsa thy) globalEnv
+    where rename orig@(Isa.Theory name) = case getCustomTheory custs (Module name) of
+                                   Nothing -> orig
+                                   Just ct -> getCustomTheoryName ct
 
 instance Convert HskDependentDecls Isa.Cmd where
     -- Mutual recursive function definitions must be specified specially

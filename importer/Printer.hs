@@ -246,9 +246,8 @@ instance Printer Isa.DatatypeDef where
 instance Printer Isa.Cmd where
     pprint' (Isa.Comment string) = empty -- blankline $ comment string
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
-    pprint' (Isa.TheoryCmd thy cmds)
+    pprint' (Isa.TheoryCmd thy imps cmds)
         = do env <- queryPP globalEnv
-             let imps  = filter (not . isStandardTheory) (lookupImports thy env)
              let imps' = map pprint' (imps ++ [Isa.Theory Env.prelude])
              withCurrentTheory thy $
                text "theory" <+> pprint' thy                     $+$
@@ -256,8 +255,6 @@ instance Printer Isa.Cmd where
                text "begin"                                      $+$
                (vcat $ map pprint' cmds)                         $+$
                text "\nend"
-        where
-          isStandardTheory (Isa.Theory n) = n `elem` used_thy_names
 
     pprint' (Isa.DatatypeCmd (def:defs)) = 
         let fstDef = text "datatype" <+> pprint' def
@@ -633,9 +630,3 @@ isUnaryOp name lookupFn
 lookupIdentifier :: Isa.Theory -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
 lookupIdentifier thy n globalEnv
     = Env.lookupConstant (Env.fromIsa thy) (Env.fromIsa n) globalEnv
-
-
-lookupImports :: Isa.Theory -> Env.GlobalE -> [Isa.Theory]
-lookupImports thy globalEnv
-    = map (\(Env.EnvImport name _ _) -> Env.toIsa name)
-        $ Env.lookupImports_OrLose (Env.fromIsa thy) globalEnv

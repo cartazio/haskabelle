@@ -4,40 +4,4 @@
     <path location="src_hs/AsPatterns.hs" />
   </input>
   <output location="dst_thy" />
-  <customisation>
-    
-    <monadInstance name="MyStateM">
-      <doSyntax>do od</doSyntax>
-      <constants>
-	when when
-	return return
-	liftM liftM
-      </constants>
-    </monadInstance>
-    
-    <monadInstance name="MyErrorM">
-      <doSyntax>doE odE</doSyntax>
-      <constants>
-	when whenE
-	throwError throwError
-	return returnE
-	liftM liftME
-      </constants>
-      <lifts>
-	<lift from="MyStateM" by="lift" />
-      </lifts>
-    </monadInstance>
-    
-    <replace>
-      <module name="Monads" />
-      <theory name="Monads" location="Monads.thy">
-	<monads>
-	  MyStateM MyErrorM
-	</monads>
-	<constants>
-	  get put
-	</constants>
-      </theory>
-    </replace>
-  </customisation>
 </translation>

@@ -23,6 +23,7 @@ module Importer.Configuration
       defaultCustomisations,
       -- * Accessor Functions
       getCustomTheory,
+      getCustomTheoryName,
       getCustomConstants,
       getCustomTypes,
       getCustomTheoryPath,
@@ -205,6 +206,9 @@ getCustomTheory Customisations{ customTheoryCust = custs} mod = Map.lookup mod c
 -}
 getCustomTheoryPath :: CustomTheory -> String
 getCustomTheoryPath CustomTheory{custThyLocation = FileLocation src} = src
+
+getCustomTheoryName :: CustomTheory -> Theory
+getCustomTheoryName CustomTheory{custThyName = name} = name
 
 {-|
   This function provides the constants that are exported by the given custom
