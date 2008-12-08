@@ -30,7 +30,7 @@ $(THY): Thy/ROOT.ML Thy/Setup.thy Thy/Haskabelle.thy
 
 ## mimic isabelle document sources
 
-../Makefile.in:
+../Makefile.in: $(ISABELLE_HOME)/doc-src
 	( cd .. && for NAME in $(ISABELLE_HOME)/doc-src/*; do ln -s $$NAME $$(basename $$NAME); done )
 
 
