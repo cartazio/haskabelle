@@ -2,8 +2,7 @@ theory Haskabelle
 imports Complex_Main Setup
 begin
 
-chapter {* Haskabelle -- importing Haskell source files into
-  Isabelle/HOL theories *}
+chapter {* Haskabelle *}
 
 section {* Introduction *}
 
@@ -11,7 +10,8 @@ subsection {* What is Haskabelle? *}
 
 text {* 
   Haskabelle is an importer from Haskell source files to
-  Isabelle/HOL \cite{isa-tutorial} theories
+  Isabelle/HOL \cite{isa-tutorial} theories implemented
+  in Haskell itself.
 *}
 
 subsection {* Installation hints *}
@@ -39,6 +39,10 @@ text {*
 
   \noindent It is assumed that you have a suitable version of Isabelle
   installed to really use the theories generated from Haskabelle.
+
+  \noindent Throughout this documentation, qualified paths
+  of executables on the shell prompt are relative to the
+  root directory of the Haskabelle distribution.
 *}
 
 subsection {* Basic usage *}
@@ -47,22 +51,27 @@ text {*
   Haskabelle is invoked using the following command line:
 *}
 
+text %quote {*
+  \shell{bin/haskabelle <SRC1> .. <SRCn> <DST>}
+*}
+
 text {*
-  \shell{bin/import\_file <SRC>.hs <DST>}
+  \noindent where \shell{<SRC1>} \ldots \shell{<SRCn>} is
+  a list of Haskell source files to imports and \shell{<DST>}
+  is a directory to put the generated Isabelle/HOL theory
+  files inside.
 *}
 
 subsection {* Examples *}
 
 text {*
+  Examples for Haskabelle can be found in the
+  \shell{ex/src\_hs} directory in the distribution.
+  They can be imported at a glance using the following command:
+*}
 
-Examples:
-
-    ex/src\_hs
-
-Importing all examples (to ex/dst\_thy):
-
-    bin/import\_all
-
+text %quote {*
+  \shell{bin/import\_all}
 *}
 
 end
