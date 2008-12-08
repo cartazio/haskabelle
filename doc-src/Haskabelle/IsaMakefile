@@ -13,6 +13,7 @@ all: images test
 SRC = $(ISABELLE_HOME)/src
 OUT = $(ISABELLE_OUTPUT)
 LOG = $(OUT)/log
+ISABELLE_TOOL = $(ISATOOL) # probably legacy
 
 USEDIR = $(ISABELLE_TOOL) usedir -v true -i false -d false -C false -D document
 
