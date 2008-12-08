@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Ephermal adapter script for isabelle vs. isatool
+
+## environment
+
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+
+if [ -z "$ISABELLE" ]
+then
+  if type -t isatool > /dev/zero
+  then
+    ISABELLE="$(isatool getenv -b ISATOOL)"
+  else
+    ISABELLE="$(isabelle getenv -b ISABELLE)"
+  fi
+fi
+
+"$ISABELLE" "$@" || exit $?
