@@ -8,6 +8,10 @@
 
 PRG="$(basename "$0")"
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+if [ -z "$GHC" ]
+then
+  GHC=ghc
+fi
 
 ## diagnostics
 
@@ -52,4 +56,4 @@ echo "...into $1"
 
 ## invoking Haskabelle
 
-ghc -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "importFiles [$SRCS] $DST" "$HASKABELLE_HOME/Haskabelle.hs" || exit $?
+"$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "importFiles [$SRCS] $DST" "$HASKABELLE_HOME/Haskabelle.hs" || exit $?
