@@ -2,7 +2,7 @@
 #
 # Author: Florian Haftmann, TU Muenchen
 #
-# Ephermal adapter script for isabelle vs. isatool
+# Ephermal adapter script for isabelle-process vs. isabelle.
 
 ## environment
 
@@ -17,5 +17,7 @@ then
     ISABELLE_PROCESS="$(isabelle getenv -b ISABELLE_PROCESS)"
   fi
 fi
+
+## execute
 
 "$ISABELLE_PROCESS" "$@" || exit $?

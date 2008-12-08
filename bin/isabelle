@@ -2,20 +2,22 @@
 #
 # Author: Florian Haftmann, TU Muenchen
 #
-# Ephermal adapter script for isabelle vs. isatool
+# Ephermal adapter script for isabelle vs. isatool.
 
 ## environment
 
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
 
-if [ -z "$ISABELLE" ]
+if [ -z "$ISABELLE_TOOL" ]
 then
   if type -t isatool > /dev/zero
   then
-    ISABELLE="$(isatool getenv -b ISATOOL)"
+    ISABELLE_TOOL="$(isatool getenv -b ISATOOL)"
   else
-    ISABELLE="$(isabelle getenv -b ISABELLE)"
+    ISABELLE_TOOL="$(isabelle getenv -b ISABELLE_TOOL)"
   fi
 fi
 
-"$ISABELLE" "$@" || exit $?
+## execute
+
+"$ISABELLE_TOOL" "$@" || exit $?

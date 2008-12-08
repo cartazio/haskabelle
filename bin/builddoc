@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Building the Haskabelle documentation
+
+## environment
+
+PRG="$(basename "$0")"
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+ISABELLE="$HASKABELLE_HOME/bin/isabelle"
+
+## diagnostics
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+## building
+
+cd "$HASKABELLE_HOME/doc-src/Haskabelle"
+"$ISABELLE" make || fail "building documentation sources failed"
+make pdf || fail "building documentation pdf failed"

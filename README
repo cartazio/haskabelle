@@ -13,17 +13,13 @@ Currently, Isabelle 2008 is recommended:
 
     http://isabelle.in.tum.de/repos/isabelle/rev/2cf13a72e170
 
-Then, switch to directory
+Then, invoke
 
-    doc-src/Haskabelle
+    bin/builddoc
 
-and issue the shell commands
-
-    $ISABELLE make
-    make doc
-
-where $ISABELLE is supposed to be the isabelle tool command of the
-desired Isabelle source distribution.
+By default, this uses the Isabelle version accessible on your PATH.
+Set shell variable ISABELLE_TOOL explicitly if this does not use 
+the desired Isabelle version.
 
 Sources of the importer itself are available via mercurial:
 
