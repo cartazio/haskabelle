@@ -48,7 +48,7 @@ text {*
 *}
 
 text {*
-  \shell{bin/import\_file SRC.hs DST}
+  \shell{bin/import\_file <SRC>.hs <DST>}
 *}
 
 subsection {* Examples *}

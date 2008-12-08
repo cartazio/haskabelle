@@ -29,6 +29,15 @@ function fail()
   exit 2
 }
 
+## cleaning
+
+if [ "$1" == "clean" ]
+then
+  cd "$HASKABELLE_HOME"
+  rm -v ex/dst_thy/* ex/dst_hs/*
+  exit 0
+fi
+
 ## testing
 
 cd "$HASKABELLE_HOME"
@@ -36,7 +45,7 @@ for SRC in ex/src_hs/*.hs
 do
   DST=ex/dst_thy/
   echo "importing $SRC..."
-  bin/import_file "$SRC" "$DST" > /dev/zero 2> /dev/zero || fail "could not import $SRC"
+  bin/haskabelle "$SRC" "$DST" > /dev/zero 2> /dev/zero || fail "could not import $SRC"
 done
 
 cp -vu misc/Prelude.thy ex/dst_thy/

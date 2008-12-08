@@ -1,7 +1,6 @@
-{-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Muenchen
+{-  Author:     Tobias C. Rittweiler, TU Muenchen
 
-Toplevel interface to importer.
+Toplevel interface to Haskabelle importer.
 -}
 
 module Main (
@@ -95,7 +94,7 @@ printIsaUnit_asAST (IsaUnit thys env)
     = vcat (map (dashes . text . prettyShow) thys)
     where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
 
-      
+
 withCurrentDirectory :: FilePath -> IO a -> IO a
 withCurrentDirectory fp body
     = do oldcwd <- getCurrentDirectory
@@ -138,6 +137,3 @@ main = do
                   assert (all (`elem` dirs ++ files) fps)
                     $ sequence_ ([importFiles files destdir] 
                                  ++ map (\srcdir -> importDir srcdir destdir) dirs)
-                                  
-            
-            
