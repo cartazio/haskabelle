@@ -1,5 +1,5 @@
 theory Haskabelle
-imports Complex_Main Setup
+imports Main Setup
 begin
 
 chapter {* Haskabelle *}

@@ -1,5 +1,5 @@
 theory Setup
-imports Complex_Main
+imports Main
 begin
 
 end
