@@ -1,4 +1,4 @@
-This is XYZ, an importer from Haskell source files to HOL Isar theories.
+This is Haskabelle, an importer from Haskell source files to HOL Isar theories.
 
 To get it run, install the following:
 
@@ -24,7 +24,7 @@ Sources of the importer itself are available from SVN:
 
 Using the importer:
 
-    bin/import_file <SRC>.hs <DST>.thy
+    bin/import_file <SRC>.hs <DST>
 
 Examples:
 
@@ -33,5 +33,3 @@ Examples:
 Importing all examples (to ex/dst_thy):
 
     bin/import_all
-
-$Id$

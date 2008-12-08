@@ -1,9 +1,25 @@
 #!/bin/bash
 #
-# $Id$
 # Author: Florian Haftmann, TU Muenchen
 #
-# Call to importer from the shell.
+# Shell interface for Haskabelle.
+
+## environment
+
+PRG="$(basename "$0")"
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+
+## diagnostics
+
+function usage()
+{
+  echo
+  echo "Usage: $PRG SRC1 .. SRCn DST"
+  echo
+  echo "  Import Haskell files SRC1 .. SRCn into Isabelle theories in directory DST."
+  echo
+  exit 1
+}
 
 function fail()
 {
@@ -11,15 +27,29 @@ function fail()
   exit 2
 }
 
-EXECPATH="$(dirname "$0")/.."
-SRC="$1"
-DST="$2"
+## processing command line arguments
 
-[ -z "$EXECPATH" ] && fail "$0 must be called with explicit path"
-[ -z "$SRC" ] && fail "no source file given"
-[ -z "$DST" ] && fail "no target dir given"
+if [ $# -lt 2 ]
+then
+  usage
+fi
 
-cd "$EXECPATH"
+SRCS="\"$1\""
+echo "importing $1..."
+shift
+for SPEC in "$@"
+do
+  if [ $# -gt 1 ]
+  then
+    echo "importing $1..."
+    SRCS="$SRCS, \"$1\""
+    shift
+  fi
+done
 
-echo "importing $SRC into $DST..."
-ghc -fglasgow-exts -e "importFiles [\"$SRC\"] \"$DST\"" Importer.hs || exit $?
+DST="\"$1\""
+echo "...into $1"
+
+## invoking Haskabelle
+
+ghc -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "importFiles [$SRCS] $DST" "$HASKABELLE_HOME/Importer.hs" || exit $?
