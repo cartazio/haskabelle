@@ -33,3 +33,8 @@ $(NAME).pdf: $(FILES) isabelle_isar.pdf
 	$(FIXBOOKMARKS) $(NAME).out
 	$(PDFLATEX) $(NAME)
 	$(PDFLATEX) $(NAME)
+
+.PHONY: doc
+doc: ../../doc/$(NAME).pdf
+../../doc/$(NAME).pdf: $(NAME).pdf
+	( cd ../../doc && ln -s ../doc-src/Haskabelle/$(NAME).pdf $(NAME).pdf )
