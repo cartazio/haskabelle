@@ -267,11 +267,12 @@ delocaliseFunDefs funDefs =
 
 delocaliseLet :: HsExp -> DelocaliserM HsExp
 delocaliseLet (HsLet binds exp) = 
-    let (HsBDecls patBinds, HsBDecls  funBinds) = splitPatBinds binds
+    let (HsBDecls patBinds, HsBDecls  funBinds) = splitPatBinds (checkBindings binds)
         funBinds' = map (addPatBindsToDecl patBinds) funBinds
         funDefs = funDefComponents (groupFunDefs funBinds') 
     in do newPatBinds <- mapM delocaliseFunDefs funDefs
-          return $ HsLet (HsBDecls $ (concat newPatBinds) ++ patBinds) exp
+          let newBinds = HsBDecls $ (concat newPatBinds) ++ patBinds
+          return $ HsLet newBinds exp
 delocaliseLet exp = return exp 
 
 
@@ -305,6 +306,10 @@ splitPatBinds (HsBDecls decls)
               = (Nothing, Just decl, Nothing)
           split decl = (Nothing, Nothing, Just decl)
 splitPatBinds junk = error ("splitPatBinds: Fall through. " ++ show junk)
+
+getPatDecls :: HsBinds -> [HsDecl]
+getPatDecls bindings
+    = let HsBDecls patdecls = fst (splitPatBinds bindings) in patdecls
 
 flattenHsTypeSig :: HsDecl -> [HsDecl]
 flattenHsTypeSig (HsTypeSig loc names typ)
@@ -396,48 +401,117 @@ whereToLetAlt orig@(HsAlt loc pat alt binds)
 
 ---- Deguardification
 
+type DeguardifyEnv = Reader Bool
+
+runDeguardifyEnv :: DeguardifyEnv a -> a
+runDeguardifyEnv m = runReader m False
+
+{-|
+  This environment defines a Boolean value indicating whether we are inside
+  the last match in a function definition
+-}
+deguardifyEnv :: (Monad m) => EnvDef m Bool
+deguardifyEnv = mkE fromMatches
+    where fromMatches :: [HsMatch] -> Envs (Repl Bool)
+          fromMatches [] = Envs []
+          fromMatches [_] = Envs [Set True,Set False]
+          fromMatches (_:_) = Envs [Set False,Set False]
+
 deguardify :: HsDecl -> HsDecl
-deguardify =
-    everywhere $ mkT
-    deguardifyRhs `extT` deguardifyAlts
+deguardify decl = runDeguardifyEnv $ everywhereEnv deguardifyEnv deguardifyLocal decl
 
-deguardifyRhs :: HsRhs -> HsRhs
-deguardifyRhs rhs@(HsUnGuardedRhs _) = rhs
-deguardifyRhs (HsGuardedRhss guards) = HsUnGuardedRhs $ deguardifyGuards guards
+deguardifyLocal :: GenericM DeguardifyEnv
+deguardifyLocal = mkM deguardifyRhs
+                  `extM` deguardifyAlts
 
-deguardifyAlts :: HsGuardedAlts -> HsGuardedAlts
-deguardifyAlts alt@(HsUnGuardedAlt _) = alt
+
+deguardifyRhs :: HsRhs -> DeguardifyEnv HsRhs
+deguardifyRhs rhs@(HsUnGuardedRhs _) = return rhs
+deguardifyRhs (HsGuardedRhss guards) = liftM HsUnGuardedRhs $ deguardifyGuards guards
+
+deguardifyAlts :: HsGuardedAlts -> DeguardifyEnv HsGuardedAlts
+deguardifyAlts alt@(HsUnGuardedAlt _) = return alt
 deguardifyAlts (HsGuardedAlts guards) = 
-    HsUnGuardedAlt .
+    liftM HsUnGuardedAlt .
     deguardifyGuards .
     (map (\(HsGuardedAlt l ss e) -> HsGuardedRhs l ss e)) $
     guards
-deguardifyGuards :: [HsGuardedRhs] -> HsExp
-deguardifyGuards guards
-    = let (guards', otherwise_expr) = findOtherwiseExpr guards
-      in foldr deguardify otherwise_expr guards'
-    where 
-      deguardify x@(HsGuardedRhs loc stmts clause) body
-          = HsIf (makeGuardExpr stmts) clause body
-   
-      makeGuardExpr stmts = if null stmts
-                            then (HsVar (UnQual (HsIdent "True")))
-                            else foldl1 andify (map expify stmts)
-          where expify (HsQualifier exp) = exp
-                andify e1 e2 = HsInfixApp e1 (HsQVarOp (Qual (Module "Prelude") (HsSymbol "&&"))) e2
+deguardifyGuards :: [HsGuardedRhs] -> DeguardifyEnv HsExp
+deguardifyGuards guards = 
+    do isLast <- ask
+       let findOtherwiseExpr guards
+               = case break isTrivial guards of
+                   (guards', (HsGuardedRhs _ _ last_expr):_) -> (guards', last_expr)
+                   (guards',[])
+                       | isLast -> let HsGuardedRhs srcLoc _ _ = last guards'
+                                   in error $ Msg.found_inconsistency_in_guards srcLoc
+                       | otherwise -> (guards', bottom)
+           (guards', otherwise_expr) = findOtherwiseExpr guards
+       return $ foldr deguardify otherwise_expr guards'
+    where otherwise_stmt = HsQualifier (HsVar (UnQual (HsIdent "otherwise")))
+          true_stmt      = HsQualifier (HsVar (UnQual (HsIdent "True")))
+          bottom         = HsVar (Qual (Module "Prelude") (HsSymbol "_|_")) 
+          isTrivial (HsGuardedRhs _ stmts _) =
+              stmts `elem` [[otherwise_stmt], [true_stmt]]
+          deguardify x@(HsGuardedRhs loc stmts clause) body
+              = HsIf (makeGuardExpr stmts) clause body
+          makeGuardExpr stmts = if null stmts
+                                then (HsVar (UnQual (HsIdent "True")))
+                                else foldl1 andify (map expify stmts)
+              where expify (HsQualifier exp) = exp
+                    andify e1 e2 = HsInfixApp e1 (HsQVarOp (Qual (Module "Prelude") (HsSymbol "&&"))) e2
 
-      findOtherwiseExpr guards
-          = let otherwise_stmt = HsQualifier (HsVar (UnQual (HsIdent "otherwise")))
-                true_stmt      = HsQualifier (HsVar (UnQual (HsIdent "True")))
-                bottom         = HsVar (Qual (Module "Prelude") (HsSymbol "_|_"))
-            in case break (\(HsGuardedRhs _ stmts _) -> stmts `elem` [[otherwise_stmt], [true_stmt]])
-                          guards of
-                 (guards', (HsGuardedRhs _ _ last_expr):_) -> (guards', last_expr)
-                 (guards', [])                             ->
-                     let HsGuardedRhs srcLoc _ _ = last guards'
-                     in error $ srcloc2string srcLoc ++ ": "
-                            ++ "Guards can be translated only if they are closed"
-                            ++ " with a trivial guard, i.e., True or otherwise."
+
+-- `let' in Haskell is actually a letrec, but Isar/HOL does not allow
+-- recursive let expressions. We hence check the bindings in question
+-- whether or not we can deal with them.
+--
+checkBindings :: HsBinds -> HsBinds
+checkBindings bindings
+    = checkForRecursiveBinds . checkForForwardRefs $ bindings
+
+-- Check for forward references, e.g. prohibit
+--
+--    let a = b * 42 
+--        b = 23 in ... 
+-- 
+-- as `b' is referenced before its binding is established.
+--
+-- Notice that do allow forward referencing to functions like for
+-- instance in
+--
+--    let a x = 32 + b x
+--        b y = c (- y)
+--        c z = 42 * z in ...
+-- 
+-- We can allow this because the function will be globalized, and
+-- hence moved out of the `let' expression.
+--
+checkForForwardRefs bindings
+    = let vardecls = getPatDecls bindings
+      in case filter (\(decl, forwardNss) -> any (`elem` concat forwardNss) $ Set.toList (extractFreeVarNs decl))
+                $ zip vardecls
+                      -- These are the consecutively following binding names:
+                      (tails (map extractBindingNs vardecls))
+      of []          -> bindings
+         (decl, _):_ -> error (Msg.forward_bindings_disallowed (getSrcLoc decl))
+
+-- Check for recursive binding attempts, e.g. prohibit
+--
+--    let ones = 1 : ones in ...
+--
+-- For the same reasons as above (forward refs), we do all recursive
+-- local function definitions.
+--
+checkForRecursiveBinds bindings
+    = let find_recursive_binds = filter (\d -> any (`elem` extractBindingNs d) 
+                                                 $ extractVarNs d)
+      in case find_recursive_binds (getPatDecls bindings) of
+        []  -> bindings
+        d:_ -> error (Msg.recursive_bindings_disallowed (getSrcLoc d))
+
+
+
 
 ------------------------------------------------------------
 ------------------------------------------------------------

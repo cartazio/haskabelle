@@ -1,27 +1,17 @@
 BUG / TODO Liste:
 
-* "op" als parameter name
-
-* enums
-
 * divmod
 
 * cover0 
 
 * ($)
 
-Presentation:
+* Deguardification: Signal error if not possible
 
-  * Beschreibung der Mappings
+* Binding globalization: rewrite closures
 
-  * Probleme in der Praxis
+* Module Name normalization
 
-  * Parse Tree, keine Typ inferenz
-
-  * Guards, List Comprehensions, Modules
-
-  * Usage.
-
-  * pers. Erfahrung.
+* let (Just foo) = bar in ... --> let gensym = bar in case gensym of Just Foo
 
 $Id$

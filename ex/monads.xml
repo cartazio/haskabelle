@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<translation>
+<translation
+   xmlns="http://www.haskell.org/hsimp/config"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.haskell.org/hsimp/config config.xsd">
   <input>
     <path location="src_hs/UseMonads.hs" />
   </input>
@@ -11,7 +14,6 @@
       <constants>
 	when when
 	return return
-	liftM liftM
       </constants>
     </monadInstance>
     
@@ -21,7 +23,6 @@
 	when whenE
 	throwError throwError
 	return returnE
-	liftM liftME
       </constants>
       <lifts>
 	<lift from="StateM" by="lift" />

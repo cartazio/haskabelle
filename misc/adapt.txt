@@ -1,5 +1,6 @@
-(*  ID:         $Id$
-    Author:     Florian Haftmann, TU Muenchen
+(*  Author:     Florian Haftmann, TU Muenchen
+
+Adaption table.
 *)
 
 classes
@@ -77,7 +78,7 @@ consts
   "Prelude.(>)"         "HOL.greater"
   "Prelude.(>=)"        "HOL.greater_eq"
   "Prelude.(==)"        "Prelude.heq"
-  "Prelude.(/=)"        "Prelude.hneq"
+  (*"Prelude.(/=)"        "Prelude.hneq"*)
   "Prelude.abs"         "HOL.abs"
   "Prelude.sgn"         "HOL.sgn"
   "Prelude.fromInteger" "Int.of_int"

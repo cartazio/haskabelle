@@ -93,3 +93,12 @@ no_default_methods_in_class_decl
 
 only_specializing_on_tycon_allowed
     = "Only specializing on a simple type constructor allowed in instance declarations."
+
+recursive_bindings_disallowed srcloc
+    = srcloc2string srcloc ++ ": " ++ "Recursive bindings disallowed."
+
+forward_bindings_disallowed srcloc
+    = srcloc2string srcloc ++ ": " ++ "Forward references to bindings disallowed."
+
+found_inconsistency_in_guards srcloc
+    = srcloc2string srcloc ++ ": " ++ "Guard inconsistency."

@@ -19,7 +19,8 @@ module Data.Generics.Env
       liftE,
       extByC,
       uniEloc,
-      Envs(..)
+      Envs(..),
+      Repl(..)
     )
 where
 
@@ -85,7 +86,7 @@ accE accum node =
 {-|
   This function turns constant environment transformations into environment
   transformations that replace the current environment with a new
-  value (for @Just@) or keep it (for @Nothing@)
+  value (for @Set@) or keep it (for @Keep@)
 -}
 replE :: (Monad m) => (a -> m (Envs (Repl e))) -> (a -> m (Envs (e -> e)))
 replE repl node =

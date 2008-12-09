@@ -1,7 +1,6 @@
-{-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Muenchen
+{-  Author:     Tobias C. Rittweiler, TU Muenchen
 
-Toplevel interface to importer.
+Toplevel interface to Haskabelle importer.
 -}
 
 module Importer (

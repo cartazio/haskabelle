@@ -26,6 +26,7 @@ module Importer.Utilities.Hsk
       bindingsFromPats,
       extractFieldNs,
       extractFreeVarNs,
+      extractVarNs,
       extractDataConNs,
       extractTypeConNs,
       extractImplDeclNs,
@@ -55,11 +56,12 @@ module Importer.Utilities.Hsk
       boundNamesEnv,
       applySubst,
       flattenRecFields,
-      unBang
+      unBang,
+      getSrcLoc
     ) where
   
 import Maybe
-import List (sort)
+import List (sort, sortBy)
 import Array (inRange)
 import Char (toLower)
 
@@ -623,6 +625,11 @@ renameHsDecl renamings decl =
     where renMatch :: HsMatch -> HsMatch
           renMatch (HsMatch loc name pats rhs binds)
                    = HsMatch loc (translate renamings name) pats rhs binds
+extractVarNs thing
+    = let varNs   = [ qn | HsVar qn <- universeBi thing ]
+          varopNs = [ qn | HsQVarOp qn <- universeBi thing ] 
+                    ++ [ qn | HsQConOp qn <- universeBi thing ]
+      in varNs ++ varopNs
 
 {-|
   This function compares the two given declarations w.r.t. the 
@@ -631,6 +638,13 @@ renameHsDecl renamings decl =
 orderDeclsBySourceLine :: HsDecl -> HsDecl -> Ordering
 orderDeclsBySourceLine decl1 decl2
     = compare (getSourceLine decl1) (getSourceLine decl2) 
+
+getSrcLoc :: HsDecl -> SrcLoc
+getSrcLoc decl
+    = head . sortBy compareLines $ (childrenBi decl :: [SrcLoc])
+    where compareLines loc1 loc2 
+              = compare (srcLine loc1) (srcLine loc2)
+
 
 {-|
   This function provides the source line where the given
