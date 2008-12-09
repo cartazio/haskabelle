@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+<schema
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   elementFormDefault="qualified"
+   attributeFormDefault="unqualified"
+   xmlns:conf="http://www.haskell.org/hsimp/config"
+   targetNamespace="http://www.haskell.org/hsimp/config">
+
+  <element name="translation" type="conf:translation"/>
+
+  <complexType name="translation">
+    <all>
+      <element name="input" type="conf:input"/>
+      <element name="output" type="conf:output"/>
+      <element name="customisation" type="conf:customisation"/>
+    </all>
+  </complexType>
+
+  <complexType name="input">
+    <sequence>
+      <choice minOccurs="1" maxOccurs="unbounded">
+	<element name="file" type="conf:path"/>
+	<element name="dir" type="conf:path"/>
+	<element name="path" type="conf:path"/>
+      </choice>
+    </sequence>
+  </complexType>
+
+  <complexType name="path">
+    <attribute name="location" type="string" use="required"/>
+  </complexType>
+
+  <complexType name="output">
+    <attribute name="location" type="string" use="required"/>
+  </complexType>
+
+  <complexType name="customisation">
+    <sequence>
+      <choice minOccurs="1" maxOccurs="unbounded">
+	<element name="monadInstance" type="conf:monadInstance"/>
+	<element name="replace" type="conf:replace"/>
+      </choice>
+    </sequence>
+  </complexType>
+
+  <complexType name="monadInstance">
+    <all>
+      <element name="doSyntax" type="string"/>
+      <element name="constants" type="string"/>
+      <element name="lifts" type="conf:lifts" minOccurs="0"/>
+    </all>
+    <attribute name="name" type="string" use="required"/>
+  </complexType>
+
+  <complexType name="lifts">
+    <sequence>
+      <element name="lift" type="conf:lift" minOccurs="1" maxOccurs="unbounded"/>
+    </sequence>
+  </complexType>
+  
+  <complexType name="lift">
+    <attribute name="from" type="string" use="required" />
+    <attribute name="by" type="string" use="required" />
+  </complexType>
+
+  <complexType name="replace">
+    <all>
+      <element name="module" type="conf:module"/>
+      <element name="theory" type="conf:theory"/>
+    </all>
+  </complexType>
+
+  <complexType name="module">
+    <attribute name="name" type="string" use="required"/>
+  </complexType>
+
+  <complexType name="theory">
+    <all>
+      <element name="monads" type="string" minOccurs="0"/>
+      <element name="constants" type="string" minOccurs="0"/>
+      <element name="types" type="string" minOccurs="0"/>
+    </all>
+    <attribute name="name" type="string" use="required"/>
+    <attribute name="location" type="string" use="required"/>
+  </complexType>
+</schema>
