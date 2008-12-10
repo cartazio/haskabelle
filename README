@@ -1,37 +1,26 @@
-This is XYZ, an importer from Haskell source files to HOL Isar theories.
+This is Haskabelle, an importer from Haskell source files to HOL Isar theories.
 
-To get it run, install the following:
+An overview how to use it can be found in the manual
 
-    GHC:
-        http://www.haskell.org/ghc/
+    doc/haskabelle.pdf
 
-    mtl:
-        http://hackage.haskell.org/cgi-bin/hackage-scripts/package/mtl-1.1.0.1
+If this is not present, you have to build it first;  for this you need
+a suitable Isabelle source (!) distribution, as available from
 
-    Happy:
-        http://www.haskell.org/happy/
+    http://isabelle.in.tum.de/repos/isabelle
+    
+Currently, Isabelle 2008 is recommended:
 
-    HSX:
-        http://www.cs.chalmers.se/~d00nibro/haskell-src-exts/
-        darcs get http://code.haskell.org/HSP/haskell-src-exts
+    http://isabelle.in.tum.de/repos/isabelle/rev/2cf13a72e170
 
-    Uniplate:
-        darcs get --partial http://www.cs.york.ac.uk/fp/darcs/uniplate  
+Then, invoke
 
-Sources of the importer itself are available from SVN:
+    bin/builddoc
 
-    svn+ssh://haftmann@atbroy100.informatik.tu-muenchen.de/home/wiss/haftmann/repos/shared/trunk/hsimp
+By default, this uses the Isabelle version accessible on your PATH.
+Set shell variable ISABELLE_TOOL explicitly if this does not use 
+the desired Isabelle version.
 
-Using the importer:
+Sources of the importer itself are available via mercurial:
 
-    bin/import_file <SRC>.hs <DST>.thy
-
-Examples:
-
-    ex/src_hs
-
-Importing all examples (to ex/dst_thy):
-
-    bin/import_all
-
-$Id$
+    http://www4.in.tum.de/~haftmann/cgi-bin/hgweb.cgi/haskabelle/

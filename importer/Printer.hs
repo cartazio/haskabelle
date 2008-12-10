@@ -1,12 +1,20 @@
+{-# LANGUAGE PatternGuards #-}
+
 {-  ID:         $Id$
     Author:     Tobias C. Rittweiler, TU Muenchen
 
-Pretty printing of abstract Isar/HOL theory.
 -}
 
-module Importer.Printer where
+{-|
+  Pretty printing of abstract Isar/HOL theory.
+-}
+
+module Importer.Printer
+    ( pprint
+    ) where
 
 import Maybe
+import Control.Monad
 
 import Importer.Utilities.Misc
 import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, 
@@ -167,6 +175,7 @@ withinApplication app d
          updatePP (\pps -> pps { currentAppFlavor = old_app })
          return result
 
+
 withTyScheme :: [(Isa.Name, [Isa.Name])] -> Doc -> Doc
 withTyScheme ctx d
     = do old_ctx <- queryPP (\pps -> currentTyScheme pps)
@@ -183,12 +192,13 @@ comment d = text "(*" <+> d <+> text "*)"
 -- Combinators
 
 (<>),(<+>),($$),($+$) :: Doc -> Doc -> Doc
-aM <> bM  = do{a<-aM; b<-bM; return (a P.<> b)}
-aM <+> bM = do{a<-aM; b<-bM; return (a P.<+> b)}
-aM $$ bM  = do{a<-aM; b<-bM; return (a P.$$ b)}
-aM $+$ bM = do{a<-aM; b<-bM; return (a P.$+$ b)}
+(<>) = liftM2 (P.<>)
+(<+>) = liftM2 (P.<+>)
+($$) = liftM2 (P.$$)
+($+$) = liftM2 (P.$+$)
 
-hcat,hsep,vcat,sep,cat,fsep,fcat :: [Doc] -> Doc
+ncat, hcat,hsep,vcat,sep,cat,fsep,fcat :: [Doc] -> Doc
+ncat = foldr ($+$) empty
 hcat dl = sequence dl >>= return . P.hcat
 hsep dl = sequence dl >>= return . P.hsep
 vcat dl = sequence dl >>= return . P.vcat
@@ -224,12 +234,20 @@ class Printer a where
                      in doc
 
 
+instance Printer Isa.DatatypeDef where
+    pprint' (Isa.DatatypeDef tyspec dataspecs)
+        = pprint' tyspec 
+          <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
+                                  (map ppconstr dataspecs))
+          where ppconstr (Isa.Constructor con types) 
+                    = hsep $ pprint' con : map pprint' types
+
+
 instance Printer Isa.Cmd where
     pprint' (Isa.Comment string) = empty -- blankline $ comment string
     pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
-    pprint' (Isa.TheoryCmd thy cmds)
+    pprint' (Isa.TheoryCmd thy imps cmds)
         = do env <- queryPP globalEnv
-             let imps  = filter (not . isStandardTheory) (lookupImports thy env)
              let imps' = map pprint' (imps ++ [Isa.Theory Env.prelude])
              withCurrentTheory thy $
                text "theory" <+> pprint' thy                     $+$
@@ -237,16 +255,12 @@ instance Printer Isa.Cmd where
                text "begin"                                      $+$
                (vcat $ map pprint' cmds)                         $+$
                text "\nend"
-        where
-          isStandardTheory (Isa.Theory n) = n `elem` used_thy_names
 
-    pprint' (Isa.DatatypeCmd tyspec dataspecs)
-        = blankline $
-          text "datatype" <+> pprint' tyspec 
-          <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
-                                  (map ppconstr dataspecs))
-          where ppconstr (Isa.Constructor con types) 
-                    = hsep $ pprint' con : map pprint' types
+    pprint' (Isa.DatatypeCmd (def:defs)) = 
+        let fstDef = text "datatype" <+> pprint' def
+            restDefs = map ((text "and     " <+>) . pprint') defs
+        in blankline $ vcat (fstDef:restDefs)
+          
 
     pprint' (Isa.RecordCmd tyspec conspecs)
         = blankline $
@@ -271,25 +285,11 @@ instance Printer Isa.Cmd where
                    let lookup = (\n -> lookupIdentifier thy n env)
                    pprint' pat <+> equals <+> parensIf (isCompound term lookup) (pprint' term)
 
+    pprint' (Isa.PrimrecCmd fnames tysigs equations)
+        = printFunDef "primrec" fnames tysigs equations
+
     pprint' (Isa.FunCmd fnames tysigs equations)
-        = blankline $
-          text "fun" <+> vcat (punctuate (text " and ") (map ppHeader (zip fnames tysigs))) $$
-          text "where" $$
-          vcat (zipWith (<+>) (space : repeat (char '|'))
-                              (map ppEquation equations))
-          where 
-            ppHeader (fn, sig)
-                | isEmptySig sig = pprint' fn
-                | otherwise      = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
-            ppEquation (fname, pattern, term) 
-                = do thy <- queryPP currentTheory 
-                     env <- queryPP globalEnv
-                     let lookup = (\n -> lookupIdentifier thy n env)
-                     maybeWithinHOL $
-                       pprint' fname <+> 
-                       hsep (map pprint' pattern) <+> 
-                       equals <+> 
-                       parensIf (isCompound term lookup) (pprint' term)
+        = printFunDef "fun" fnames tysigs equations
 
     pprint' (Isa.ClassCmd classN superclassNs typesigs)
         = blankline $
@@ -322,6 +322,29 @@ instance Printer Isa.Cmd where
           where pp Isa.AssocNone  = text ""
                 pp Isa.AssocLeft  = text "l"
                 pp Isa.AssocRight = text "r"
+    
+    pprint' (Isa.TypesCmd aliases) = text "type" <+> vcat (map pp aliases)
+        where pp (spec, typ) = pprint' spec <+> equals <+> pprint' typ
+
+printFunDef cmd fnames tysigs equations
+    = blankline $
+      text cmd <+> vcat (punctuate (text " and ") (map ppHeader (zip fnames tysigs))) $$
+      text "where" $$
+      vcat (zipWith (<+>) (space : repeat (char '|'))
+            (map ppEquation equations))
+    where 
+      ppHeader (fn, sig)
+          | isEmptySig sig = pprint' fn
+          | otherwise      = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
+      ppEquation (fname, pattern, term) 
+          = do thy <- queryPP currentTheory 
+               env <- queryPP globalEnv
+               let lookup = (\n -> lookupIdentifier thy n env)
+               maybeWithinHOL $
+                              pprint' fname <+> 
+                              hsep (map pprint' pattern) <+> 
+                              equals <+> 
+                              parensIf (isCompound term lookup) (pprint' term)
 
 instance Printer Isa.Theory where
     pprint' (Isa.Theory name) = text name
@@ -392,7 +415,8 @@ instance Printer Isa.Literal where
     -- would come up with a too general type, resulting in
     -- non-workingness.
     pprint' (Isa.Int i)      = let cc = colon <> colon in
-                               parens $ integer i <> cc <> text "_" <> cc <> text "num"
+                               integer i
+                               -- parens $ integer i  <> cc <> text "_" <> cc <> text "num"
     pprint' (Isa.Char ch)    = text "CHR " <+> quotes (quotes (char ch))
     pprint' (Isa.String str) = quotes . quotes . text $ str
 
@@ -461,6 +485,15 @@ instance Printer Isa.Term where
               = pprint' b
           ppStmt (Isa.Generator (p, e)) 
               = pprint' p <+> text "<-" <+> pprint' e
+
+    pprint' (Isa.DoBlock pre stmts post) = 
+        text pre <+> (vcat $ (printStmts stmts) ++ [text post])
+        where printStmts [stmt] = [pprint' stmt]
+              printStmts (stmt:stmts) = (pprint' stmt <> semi) : (printStmts stmts)
+
+instance Printer Isa.Stmt where
+    pprint' (Isa.DoGenerator pat exp) = pprint' pat <+> text "<-" <+> pprint' exp
+    pprint' (Isa.DoQualifier exp) = pprint' exp
 
 
 reAdaptEnvName :: Env.EnvName -> Maybe Env.EnvName
@@ -597,9 +630,3 @@ isUnaryOp name lookupFn
 lookupIdentifier :: Isa.Theory -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
 lookupIdentifier thy n globalEnv
     = Env.lookupConstant (Env.fromIsa thy) (Env.fromIsa n) globalEnv
-
-
-lookupImports :: Isa.Theory -> Env.GlobalE -> [Isa.Theory]
-lookupImports thy globalEnv
-    = map (\(Env.EnvImport name _ _) -> Env.toIsa name)
-        $ Env.lookupImports_OrLose (Env.fromIsa thy) globalEnv

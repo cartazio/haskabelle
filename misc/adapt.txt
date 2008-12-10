@@ -1,5 +1,6 @@
-(*  ID:         $Id$
-    Author:     Florian Haftmann, TU Muenchen
+(*  Author:     Florian Haftmann, TU Muenchen
+
+Adaption table.
 *)
 
 classes
@@ -11,6 +12,8 @@ classes
   "Prelude.Num"         "Prelude.num"
 
 types
+  "Prelude.Char"	"char"
+  "Prelude.String"	"string"
   "Prelude.Bool"        "bool"
   "Prelude.PairTyCon"   "*"
   "Prelude.ListTyCon"   "list"
@@ -18,6 +21,8 @@ types
 
   "Prelude.Int"         "int"
   "Prelude.Integer"     "int"
+
+  "Prelude.UnitTyCon" 	"unit"
 
 consts
   "Prelude.show"        "Prelude.print"
@@ -40,7 +45,9 @@ consts
   "Prelude.([])"        "List.Nil"
   "Prelude.(:)"         "List.Cons"
   "Prelude.(!!)"        "List.nth"
-
+  
+  "Prelude.null"	"List.null"
+  "Prelude.zip"		"List.zip"
   "Prelude.head"        "List.hd"
   "Prelude.tail"        "List.tl"
   "Prelude.map"         "List.map"
@@ -53,11 +60,14 @@ consts
   "Prelude.filter"      "List.filter"
   "Prelude.length"      "List.length"
   "Prelude.foldl"       "List.foldl"
+  "Prelude.and"		"Prelude.list_and"
   "Prelude.foldr"       "Prelude.hsk_foldr"
   "Prelude.zipWith"     "Prelude.zipWith"
 
   "Prelude.Nothing"     "None"
   "Prelude.Just"        "Some"
+  
+  "Prelude.(())"	"Unity"
 
   "Prelude.(+)"         "HOL.plus"
   "Prelude.(*)"         "HOL.times"
@@ -66,11 +76,13 @@ consts
   "Prelude.(<)"         "HOL.less"
   "Prelude.(<=)"        "HOL.less_eq"
   "Prelude.(>)"         "HOL.greater"
-  "Prelude.(<=)"        "HOL.greater_eq"
+  "Prelude.(>=)"        "HOL.greater_eq"
   "Prelude.(==)"        "Prelude.heq"
-  "Prelude.(/=)"        "Prelude.hneq"
+  (*"Prelude.(/=)"        "Prelude.hneq"*)
   "Prelude.abs"         "HOL.abs"
   "Prelude.sgn"         "HOL.sgn"
   "Prelude.fromInteger" "Int.of_int"
 
   "Prelude._|_"         "HOL.undefined"
+
+  "Prelude.($)"		"Prelude.fun_app"

@@ -10,6 +10,8 @@ import Maybe
 import List (groupBy, sortBy, intersect)
 
 import Data.Graph
+import Data.Set (Set)
+import qualified Data.Set as Set hiding (Set)
 import Data.Tree
 import Language.Haskell.Exts
 
@@ -19,30 +21,51 @@ import Importer.Utilities.Hsk
 import qualified Importer.LexEnv as Env
 import qualified Importer.Msg as Msg
 
-
 -- We have to canonicalize the names in our graph, as there may appear
 -- "some_fun", and "Foo.some_fun", and they may be reffering to the
 -- same. We use our GlobalEnv for this purpose.
+
+{-|
+  This data structure represents the dependency graph of Haskell declarations.
+  The nodes of this graph are elements of type 'HsDecl' keys are of type 'Env.EnvName'.
+-}
 data HskDeclDepGraph = HskDeclDepGraph (Graph, 
                                         Vertex -> (HsDecl, Env.EnvName, [Env.EnvName]), 
                                         Env.EnvName -> Maybe Vertex)
 
+{-|
+  This function computes the dependency graph of the given Haskell declarations of the
+  given module in the given environment. An edge from a declaration A to declaration B
+  means the definition of A depends on B.
+-}
 makeDeclDepGraph :: Env.GlobalE -> Module -> [HsDecl] -> HskDeclDepGraph
 makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
     where declDepGraph = graphFromEdges
                            $ handleDuplicateEdges
                                $ concatMap (makeEdgesFromHsDecl globalEnv modul) decls
 
+{-|
+  This function constructs the outgoing edges of the given declaration in the given environment
+  module.
+-}
 makeEdgesFromHsDecl :: Env.GlobalE -> Module -> HsDecl -> [(HsDecl, Env.EnvName, [Env.EnvName])]
 makeEdgesFromHsDecl globalEnv modul decl
     = let canonicalize hsqname = (let mID  = Env.fromHsk modul
                                       envN = Env.fromHsk hsqname
                                   in Env.resolveEnvName_OrLose globalEnv mID envN)
-      in do defname <- fromJust $ namesFromHsDecl decl
-            let used_names = extractFreeVarNs decl
-            return (decl, canonicalize defname, map canonicalize used_names)
+          names = map canonicalize $ (namesFromHsDecl decl)
+          used_names = map canonicalize $ Set.toList (extractFreeVarNs decl) ++ Set.toList (extractDataConNs decl) ++ Set.toList (extractFieldNs decl)
+          implTypes =  catMaybes $
+                       map (Env.getDepDataType globalEnv (Env.fromHsk modul)) used_names
+          usedTypes = case decl of
+                        HsDataDecl _ _ _ _ _ _ _
+                            -> map canonicalize $ Set.toList $ extractTypeConNs decl
+                        _ -> []
+      in [(decl, name , used_names ++ usedTypes ++ implTypes) | name <- names]
              
-
+{-|
+  ???
+-}
 handleDuplicateEdges :: [(HsDecl, Env.EnvName, [Env.EnvName])] -> [(HsDecl, Env.EnvName, [Env.EnvName])]
 handleDuplicateEdges edges
     = concatMap handleGroup (groupBy (\(_,x,_) (_,y,_) -> x == y) edges)
@@ -65,6 +88,13 @@ handleDuplicateEdges edges
 -- In Haskell definitions may appear anywhere in a source file, but in
 -- Isar/HOL (like in ML), definitions that are used in another definition
 -- must appear lexically before that other definition.
+
+{-|
+  This function takes a dependency graph of Haskell declarations and linearises it, such that
+  functions are declared before they are used by another function definition. The result is a
+  list of list of declaration each list of declarations forms a set of declarations that depend
+  on each other in a mutually recursive way.
+-}
 
 flattenDeclDepGraph :: HskDeclDepGraph -> [[HsDecl]]
 flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))

@@ -1,4 +1,3 @@
-
 module Guards where
 
 import Nats
@@ -19,3 +18,16 @@ three = Suc (Suc (Suc (Zero_nat)))
 quux n | eq_nat n three       = zero
        | less_nat n three     = one
        | greater_nat n three  = two
+
+foomb mb = case mb of
+             Nothing -> zero
+             Just n
+                 | eq_nat n three       -> zero
+                 | less_nat n three     -> one
+                 | greater_nat n three  -> two
+
+fallthrough n = case n of
+                  n | eq_nat n (Suc Zero_nat) -> zero
+                  Zero_nat -> one
+                  _ -> two
+                       

@@ -1,9 +1,16 @@
 #!/bin/bash
 #
-# $Id$
 # Author: Florian Haftmann, TU Muenchen
 #
-# Call to adaption table builder from the shell.
+# Shell interface for adaption table builder.
+
+## environment
+
+PRG="$(basename "$0")"
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+ISABELLE_PROCESS="$HASKABELLE_HOME/bin/isabelle-process"
+
+## diagnostics
 
 function fail()
 {
@@ -11,19 +18,15 @@ function fail()
   exit 2
 }
 
-EXECPATH="$(dirname "$0")/.."
+## file names
 
-[ -z "$EXECPATH" ] && fail "$0 must be called with explicit path"
-
-cd "$EXECPATH"
-
-[ -z "$ISABELLE" ] && ISABELLE="$(isatool getenv -b ISABELLE)"
-
-SRC="$EXECPATH/misc/adapt.txt"
-DST="$EXECPATH/Importer/Adapt/Raw.hs"
+SRC="$HASKABELLE_HOME/misc/adapt.txt"
+DST="$HASKABELLE_HOME/Importer/Adapt/Raw.hs"
 PRELUDE_NAME="Prelude"
-PRELUDE="$EXECPATH/misc/$PRELUDE_NAME"
-CONV="$EXECPATH/misc/mk_adapt.ML"
-CMD="use_thy \"$PRELUDE\"; use \"$CONV\"; MkAdapt.run (theory \"$PRELUDE_NAME\") \"$SRC\" \"$DST\";"
+PRELUDE="$HASKABELLE_HOME/misc/$PRELUDE_NAME"
+CONV="$HASKABELLE_HOME/misc/mk_adapt.ML"
 
-"$ISABELLE" -q -e "$CMD" HOL || exit 1
+## convert
+
+CMD="use_thy \"$PRELUDE\"; use \"$CONV\"; MkAdapt.run (theory \"$PRELUDE_NAME\") \"$SRC\" \"$DST\";"
+"$ISABELLE_PROCESS" -q -e "$CMD" HOL || exit 1

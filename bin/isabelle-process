@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Ephermal adapter script for isabelle-process vs. isabelle.
+
+## environment
+
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+
+if [ -z "$ISABELLE_PROCESS" ]
+then
+  if type -t isatool > /dev/zero
+  then
+    ISABELLE_PROCESS="$(isatool getenv -b ISABELLE)"
+  else
+    ISABELLE_PROCESS="$(isabelle getenv -b ISABELLE_PROCESS)"
+  fi
+fi
+
+## execute
+
+"$ISABELLE_PROCESS" "$@" || exit $?

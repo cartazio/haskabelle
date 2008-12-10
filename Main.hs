@@ -12,6 +12,10 @@ import Control.Monad
 import Control.Exception
 import System.Environment(getArgs, getProgName)
 import System.Directory
+import Importer.Configuration
+
+
+import Importer.Preprocess
 
 main :: IO ()
 main = do
@@ -24,19 +28,9 @@ mainArgs args = mainProgArgs "importer" args
 
 
 mainProgArgs :: String -> [String] -> IO ()
-mainProgArgs progname args =
-  case args of
-    []   -> ioError $ userError ("Usage: " ++ progname ++ " [[source_file | source_dir]]* destination_dir")
-    args -> let
-           destdirRel = last args
-           fpsRel     = init args 
-           in do 
-             -- make paths absolute
-             destdir <- makeAbsolute destdirRel
-             fps <- mapM makeAbsolute fpsRel
-             dirs  <- filterM doesDirectoryExist fps
-             files <- filterM doesFileExist fps
-             assert (all (`elem` dirs ++ files) fps) $
-                    sequence_ ([importFiles files destdir] ++ map (\srcdir -> importDir srcdir destdir) dirs) 
-                              `catch` (\ e -> print e >> putStr "\nProcess finished with uncaught exceptions!\n")
-             putStr "done"
+mainProgArgs progname args
+    = case args of
+        [configFile] -> 
+            do config <- readConfig configFile
+               importProject config
+        _ -> error $ "Usage: " ++ progname ++ " <config file>"
