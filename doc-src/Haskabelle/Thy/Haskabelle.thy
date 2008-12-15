@@ -35,6 +35,12 @@ text {*
     \item[Uniplate]
        \shell{darcs get --partial http://www.cs.york.ac.uk/fp/darcs/uniplate}
 
+    \item[xml]
+        \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/xml}
+
+    \item[QuickCheck]
+        \url{http://hackage.haskell.org/packages/archive/QuickCheck/2.1.0.1/QuickCheck-2.1.0.1.tar.gz}
+
   \end{description}
 
   \noindent It is assumed that you have a suitable version of Isabelle
