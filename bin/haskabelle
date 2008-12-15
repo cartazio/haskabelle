@@ -56,4 +56,4 @@ echo "...into $1"
 
 ## invoking Haskabelle
 
-"$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "importFiles defaultCustomisations [$SRCS] $DST" "$HASKABELLE_HOME/Importer.hs" || exit $?
+"$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "importFiles [$SRCS] $DST" "$HASKABELLE_HOME/Importer.hs" || exit $?

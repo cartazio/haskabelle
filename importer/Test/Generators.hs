@@ -34,6 +34,9 @@ instance Arbitrary SrcLoc where
     shrink (SrcLoc a b c) = [SrcLoc a' b' c' | a' <- shrink a, b' <- shrink b, c' <- shrink c]
 -}
 
+instance Arbitrary HsReify where
+    arbitrary = error "Arbitrary HsReify"
+
 instance (Arbitrary a , Ord a) => Arbitrary (Set a) where
     arbitrary = liftM Set.fromList  arbitrary 
 
