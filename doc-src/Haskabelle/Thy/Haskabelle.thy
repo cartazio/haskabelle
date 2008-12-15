@@ -68,7 +68,82 @@ text {*
   files inside.
 *}
 
-subsection {* Examples *}
+section {* Haskabelle *}
+
+subsection {* The concept behind *}
+
+text {*
+  \begin{itemize}
+
+    \item ``dumb tool'', works on Abstract Syntax Trees only.
+
+    \item e.g.~no type inference
+
+    \item we delegate the hard work to Isabelle
+
+    \item Conclusion: Only because the conversion succeeded, does not
+      mean that Isabelle won't choke\ldots
+
+  \end{itemize}
+*}
+
+subsection {* Facilities and limits *}
+
+text {*
+
+  What we can:
+
+  \begin{itemize}
+\item Module Resolution
+\end{itemize}
+~
+
+\begin{itemize}
+\item Declarations: %
+\begin{itemize}
+\item functions (\texttt{\small fun})
+\item constants (\texttt{\small definition})
+\item algebraic data types (\texttt{\small datatype})
+\item classes \& instances (\texttt{\small class}, \texttt{\small instantiation})
+\end{itemize}
+\end{itemize}
+~
+
+\begin{itemize}
+\item Linearization of declarations
+\end{itemize}
+
+\begin{itemize}
+\item Expressions: %
+\begin{itemize}
+\item literals (integers, strings, characters)
+\item applications, incl. infix applications and sections
+\item lambda abstractions
+\item if, let, case
+\item pattern guards
+\item list comprehensions
+\end{itemize}
+\end{itemize}
+
+  What we can't:
+
+  \ldots
+
+5 Phases:
+
+\begin{itemize}
+\item Parsing
+\item Preprocessing
+\item Converting
+\item Adapting
+\item Printing
+\end{itemize}
+
+*}
+
+section {* Configuring and adapting *}
+
+section {* Examples *}
 
 text {*
   Examples for Haskabelle can be found in the
@@ -77,7 +152,7 @@ text {*
 *}
 
 text %quote {*
-  \shell{bin/import\_all}
+  \shell{bin/regression}
 *}
 
 end
