@@ -489,7 +489,8 @@ checkBindings bindings
 --
 checkForForwardRefs bindings
     = let vardecls = getPatDecls bindings
-      in case filter (\(decl, forwardNss) -> any (`elem` concat forwardNss) $ Set.toList (extractFreeVarNs decl))
+      in case filter (\(decl, forwardNss) 
+                          -> any (`elem` concat forwardNss) $ Set.toList (extractFreeVarNs decl))
                 $ zip vardecls
                       -- These are the consecutively following binding names:
                       (tails (map extractBindingNs vardecls))
