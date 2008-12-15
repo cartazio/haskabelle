@@ -18,7 +18,7 @@ import Language.Haskell.Exts
 
 import Data.Generics.Biplate
 import Data.Generics.Str
-import Data.Generics.Env
+import Importer.Utilities.Env
 import Data.Generics
 import Data.Graph
 import Data.Tree

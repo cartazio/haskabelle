@@ -70,9 +70,9 @@ import Data.Generics.Basics
 import Data.Generics.PlateData
 import Language.Haskell.Exts
 
-
 import Data.Generics
-import Data.Generics.Env
+
+import Importer.Utilities.Env
 
 import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)

@@ -10,7 +10,7 @@
   modular defined environment information.
 -}
 
-module Data.Generics.Env
+module Importer.Utilities.Env
     ( EnvDef,
       everywhereEnv,
       everythingEnv,
