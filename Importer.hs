@@ -7,7 +7,7 @@ module Importer (
   module Importer.Convert,
   module Importer.IsaSyntax,
   module Importer.Printer,
-  importFiles, importDir, importProject,
+  importFiles, importProject,
   preprocessFile, 
   defaultCustomisations
 ) where
@@ -53,15 +53,6 @@ convertFiles files
         let isaUnits = map (convertHskUnit custs) units
         return isaUnits
 
-importDir :: FilePath -> FilePath -> IO ()
-importDir file out = importProject $ defaultConfig [file] out defaultCustomisations
-
-importFiles :: [FilePath] -> FilePath -> IO ()
-importFiles files out = importProject $ defaultConfig files out defaultCustomisations
-
-importProject :: Config -> IO ()
-importProject config = runConversion config importProject'
-
 importProject' :: Conversion ()
 importProject' 
     = do inFiles <- getInputFilesRecursively
@@ -70,6 +61,14 @@ importProject'
          when (not exists) $ liftIO $ createDirectory outDir
          convertedUnits <- convertFiles (filter isHaskellSourceFile inFiles)
          sequence_ (map writeIsaUnit convertedUnits)
+
+importProject :: Config -> IO ()
+importProject config = runConversion config importProject'
+
+importFiles :: [FilePath] -> FilePath -> IO ()
+importFiles files out = importProject $ defaultConfig files out defaultCustomisations
+
+
 
 {-|
   This function writes all Isabelle theories contained in the given unit to corresponding
@@ -116,15 +115,6 @@ printIsaUnit_asAST (IsaUnit thys _ env)
     = vcat (map (dashes . text . prettyShow) thys)
     where dashes d = d <> (text "\n") <> (text (replicate 60 '-'))
 
-
-
-{-|
-  This function turns a relative path into an absolute path using
-  the current directory as provided by 'getCurrentDirectory'.
--}
-
-makeAbsolute :: FilePath -> IO FilePath
-makeAbsolute fp = liftM2 combine getCurrentDirectory (return fp)
 
 ----------------------------------------------------------
 ------------ Preprocessing Only --------------------------

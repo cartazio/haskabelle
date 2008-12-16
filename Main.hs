@@ -1,36 +1,35 @@
-{-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Muenchen
+{-  Author:     Florian Haftmann, TU Muenchen
 
-Toplevel interface to importer.
+Toplevel interface to Haskabelle importer.
 -}
 
 module Main where
 
-import Prelude hiding (catch)
-import Importer
-import Control.Monad
-import Control.Exception
 import System.Environment(getArgs, getProgName)
-import System.Directory
-import Importer.Configuration
+import System.Exit(exitWith, ExitCode(ExitFailure))
 
+import Importer(importProject, importFiles)
+import Importer.Configuration(readConfig)
 
-import Importer.Preprocess
+usage :: IO ()
+usage = do
+  executable <- getProgName
+  putStrLn ""
+  putStrLn ("Usage: " ++ executable ++ " <SRC1> .. <SRCn> <DST> | --config <CONFIG>")
+  putStrLn ""
+  putStrLn "  Import Haskell files <SRC1> .. <SRCn> into Isabelle theories in directory DST"
+  putStrLn "    OR import Haskell files according to configuration file <CONFIG>"
+  putStrLn ""
+  exitWith (ExitFailure 1)
+
+mainInterface :: [String] -> IO ()
+mainInterface ["--config", configFile] = do
+  config <- readConfig configFile
+  importProject config
+mainInterface srcs_dst @ (_ : _ : _) =
+  importFiles (init srcs_dst) (last srcs_dst)
+mainInterface _ =
+  usage
 
 main :: IO ()
-main = do
-  progname <- getProgName
-  args     <- getArgs
-  mainProgArgs progname args
-
-mainArgs :: [String] -> IO()
-mainArgs args = mainProgArgs "importer" args
-
-
-mainProgArgs :: String -> [String] -> IO ()
-mainProgArgs progname args
-    = case args of
-        [configFile] -> 
-            do config <- readConfig configFile
-               importProject config
-        _ -> error $ "Usage: " ++ progname ++ " <config file>"
+main = getArgs >>= mainInterface
