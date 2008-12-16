@@ -27,9 +27,13 @@ then
   exit 0
 fi
 
-## testing
+## building
 
 cd "$HASKABELLE_HOME"
+bin/buildbin
+
+## testing
+
 for SRC in ex/src_hs/*.hs
 do
   DST=ex/dst_thy/
