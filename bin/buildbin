@@ -26,5 +26,4 @@ function fail()
 BUILDDIR=build
 cd "$HASKABELLE_HOME"
 mkdir -p "$BUILDDIR" || fail "Cannot create directory $BUILDDIR."
-"$GHC" -fglasgow-exts --make -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" "Main.hs" || fail "Cannot build source."
-mv Main bin/haskabelle_bin
+"$GHC" -fglasgow-exts --make -o bin/haskabelle_bin -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" "Main.hs" || fail "Cannot build source."
