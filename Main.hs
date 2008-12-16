@@ -5,11 +5,11 @@ Toplevel interface to Haskabelle importer.
 
 module Main where
 
-import System.Environment(getArgs, getProgName)
-import System.Exit(exitWith, ExitCode(ExitFailure))
+import System.Environment (getArgs, getProgName)
+import System.Exit (exitWith, ExitCode( ExitFailure))
 
-import Importer(importProject, importFiles)
-import Importer.Configuration(readConfig)
+import Importer.FilePrinter (importProject, importFiles)
+import Importer.Configuration (readConfig)
 
 usage :: IO ()
 usage = do
