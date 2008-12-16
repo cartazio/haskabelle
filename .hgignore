@@ -1,5 +1,7 @@
 syntax: glob
 
+bin/haskabelle_bin
+
 doc-src/Haskabelle/Thy/document
 doc-src/Haskabelle/haskabelle.pdf
 doc-src/Haskabelle/isabelle_isar.eps
