@@ -5,13 +5,10 @@
   GeneralizedNewtypeDeriving #-}
 
 
-{-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Muenchen
-    
-    Description:
+{-| Author: Tobias C. Rittweiler, TU Muenchen
 
-       Definition of a Global Environment for identifier resolution
-       and information retrieval.
+Definition of a Global Environment for identifier resolution and information
+retrieval.
 -}
 
 module Importer.LexEnv

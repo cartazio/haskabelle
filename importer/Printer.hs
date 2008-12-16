@@ -1,12 +1,8 @@
 {-# LANGUAGE PatternGuards #-}
 
-{-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Muenchen
+{-| Author: Tobias C. Rittweiler, TU Muenchen
 
--}
-
-{-|
-  Pretty printing of abstract Isar/HOL theory.
+Pretty printing of abstract Isar/HOL theory.
 -}
 
 module Importer.Printer

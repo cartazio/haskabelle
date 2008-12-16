@@ -1,9 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-{-|
-  This module provides data generators as used by /QuickCheck/ for types from external
-  libraries. Data generators of types defined in this application should be defined
-  locally with the definition of the type.
+{-| Author: Patrick Bahr, NICTA
+
+This module provides data generators as used by /QuickCheck/ for types from external
+libraries. Data generators of types defined in this application should be defined
+locally with the definition of the type.
 -}
 
 module Importer.Test.Generators where

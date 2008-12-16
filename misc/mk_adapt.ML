@@ -116,7 +116,7 @@ fun run thy src_loc dst_loc =
     val thy_names = Pretty.enum "," "[" "]"
       (map prep_string (ThyInfo.get_names ()));
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
-      "-- $" ^ "Id" ^ "$", "",
+      "",
       "module Importer.Adapt." ^ modl_name ^ " where", "",
       "import Importer.Adapt.Common", "",
       "raw_adaption_table = " ^ adaptions, "",

@@ -1,4 +1,4 @@
-{-  Author:     Tobias C. Rittweiler, TU Muenchen
+{-| Author: Tobias C. Rittweiler, TU Muenchen
 
 Importing and writing whole bunches of files.
 -}

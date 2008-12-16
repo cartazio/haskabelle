@@ -1,5 +1,4 @@
-{-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Muenchen
+{-| Author: Tobias C. Rittweiler, TU Muenchen
 -}
 
 module Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit) where

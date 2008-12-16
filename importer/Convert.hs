@@ -6,7 +6,7 @@
   TypeSynonymInstances,
   GeneralizedNewtypeDeriving #-}
 
-{-  Author:     Tobias C. Rittweiler, TU Muenchen
+{-| Author: Tobias C. Rittweiler, TU Muenchen
 
 Conversion from abstract Haskell code to abstract Isar/HOL theory.
 -}

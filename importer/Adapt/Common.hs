@@ -1,5 +1,4 @@
-{-  ID:         $Id$
-    Author:     Tobias C. Rittweiler and Florian Haftmann, TU Muenchen
+{-  Author: Tobias C. Rittweiler and Florian Haftmann, TU Muenchen
 
 Basic data structures for adaption table.
 -}

@@ -1,4 +1,4 @@
-{-
+{-| Author: Tobias Rittweiler, TU Muenchen
 
 Collection of various diagnostic function
 -}

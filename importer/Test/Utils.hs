@@ -1,7 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-{-|
-  This module provides template functions to derive instance declarations of data types for the class 'Arbitrary'.
+{-| Author: Patrick Bahr, NICTA
+
+This module provides template functions to derive instance declarations of data types for the class 'Arbitrary'.
 -}
 
 module Importer.Test.Utils

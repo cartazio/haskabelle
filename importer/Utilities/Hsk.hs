@@ -3,8 +3,7 @@
   FlexibleInstances,
   GeneralizedNewtypeDeriving #-}
 
-{-  ID:         $Id$
-    Author:     Tobias C. Rittweiler, TU Muenchen
+{-| Author: Tobias C. Rittweiler, TU Muenchen
 
 Auxiliary.
 -}
