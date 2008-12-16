@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Compoiling Haskabelle Haskell source to binary
+
+## environment
+
+PRG="$(basename "$0")"
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+if [ -z "$GHC" ]
+then
+  GHC=ghc
+fi
+
+## diagnostics
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+## building
+
+BUILDDIR=build
+cd "$HASKABELLE_HOME"
+mkdir -p "$BUILDDIR" || fail "Cannot create directory $BUILDDIR."
+"$GHC" -fglasgow-exts --make -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" "Main.hs" || fail "Cannot build source."
+mv Main bin/haskabelle_bin

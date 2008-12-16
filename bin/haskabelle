@@ -13,21 +13,20 @@ then
   GHC=ghc
 fi
 
-## processing command line arguments
- 
-if [ $# -lt 1 ]
+## invoking Haskabelle
+
+HASKABELLE_BIN="$HASKABELLE_HOME/bin/haskabelle_bin"
+if [ -x "$HASKABELLE_BIN" ]
 then
-  ARGS=""
+  "$HASKABELLE_BIN" "$PRG" "$@" || exit $?
 else
-  ARGS="\"$1\""
-  shift
+  ARGS="\"$PRG\""
   for ARG in "$@"
   do
     ARGS="$ARGS, \"$1\""
     shift
   done
+  BUILDDIR="$HASKABELLE_HOME/build"
+  echo Running Haskabelle from source...
+  "$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
 fi
-
-## invoking Haskabelle
-
-"$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
