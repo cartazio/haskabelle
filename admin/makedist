@@ -32,7 +32,7 @@ then
   REPOSITORY="$("$HG" showconfig paths.default)"
 fi
 
-if [ "$1" == regression ]
+if [ "$1" == "--regression" ]
 then
   REGRESSION=1
   shift

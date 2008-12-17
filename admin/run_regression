@@ -14,14 +14,14 @@ MAIL=admin/mail-attach
 ## log
 
 mkdir -p log
-LOG=log/haskabelle-$($DATE +'%Y-%m-%d_%H:%M:%S').log
+LOG=log/haskabelle-$(date +'%Y-%m-%d_%H:%M:%S').log
 
 ## run
 
 admin/regression 2>&1 > "$LOG"
 if [ -n $? ]
 then
-  MAILTEXT=/tmp/haskabelle-$($DATE +'%Y-%m-%d_%H:%M:%S').mail
+  MAILTEXT=/tmp/haskabelle-$(date +'%Y-%m-%d_%H:%M:%S').mail
 
   cat > "$MAILTEXT" <<EOF
 Haskabelle test failed.  See attached log.
