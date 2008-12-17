@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Testing the current Haskabelle repository.
+
+## diagnostics
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+## environment
+
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+
+if [ -z "$HG" ]
+then
+  HG=hg
+fi
+if type -p $HG > /dev/zero
+then
+  HG=$(type -p $HG)
+else
+  fail "Mercurial not found"
+fi
+
+## updating master repository
+
+cd "$HASKABELLE_HOME" || fail "Could not cd to $HASKABELLE_HOME"
+"$HG" pull -u || fail "Could not update master repository"
+
+## cleaning
+
+rm -rf "$HOME/tmp/haskabelle-dist"
+
+## building distribution
+
+admin/makedist --regression || fail "Could not build distribution"

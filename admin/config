@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Configuration for automatic Haskabelle test.
+
+#NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tun.de'
+NOTIFY='haftmann@in.tun.de'

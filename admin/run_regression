@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Run regression with logging and mail failures
+
+## environment
+
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+cd "$HASKABELLE_HOME"
+MAIL=admin/mail-attach
+. admin/config
+
+## log
+
+mkdir -p log
+LOG=log/haskabelle-$($DATE +'%Y-%m-%d_%H:%M:%S').log
+
+## run
+
+admin/regression 2>&1 > "$LOG"
+if [ -n $? ]
+then
+  MAILTEXT=/tmp/haskabelle-$($DATE +'%Y-%m-%d_%H:%M:%S').mail
+
+  cat > "$MAILTEXT" <<EOF
+Haskabelle test failed.  See attached log.
+
+Have a nice day,
+  isatest
+
+EOF
+
+  for RECEIVER in $NOTIFY
+  do
+    "$MAIL" 'test failed (Haskabelle)' "$RECEIVER" "$MAILTEXT" "$LOG"
+  done
+  rm "$MAILTEXT"
+  
+else
+  echo Done. >> "$LOG"
+fi
