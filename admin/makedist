@@ -61,9 +61,9 @@ rm $(find ex/src_hs -name "*.disabled")
 
 ## brand version
 
-if [ "$VERSION" -ne "" ]
+if [ -n "$VERSION" ]
 then
-  perl -i -pe 's/"Haskabelle (repository snapshot)"/"'$VERSION'"/g' Importer/Version.hs
+  perl -i -pe 's/"Haskabelle \(repository snapshot\)"/"'$VERSION'"/g' Importer/Version.hs
 fi
 
 ## building generated files

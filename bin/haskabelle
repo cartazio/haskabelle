@@ -26,7 +26,12 @@ else
     ARGS="$ARGS, \"$1\""
     shift
   done
-  BUILDDIR="$HASKABELLE_HOME/build"
   echo Running Haskabelle from source...
-  "$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
+  BUILDDIR="$HASKABELLE_HOME/build"
+  if [ -d "$BUILDDIR" ]
+  then
+    "$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -odir $BUILDDIR -hidir $BUILDDIR -stubdir $BUILDDIR -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
+  else
+    "$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
+  fi
 fi
