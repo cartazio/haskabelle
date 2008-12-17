@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fglasgow-exts -O -o bin/haskabelle_bin -odir build -hidir build -stubdir build #-}
+
 {-  Author:     Florian Haftmann, TU Muenchen
 
 Toplevel interface to Haskabelle importer.
@@ -6,7 +8,7 @@ Toplevel interface to Haskabelle importer.
 module Main where
 
 import System.Environment (getArgs, getProgName)
-import System.Exit (exitWith, ExitCode( ExitFailure))
+import System.Exit (exitWith, ExitCode (ExitFailure))
 
 import Importer.FilePrinter (importProject, importFiles)
 import Importer.Configuration (readConfig)
