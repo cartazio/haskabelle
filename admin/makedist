@@ -32,23 +32,25 @@ then
   REPOSITORY="$("$HG" showconfig paths.default)"
 fi
 
-DIST_HOME="${DIST_HOME:-$HOME/tmp/haskabelle-dist}"
-mkdir "$DIST_HOME" || fail "Directory $DIST_HOME already exists"
-
 if [ -z "$1" ]
 then
   REVISION=tip
   VERSION=""
-  ARCHIVE="haskabelle-snapshot"
+  ARCHIVE="haskabelle-$("$HG" tip --template '{date|shortdate}')"
 else
   REVISION="$1"
   VERSION="$REVISION"
   ARCHIVE="$REVISION"
 fi
 
+DIST_HOME="${DIST_HOME:-$HOME/tmp/haskabelle-dist}"
+mkdir -p "$DIST_HOME" || fail "Could not allocate directory $DIST_HOME"
+
 ## check out
 
 cd "$DIST_HOME"
+mkdir "$ARCHIVE" || fail "Directory $ARCHIVE already exists"
+cd "$ARCHIVE"
 "$HG" -R "$REPOSITORY" archive -t files . || fail "Could not check out source files"
 
 ## remove junk
@@ -82,4 +84,5 @@ rm -rf admin
 
 ## dist bundle
 
-tar --exclude="$ARCHIVE.tar.gz" -czvf "$ARCHIVE.tar.gz" * || fail "Could not build archive"
+cd ..
+tar -czvf "$ARCHIVE.tar.gz" "$ARCHIVE" || fail "Could not build archive"
