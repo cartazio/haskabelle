@@ -22,4 +22,4 @@ function fail()
 
 cd "$HASKABELLE_HOME/doc-src/Haskabelle"
 "$ISABELLE" make || fail "building documentation sources failed"
-make pdf || fail "building documentation pdf failed"
+make doc || fail "building documentation pdf failed"

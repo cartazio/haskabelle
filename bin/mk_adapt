@@ -29,4 +29,4 @@ CONV="$HASKABELLE_HOME/misc/mk_adapt.ML"
 ## convert
 
 CMD="use_thy \"$PRELUDE\"; use \"$CONV\"; MkAdapt.run (theory \"$PRELUDE_NAME\") \"$SRC\" \"$DST\";"
-"$ISABELLE_PROCESS" -q -e "$CMD" HOL || exit 1
+"$ISABELLE_PROCESS" -q -e "$CMD" HOL || fail "Building adaption table failed"

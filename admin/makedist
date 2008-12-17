@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Building a Haskabelle distribution from repository
+
+## diagnostics
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+## environment
+
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+
+if [ -z "$HG" ]
+then
+  HG=hg
+fi
+if type -p $HG > /dev/zero
+then
+  HG=$(type -p $HG)
+else
+  fail "Mercurial not found"
+fi
+
+if [ -z $REPOSITORY ]
+then
+  REPOSITORY="$("$HG" showconfig paths.default)"
+fi
+
+DIST_HOME="${DIST_HOME:-$HOME/tmp/haskabelle-dist}"
+mkdir "$DIST_HOME" || fail "Directory $DIST_HOME already exists"
+
+if [ -z "$1" ]
+then
+  REVISION=tip
+  VERSION=""
+  ARCHIVE="haskebelle-snapshot"
+else
+  REVISION="$1"
+  VERSION="$REVISION"
+  ARCHIVE="$REVISION"
+fi
+
+## check out
+
+cd "$DIST_HOME"
+"$HG" -R "$REPOSITORY" archive -t files . || fail "Could not check out source files"
+
+## brand version
+
+# FIXME
+
+## remove junk
+
+rm AGENDA
+rm .hgignore
+rm .hg_archival.txt
+rm doc/*
+
+## building generated files
+
+bin/mk_adapt || fail "Could not build adaption table"
+admin/builddoc || fail "Could not buld documentation"
+
+## include manual
+
+mv -f doc-src/Haskabelle/haskabelle.pdf doc/haskabelle.pdf
+rm -rf doc-src
+
+## remove admin
+
+rm -rf admin
+
+## dist bundle
+
+tar -czvf "$ARCHIVE"  . || fail "Could not build archive"
