@@ -2,7 +2,7 @@
 #
 # Author: Florian Haftmann, TU Muenchen
 #
-# Building a Haskabelle distribution from repository
+# Building a Haskabelle distribution from repository.
 
 ## diagnostics
 
@@ -30,6 +30,14 @@ fi
 if [ -z $REPOSITORY ]
 then
   REPOSITORY="$("$HG" showconfig paths.default)"
+fi
+
+if [ "$1" == regression ]
+then
+  REGRESSION=1
+  shift
+else
+  REGRESSION=
 fi
 
 if [ -z "$1" ]
@@ -78,6 +86,13 @@ admin/builddoc || fail "Could not buld documentation"
 mv -f doc-src/Haskabelle/haskabelle.pdf doc/haskabelle.pdf
 rm -rf doc-src
 
+## regression, if desired
+
+if [ "$REGRESSION" ]
+then
+  bin/regression
+end
+
 ## remove admin
 
 rm -rf admin
@@ -86,3 +101,5 @@ rm -rf admin
 
 cd ..
 tar -czvf "$ARCHIVE.tar.gz" "$ARCHIVE" || fail "Could not build archive"
+echo DIST_HOME="$DIST_HOME"
+echo ARCHIVE="$ARCHIVE"
