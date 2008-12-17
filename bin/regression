@@ -30,7 +30,7 @@ fi
 ## building
 
 cd "$HASKABELLE_HOME"
-bin/buildbin
+bin/buildbin || fail "Could not build source"
 
 ## testing
 
