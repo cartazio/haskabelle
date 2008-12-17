@@ -30,7 +30,7 @@ fi
 ## building
 
 cd "$HASKABELLE_HOME"
-bin/buildbin
+bin/buildbin || fail "Could not build source"
 
 ## testing
 
@@ -38,7 +38,7 @@ for SRC in ex/src_hs/*.hs
 do
   DST=ex/dst_thy/
   echo "importing $SRC..."
-  bin/haskabelle "$SRC" "$DST" > /dev/zero 2> /dev/zero || fail "could not import $SRC"
+  bin/haskabelle "$SRC" "$DST" > /dev/zero 2> /dev/zero || fail "Could not import $SRC"
 done
 
 ## re-importing
@@ -52,7 +52,7 @@ then
     THY_NAME="$(basename $THY .thy)"
     DST="../../ex/dst_hs/"
     echo "re-importing $THY_NAME..."
-    "$ISABELLE" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail "could not re-import $THY"
+    "$ISABELLE" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail "Could not re-import $THY"
   done
 fi
 

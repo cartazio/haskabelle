@@ -4,5 +4,8 @@
 #
 # Configuration for automatic Haskabelle test.
 
-#NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tun.de'
-NOTIFY='haftmann@in.tun.de'
+ISABELLE_PROCESS=/home/isatest/hg-isabelle/bin/isabelle-process
+ISABELLE_TOOL=/home/isatest/hg-isabelle/bin/isabelle
+
+#NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tum.de'
+NOTIFY='haftmann@in.tum.de'

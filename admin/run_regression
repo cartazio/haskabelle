@@ -10,6 +10,8 @@ HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
 cd "$HASKABELLE_HOME"
 MAIL=admin/mail-attach
 . admin/config
+export ISABELLE_TOOL
+export ISABELLE_PROCESS
 
 ## log
 
@@ -18,7 +20,8 @@ LOG=log/haskabelle-$(date +'%Y-%m-%d_%H:%M:%S').log
 
 ## run
 
-admin/regression 2>&1 > "$LOG"
+admin/regression > "$LOG" 2>&1
+
 if [ -n $? ]
 then
   MAILTEXT=/tmp/haskabelle-$(date +'%Y-%m-%d_%H:%M:%S').mail

@@ -90,8 +90,8 @@ rm -rf doc-src
 
 if [ "$REGRESSION" ]
 then
-  bin/regression
-end
+  bin/regression || fail "Could not issue regression test"
+fi
 
 ## remove admin
 
@@ -101,5 +101,3 @@ rm -rf admin
 
 cd ..
 tar -czvf "$ARCHIVE.tar.gz" "$ARCHIVE" || fail "Could not build archive"
-echo DIST_HOME="$DIST_HOME"
-echo ARCHIVE="$ARCHIVE"
