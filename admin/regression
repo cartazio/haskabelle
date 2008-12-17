@@ -38,4 +38,4 @@ rm -rf "$HOME/tmp/haskabelle-dist"
 
 ## building distribution
 
-admin/makedist --regression || fail "Could not build distribution"
+admin/makedist --regression || fail "Could not check distribution"
