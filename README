@@ -15,7 +15,7 @@ Currently, Isabelle 2008 is recommended:
 
 Then, invoke
 
-    bin/builddoc
+    admin/builddoc
 
 By default, this uses the Isabelle version accessible on your PATH.
 Set shell variable ISABELLE_TOOL explicitly if this does not use 

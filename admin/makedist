@@ -39,7 +39,7 @@ if [ -z "$1" ]
 then
   REVISION=tip
   VERSION=""
-  ARCHIVE="haskebelle-snapshot"
+  ARCHIVE="haskabelle-snapshot"
 else
   REVISION="$1"
   VERSION="$REVISION"
@@ -51,16 +51,20 @@ fi
 cd "$DIST_HOME"
 "$HG" -R "$REPOSITORY" archive -t files . || fail "Could not check out source files"
 
-## brand version
-
-# FIXME
-
 ## remove junk
 
 rm AGENDA
 rm .hgignore
 rm .hg_archival.txt
 rm doc/*
+rm $(find ex/src_hs -name "*.disabled")
+
+## brand version
+
+if [ "$VERSION" -ne "" ]
+then
+  perl -i -pe 's/"Haskabelle (repository snapshot)"/"'$VERSION'"/g' Importer/Version.hs
+fi
 
 ## building generated files
 
@@ -78,4 +82,4 @@ rm -rf admin
 
 ## dist bundle
 
-tar -czvf "$ARCHIVE"  . || fail "Could not build archive"
+tar --exclude="$ARCHIVE.tar.gz" -czvf "$ARCHIVE.tar.gz" * || fail "Could not build archive"

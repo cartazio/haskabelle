@@ -10,9 +10,11 @@ import System.Exit (exitWith, ExitCode( ExitFailure))
 
 import Importer.FilePrinter (importProject, importFiles)
 import Importer.Configuration (readConfig)
+import Importer.Version
 
 usage :: String -> IO ()
 usage executableName = do
+  putStrLn ("This is " ++ version ++ ".")
   putStrLn ""
   putStrLn ("Usage: " ++ executableName  ++ " <SRC1> .. <SRCn> <DST> | --config <CONFIG>")
   putStrLn ""
@@ -27,7 +29,7 @@ mainInterface [executableName, "--config", configFile] = do
   importProject config
 mainInterface (executableName : srcs_dst @ (_ : _ : _)) =
   importFiles (init srcs_dst) (last srcs_dst)
-mainInterface [executableName] =
+mainInterface (executableName : _) =
   usage executableName 
 
 main :: IO ()
