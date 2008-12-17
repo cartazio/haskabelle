@@ -4,5 +4,5 @@
 #
 # Configuration for automatic Haskabelle test.
 
-#NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tun.de'
-NOTIFY='haftmann@in.tun.de'
+#NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tum.de'
+NOTIFY='haftmann@in.tum.de'

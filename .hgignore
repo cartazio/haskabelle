@@ -16,10 +16,7 @@ ex/dst_thy
 *~
 \#*\#
 build/
-haddock/
-hpc/
-*.tix
-
+log/
 
 syntax: regexp
 
