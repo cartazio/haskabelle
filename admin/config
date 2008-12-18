@@ -6,6 +6,7 @@
 
 ISABELLE_PROCESS=/home/isatest/hg-isabelle/bin/isabelle-process
 ISABELLE_TOOL=/home/isatest/hg-isabelle/bin/isabelle
+GHC=/usr/local/ldist/bin/ghc
 
 #NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tum.de'
 NOTIFY='haftmann@in.tum.de'
