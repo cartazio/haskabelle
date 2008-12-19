@@ -4,8 +4,9 @@
 #
 # Configuration for automatic Haskabelle test.
 
-ISABELLE_PROCESS=/home/isatest/hg-isabelle/bin/isabelle-process
-ISABELLE_TOOL=/home/isatest/hg-isabelle/bin/isabelle
+ISABELLE_HOME=/home/isatest/isadist/Isabelle
+ISABELLE_PROCESS="$ISABELLE_HOME/bin/isabelle-process"
+ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"
 GHC=/usr/local/ldist/bin/ghc
 
 #NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tum.de'
