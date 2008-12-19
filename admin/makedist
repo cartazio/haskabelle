@@ -78,8 +78,8 @@ fi
 
 ## building generated files
 
-bin/mk_adapt || fail "Could not build adaption table"
 admin/builddoc || fail "Could not buld documentation"
+bin/mk_adapt || fail "Could not build adaption table"
 
 ## include manual
 
