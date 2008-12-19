@@ -64,7 +64,7 @@ hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
 
 
 prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
-                             (Hsx.ParseOk (Hsx.HsModule _ _ _ _ decls)) 
+                             (Hsx.ParseOk (Hsx.Module _ _ _ _ _ _ decls)) 
                                  = Hsx.parseModule str
                          in concatMap Hsx.prettyPrint decls
 

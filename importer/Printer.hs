@@ -22,7 +22,7 @@ import qualified Importer.LexEnv as Env
 import Importer.Adapt.Mapping (adaptionTable, AdaptionTable(..))
 import Importer.Adapt.Raw (used_thy_names, reserved_keywords)
 
-import Language.Haskell.Exts.Syntax (HsSpecialCon(..), HsQName(..))
+import Language.Haskell.Exts.Syntax as Hs (SpecialCon(..), QName(..))
 
 import qualified Text.PrettyPrint as P
 
@@ -509,9 +509,9 @@ mk_isFoo foo n
                        Special con -> con == foo
                        _ -> False
 
-isNil     = mk_isFoo HsListCon
-isCons    = mk_isFoo HsCons
-isPairCon = mk_isFoo (HsTupleCon 2)
+isNil     = mk_isFoo Hs.ListCon
+isCons    = mk_isFoo Hs.Cons
+isPairCon = mk_isFoo (Hs.TupleCon 2)
 
 isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
 isEmptySig _ = False

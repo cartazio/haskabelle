@@ -58,12 +58,12 @@ $(deriveArbitrary_shrink ''SrcLoc
   This generator only generates type signatures
 -}
 
-$(deriveGenForConstrs "typeSigDecl" ['HsTypeSig])
+$(deriveGenForConstrs "typeSigDecl" ['Hs.TypeSig])
 
 {-|
-  HsBinds
+  Hs.Binds
 -}
-$(deriveArbitraryForConstrs ['HsBDecls])
+$(deriveArbitraryForConstrs ['Hs.BDecls])
 
 {-|
   HsLiteral
@@ -71,66 +71,66 @@ $(deriveArbitraryForConstrs ['HsBDecls])
 $(deriveArbitraryForConstrs ['HsChar,'HsString, 'HsInt])
 
 {-|
-  HsPat
+  Hs.Pat
 -}
 $(deriveArbitraryForConstrs [
-   'HsPVar,
-   'HsPLit,
-   'HsPNeg,
-   'HsPInfixApp,
-   'HsPApp,
-   'HsPTuple,
-   'HsPList,
-   'HsPParen,
-   'HsPRec,
-   'HsPAsPat,
-   'HsPWildCard
+   'Hs.PVar,
+   'Hs.PLit,
+   'Hs.PNeg,
+   'Hs.PInfixApp,
+   'Hs.PApp,
+   'Hs.PTuple,
+   'Hs.PList,
+   'Hs.PParen,
+   'Hs.PRec,
+   'Hs.PAsPat,
+   'Hs.PWildCard
 --   'HsPIrrPat,
---   'HsPatTypeSig
+--   'Hs.PatTypeSig
   ])
 
 {-|
-  HsClassDecl
+  Hs.ClassDecl
 -}
 $(deriveArbitraryForConstrs [
-   'HsClsDecl
---   'HsClsDataFam,
---   'HsClsTyFam,
---   'HsClsTyDef
+   'Hs.ClsDecl
+--   'Hs.ClsDataFam,
+--   'Hs.ClsTyFam,
+--   'Hs.ClsTyDef
    ])
 
 {-|
-  HsExp
+  Hs.Exp
 -}
 $(deriveArbitraryForConstrs [
-   'HsVar,
+   'Hs.Var,
    'HsIPVar,
-   'HsCon,
+   'Hs.Con,
    'HsLit,
-   'HsInfixApp,
-   'HsApp,
+   'Hs.InfixApp,
+   'Hs.App,
    'HsNegApp,
-   'HsLambda,
-   'HsLet,
+   'Hs.Lambda,
+   'Hs.Let,
    'HsDLet,
    'HsWith,
-   'HsIf,
-   'HsCase,
+   'Hs.If,
+   'Hs.Case,
    'HsDo,
-   'HsMDo,
-   'HsTuple,
-   'HsList,
+   'Hs.MDo,
+   'Hs.Tuple,
+   'Hs.List,
    'HsParen,
-   'HsLeftSection,
-   'HsRightSection,
+   'Hs.LeftSection,
+   'Hs.RightSection,
    'HsRecConstr,
    'HsRecUpdate,
    'HsEnumFrom,
    'HsEnumFromTo,
    'HsEnumFromThen,
    'HsEnumFromThenTo,
-   'HsListComp,
-   'HsExpTypeSig
+   'Hs.ListComp,
+   'Hs.ExpTypeSig
 --   'HsAsPat,
 --   'HsWildCard,
 --   'HsIrrPat,
@@ -145,8 +145,8 @@ $(deriveArbitraryForConstrs [
 --   'HsCAsRP,
     
 -- Template Haskell
---   'HsVarQuote,
---   'HsTypQuote,
+--   'Hs.VarQuote,
+--   'Hs.TypQuote,
 --   'HsBracketExp,
 --   'HsSpliceExp,
     
@@ -160,33 +160,33 @@ $(deriveArbitraryForConstrs [
 
 $(deriveArbitraryAll [
 --   ''SrcLoc,
-   ''HsRhs,
-   ''Module,
-   ''HsSpecialCon,
-   ''HsQName,
-   ''HsName,
+   ''Hs.Rhs,
+   ''Hs.ModuleName,
+   ''Hs.SpecialCon,
+   ''Hs.QName,
+   ''Hs.Name,
    ''HsIPName,
-   ''HsQOp,
+   ''Hs.QOp,
    ''HsOp,
    ''HsCName,
-   ''HsExportSpec,
-   ''HsImportDecl,
+   ''Hs.ExportSpec,
+   ''Hs.ImportDecl,
    ''HsImportSpec,
-   ''HsAssoc,
+   ''Hs.Assoc,
    ''DataOrNew,
-   ''HsConDecl,
+   ''Hs.ConDecl,
    ''HsGadtDecl,
-   ''HsQualConDecl,
-   ''HsMatch,
-   ''HsIPBind,
-   ''HsDecl,
-   ''HsModule,
-   ''HsInstDecl,
-   ''HsBangType,
-   ''HsGuardedRhs,
-   ''HsType,
+   ''Hs.QualConDecl,
+   ''Hs.Match,
+   ''Hs.IPBind,
+   ''Hs.Decl,
+   ''Hs.ModuleName,
+   ''Hs.InstDecl,
+   ''Hs.BangType,
+   ''Hs.GuardedRhs,
+   ''Hs.Type,
    ''HsBoxed,
-   ''HsTyVarBind,
+   ''Hs.TyVarBind,
    ''HsKind,
    ''HsFunDep,
    ''HsAsst,
@@ -199,10 +199,10 @@ $(deriveArbitraryAll [
    ''HsPXAttr,
    ''HsRPatOp,
    ''HsRPat,
-   ''HsPatField,
-   ''HsStmt,
-   ''HsFieldUpdate,
-   ''HsAlt,
-   ''HsGuardedAlts,
-   ''HsGuardedAlt
+   ''Hs.PatField,
+   ''Hs.Stmt,
+   ''Hs.FieldUpdate,
+   ''Hs.Alt,
+   ''Hs.GuardedAlts,
+   ''Hs.GuardedAlt
   ])

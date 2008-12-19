@@ -94,7 +94,7 @@ text {*
   What we can:
 
   \begin{itemize}
-\item Module Resolution
+\item Hs.ModuleName Resolution
 \end{itemize}
 ~
 

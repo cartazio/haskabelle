@@ -75,7 +75,7 @@ Parsing:
   werden dann die die Imports aufgelöst, und all die relevanten Haskell
   Sources werden in eine sogenannte ConversionUnit gepackt. 
 
-  Unterstützt werden nur Imports eigener Module, da a) der Sourcecode
+  Unterstützt werden nur Imports eigener Hs.ModuleName, da a) der Sourcecode
   von den Standardmodulen i.d.R. nicht verfügbar ist, und b) diese
   höchstwahrscheinlich eh aus Haskellcode bestehen, der zu komplex ist
   für den Hsimp.
@@ -219,8 +219,8 @@ Randnotiz:
 --------------------------         
   Language.Haskell.Exts benutzt als Namensschema `HsFoo'. Ich benutze im
   Hsimp `HskFoo', so dass man besser unterscheiden kann, was wozu
-  gehört. Also `HskModule' entspricht dem `HsModule' von
-  Language.Haskell.Exts, mit dem Unterschied, dass es nicht `HsDecl's,
+  gehört. Also `HskHs.ModuleName' entspricht dem `Hs.ModuleName' von
+  Language.Haskell.Exts, mit dem Unterschied, dass es nicht `Hs.Decl's,
   sondern `HskDependentDecls' enthält.
 --------------------------         
 
@@ -241,13 +241,13 @@ Randnotiz:
 
        `x + y * z' wird in geparsed als `(x + y) * z', d.h. in etwa
 
-          (HsInfixApp (HsInfixApp (HsVar x) (HsOp +) (HsVar y))
-                      (HsOp *) (HsVar z))
+          (Hs.InfixApp (Hs.InfixApp (Hs.Var x) (HsOp +) (Hs.Var y))
+                      (HsOp *) (Hs.Var z))
 
        anstatt `x + (y * z)', d.h.
 
-          (HsInfixApp (HsVar x) (HsOp +)
-                      (HsInfixApp (HsVar y) (HsOp *) (HsVar z)))
+          (Hs.InfixApp (Hs.Var x) (HsOp +)
+                      (Hs.InfixApp (Hs.Var y) (HsOp *) (Hs.Var z)))
 
      Die Auflösung und Transformation erledigt `fixOperatorFixities' in
      Importer/Convert.hs, die dazu die Prioritäten etc. der Ops aus der

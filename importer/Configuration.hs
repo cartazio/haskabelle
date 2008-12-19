@@ -35,7 +35,7 @@ module Importer.Configuration
     ) where
 
 import Importer.IsaSyntax (Theory (..))
-import Language.Haskell.Exts.Syntax (Module (..), HsType(..), HsQName(..))
+import qualified Language.Haskell.Exts as Hs (ModuleName (..), Type(..), QName(..))
 import Text.XML.Light hiding (findAttr)
 import qualified Text.XML.Light as XML
 import Control.Monad
@@ -56,12 +56,12 @@ import qualified Data.Map as Map hiding (Map)
   This type represents sets of custom translations, i.e., mappings from Haskell
   modules to custom theories.
 -}
-type CustomTranslations = Map Module CustomTheory
+type CustomTranslations = Map Hs.ModuleName CustomTheory
 
 {-|
   This type represents single custom translations.
 -}
-type CustomTranslation = (Module, CustomTheory)
+type CustomTranslation = (Hs.ModuleName, CustomTheory)
 
 {-|
   This type represents locations  declared in a configuration.
@@ -72,7 +72,7 @@ newtype Location = FileLocation{ fileLocation :: FilePath}
 {-|
   This type represents information that customise the actual translation.
 -}
-data Customisations = Customisations{ customTheoryCust :: Map Module CustomTheory, monadInstanceCust ::  Map String MonadInstance}
+data Customisations = Customisations{ customTheoryCust :: Map Hs.ModuleName CustomTheory, monadInstanceCust ::  Map String MonadInstance}
     deriving (Show, Eq, Data, Typeable)
 
 {-|
@@ -107,7 +107,7 @@ data Config = Config{inputLocations :: [InputLocation], outputLocation :: Output
   This type represents a particular kind of a translation customisation. An element
   of this type describes how a Haskell module can be replaced by an Isabelle theory.
 -}
-data Replace = Replace{ moduleRepl :: Module, customTheoryRepl :: CustomTheory}
+data Replace = Replace{ moduleRepl :: Hs.ModuleName, customTheoryRepl :: CustomTheory}
                deriving (Show, Eq, Data, Typeable)
 
 {-|
@@ -197,7 +197,7 @@ noMonadConstants = ExplicitMonadConstants (Map.empty)
   replaced with according to the given customisations or @nothing@ if
   no such translation was declared for the given module.
 -}
-getCustomTheory :: Customisations -> Module -> Maybe CustomTheory
+getCustomTheory :: Customisations -> Hs.ModuleName -> Maybe CustomTheory
 getCustomTheory Customisations{ customTheoryCust = custs} mod = Map.lookup mod custs
 
 
@@ -470,7 +470,7 @@ parseReplaceElem :: Element -> XMLReader Replace
 parseReplaceElem  el
     = do moduleEl <- findSingleSElem "module" el
          theoryEl <- findSingleSElem "theory" el
-         mod <- parseModuleElem moduleEl
+         mod <- parseModuleNameElem moduleEl
          custThy <- parseTheoryElem theoryEl
          return $  Replace mod custThy
 
@@ -520,8 +520,8 @@ parseThyMonadsElem el = return .words . strContent $ el
   This function reads a module name stored in the given @module@
   XML element.
 -}            
-parseModuleElem :: Element -> XMLReader Module
-parseModuleElem el = liftM Module $ findSAttr "name" el
+parseModuleNameElem :: Element -> XMLReader Hs.ModuleName
+parseModuleNameElem el = liftM Hs.ModuleName $ findSAttr "name" el
 
 ---------------------
 -- Monad Instances --

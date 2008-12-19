@@ -8,7 +8,7 @@ module Importer.Msg where
 import List (intersperse)
 import Maybe (fromMaybe)
 
-import Importer.Utilities.Hsk (srcloc2string, module2FilePath, namesFromHsDecl)
+import Importer.Utilities.Hsk (srcloc2string, module2FilePath)
 import Importer.Utilities.Misc (prettyShow', prettyHsx)
 
 
@@ -65,14 +65,14 @@ found_duplicates str x y
       ++ "    " ++ quote x ++ "\n"
       ++ "and " ++ quote y ++ "\n" 
 
-identifier_collision_in_lookup curModule qname foundIdentifiers
+identifier_collision_in_lookup curModuleName qname foundIdentifiers
     = "Ambiguous occurences found for " ++ quote qname ++ "\n"
-      ++ "while trying to look it up in " ++ quote curModule ++ ":\n\n" 
+      ++ "while trying to look it up in " ++ quote curModuleName ++ ":\n\n" 
       ++ concatMap (linify . prettyShow' (show qname)) foundIdentifiers
 
-failed_lookup lookup_kind_str curModule envname globalEnv
+failed_lookup lookup_kind_str curModuleName envname globalEnv
     = "No entry for the " ++ lookup_kind_str ++ " " ++ quote envname ++ "\n"
-      ++ "found in global environment while trying to look it up in " ++ quote curModule ++ ".\n"
+      ++ "found in global environment while trying to look it up in " ++ quote curModuleName ++ ".\n"
       ++ printEnv globalEnv
 
 ambiguous_decl_definitions decls

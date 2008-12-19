@@ -10,7 +10,7 @@ BUG / TODO Liste:
 
 * Binding globalization: rewrite closures
 
-* Module Name normalization
+* Hs.ModuleName Name normalization
 
 * let (Just foo) = bar in ... --> let gensym = bar in case gensym of Just Foo
 

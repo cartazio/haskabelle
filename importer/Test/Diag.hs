@@ -37,15 +37,15 @@ printIsaUnit_asAST (IsaUnit thys _ env)
 -}
 writeHskUnit :: HskUnit -> FilePath -> IO ()
 writeHskUnit (HskUnit modules _ _) outDir
-    = mapM_ (`writeHskModule` outDir) modules
+    = mapM_ (`writeHskHs.ModuleName` outDir) modules
 
 
 {-|
   This function writes a single Haskell module into the given
   destination directory.
 -}
-writeHskModule :: HsModule -> FilePath -> IO ()
-writeHskModule mod@(HsModule _ (Module modName) _ _ _) dir
+writeHskHs.ModuleName :: Hs.ModuleName -> FilePath -> IO ()
+writeHskHs.ModuleName mod@(Hs.ModuleName _ (Hs.ModuleName modName) _ _ _) dir
     = do let modCont = prettyPrint mod
          let dstName = map (\c -> if c == '.' then '_' else c) modName ++ ".hs"
          let dstPath = combine dir dstName
@@ -59,7 +59,7 @@ preprocessFile :: FilePath -> FilePath -> IO ()
 preprocessFile inFile outDir = do
   hskUnits <- runConversion (defaultConfig [] outDir defaultCustomisations) $ parseHskFiles [inFile]
   let [HskUnit modules custMods env] = hskUnits
-  let ppModules = map preprocessHsModule modules
-  let ppUnit = HskUnit ppModules custMods env
+  let ppHs.ModuleNames = map preprocessHs.ModuleName modules
+  let ppUnit = HskUnit ppHs.ModuleNames custMods env
   writeHskUnit ppUnit outDir
  

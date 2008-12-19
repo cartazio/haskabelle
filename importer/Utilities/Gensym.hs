@@ -7,8 +7,8 @@ module Importer.Utilities.Gensym where
 
 import Control.Monad.State
 
-import Language.Haskell.Exts (HsName(..), HsQName(..))
-import Importer.IsaSyntax (Name(..))
+import qualified Language.Haskell.Exts as Hs (Name(..), QName(..))
+import qualified Importer.IsaSyntax as Isa (Name(..))
 
 newtype GensymM a = GensymM (State Int a)
     deriving (Monad, Functor, MonadFix, MonadState Int)
@@ -23,18 +23,18 @@ gensym prefix = do count <- get
                    put $ (count+1)
                    return (prefix ++ (show count))
 
-genHsName :: HsName -> GensymM HsName
-genHsName (HsIdent  prefix) = liftM HsIdent  (gensym prefix) 
-genHsName (HsSymbol prefix) = liftM HsSymbol (gensym prefix) 
+genHsName :: Hs.Name -> GensymM Hs.Name
+genHsName (Hs.Ident  prefix) = liftM Hs.Ident  (gensym prefix) 
+genHsName (Hs.Symbol prefix) = liftM Hs.Symbol (gensym prefix) 
 
-genHsQName :: HsQName -> GensymM HsQName
-genHsQName (Qual m prefix)  = liftM (Qual m) (genHsName prefix)
-genHsQName (UnQual prefix)  = liftM UnQual   (genHsName prefix)
+genHsQName :: Hs.QName -> GensymM Hs.QName
+genHsQName (Hs.Qual m prefix)  = liftM (Hs.Qual m) (genHsName prefix)
+genHsQName (Hs.UnQual prefix)  = liftM Hs.UnQual   (genHsName prefix)
 genHsQName junk = error ("junk = " ++ show junk)
 
-genIsaName :: Name -> GensymM Name
-genIsaName (QName t prefix) = liftM (QName t) (gensym prefix)
-genIsaName (Name prefix)    = liftM Name      (gensym prefix)
+genIsaName :: Isa.Name -> GensymM Isa.Name
+genIsaName (Isa.QName t prefix) = liftM (Isa.QName t) (gensym prefix)
+genIsaName (Isa.Name prefix)    = liftM Isa.Name      (gensym prefix)
 
 evalGensym :: Int -> GensymM a -> a
 evalGensym init (GensymM state) =  evalState state init

@@ -35,7 +35,7 @@ vorgehe, wenn ich den Importer um neue Syntax erweitern will:
           Im Grunde muss man nun nur Importer/Process.hs verändern, und
        dort eine Präprozessierungphase einfügen. Du musst dabei aber auf
        die Reihenfolge aufpassen, in der normalisiert wird. Wenn du dir
-       z.B. preprocessHsModule dort anschaust, so siehst du, dass zuerst
+       z.B. preprocessHs.ModuleName dort anschaust, so siehst du, dass zuerst
        die Guards wegnormalisiert werden. Der Grund ist, dass die
        Delokalization Guards nicht versteht, deswegen müssen diese also
        vorher wegnormalisiert werden.

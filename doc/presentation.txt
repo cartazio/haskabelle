@@ -6,7 +6,7 @@
 
 *** Subset of Haskell 98:
 
- * Module -> Theory
+ * Hs.ModuleName -> Theory
 
  * Toplevel Function Declarations
 

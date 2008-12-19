@@ -3,7 +3,7 @@
 
 module Importer.Adapt.Mapping 
     (AdaptionTable(..), extractHskEntries, extractIsaEntries,
-     makeAdaptionTable_FromHsModules, adaptionTable)
+     makeAdaptionTable_FromHsModule, adaptionTable)
 where
 
 import List (intersperse, group, groupBy, sort, sortBy, nub)
@@ -11,10 +11,10 @@ import List (intersperse, group, groupBy, sort, sortBy, nub)
 import Data.Maybe
 import qualified Data.Map as Map
 
-import Language.Haskell.Exts
+import qualified Language.Haskell.Exts as Hs
 
 import Importer.Utilities.Misc (wordsBy, hasDuplicates, prettyShow', trace, assert)
-import Importer.Utilities.Hsk (string2HsName, extractBindingNs)
+import Importer.Utilities.Hsk (string2Name, extractBindingNs)
 
 import qualified Importer.LexEnv as Env
 import qualified Importer.IsaSyntax as Isa
@@ -42,8 +42,8 @@ extractIsaEntries (AdaptionTable mapping) = map snd mapping
 -- 
 -- Hence, we have to remove entries from `adaptionTable' which are
 -- defined in one of the source files.
-makeAdaptionTable_FromHsModules :: Env.GlobalE -> [HsModule] -> AdaptionTable
-makeAdaptionTable_FromHsModules env hsmodules
+makeAdaptionTable_FromHsModule :: Env.GlobalE -> [Hs.Module] -> AdaptionTable
+makeAdaptionTable_FromHsModule env hsmodules
     = let initial_class_env = makeGlobalEnv_FromAdaptionTable
                                   (filterAdaptionTable (Env.isClass . fst) adaptionTable)
           tmp_env           = Env.unionGlobalEnvs initial_class_env env
@@ -55,8 +55,8 @@ makeAdaptionTable_FromHsModules env hsmodules
                          in fromN `notElem` defined_names && toN `notElem` defined_names)
           adaptionTable
     where
-      extractDefNames :: Env.GlobalE -> HsModule -> [String]
-      extractDefNames globalEnv (HsModule _ m _ _ decls)
+      extractDefNames :: Env.GlobalE -> Hs.Module -> [String]
+      extractDefNames globalEnv (Hs.Module _ m _ _ _ _ decls)
           = mapMaybe (\n -> let m'   = Env.fromHsk m
                                 n'   = Env.fromHsk n
                                 ids  = Env.lookupIdentifiers_OrLose m' n' globalEnv
@@ -153,7 +153,7 @@ makeIdentifier (InfixOp assoc prio) m identifier t
     = Env.Constant $ Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
 makeIdentifier (Class classinfo) m identifier t
     = let supers  = map (Env.EnvUnqualName . snd . parseRawIdentifier) (superclasses classinfo)
-          meths   = map (\(n, tstr) -> let t = Env.fromHsk (parseHsType tstr)
+          meths   = map (\(n, tstr) -> let t = Env.fromHsk (parseType tstr)
                                        in makeTypeAnnot (Env.makeLexInfo m n t))
                         (methods classinfo)
           classV  = Env.EnvUnqualName (classVar classinfo)
@@ -166,10 +166,10 @@ makeIdentifier Type m identifier t
 makeTypeAnnot :: Env.LexInfo -> Env.Identifier
 makeTypeAnnot lexinfo = Env.Constant (Env.TypeAnnotation lexinfo)
 
-parseHsType :: String -> HsType
-parseHsType string
-    = let (ParseOk (HsModule _ _ _ _ [HsTypeSig _ _ t])) 
-              = parseFileContents ("__foo__ :: " ++ string)
+parseType :: String -> Hs.Type
+parseType string
+    = let (Hs.ParseOk (Hs.Module _ _ _ _ _ _ [Hs.TypeSig _ _ t])) 
+              = Hs.parseFileContents ("__foo__ :: " ++ string)
       in t
 
 transformAssoc :: Assoc -> Env.EnvAssoc

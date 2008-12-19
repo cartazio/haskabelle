@@ -12,7 +12,7 @@ import Data.Graph
 import Data.Set (Set)
 import qualified Data.Set as Set hiding (Set)
 import Data.Tree
-import Language.Haskell.Exts
+import qualified Language.Haskell.Exts as Hs
 
 import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
@@ -26,10 +26,10 @@ import qualified Importer.Msg as Msg
 
 {-|
   This data structure represents the dependency graph of Haskell declarations.
-  The nodes of this graph are elements of type 'HsDecl' keys are of type 'Env.EnvName'.
+  The nodes of this graph are elements of type 'Hs.Decl' keys are of type 'Env.EnvName'.
 -}
 data HskDeclDepGraph = HskDeclDepGraph (Graph, 
-                                        Vertex -> (HsDecl, Env.EnvName, [Env.EnvName]), 
+                                        Vertex -> (Hs.Decl, Env.EnvName, [Env.EnvName]), 
                                         Env.EnvName -> Maybe Vertex)
 
 {-|
@@ -37,27 +37,27 @@ data HskDeclDepGraph = HskDeclDepGraph (Graph,
   given module in the given environment. An edge from a declaration A to declaration B
   means the definition of A depends on B.
 -}
-makeDeclDepGraph :: Env.GlobalE -> Module -> [HsDecl] -> HskDeclDepGraph
+makeDeclDepGraph :: Env.GlobalE -> Hs.ModuleName -> [Hs.Decl] -> HskDeclDepGraph
 makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
     where declDepGraph = graphFromEdges
                            $ handleDuplicateEdges
-                               $ concatMap (makeEdgesFromHsDecl globalEnv modul) decls
+                               $ concatMap (makeEdgesFromDecl globalEnv modul) decls
 
 {-|
   This function constructs the outgoing edges of the given declaration in the given environment
   module.
 -}
-makeEdgesFromHsDecl :: Env.GlobalE -> Module -> HsDecl -> [(HsDecl, Env.EnvName, [Env.EnvName])]
-makeEdgesFromHsDecl globalEnv modul decl
+makeEdgesFromDecl :: Env.GlobalE -> Hs.ModuleName -> Hs.Decl -> [(Hs.Decl, Env.EnvName, [Env.EnvName])]
+makeEdgesFromDecl globalEnv modul decl
     = let canonicalize hsqname = (let mID  = Env.fromHsk modul
                                       envN = Env.fromHsk hsqname
                                   in Env.resolveEnvName_OrLose globalEnv mID envN)
-          names = map canonicalize $ (namesFromHsDecl decl)
+          names = map canonicalize $ (namesFromDecl decl)
           used_names = map canonicalize $ Set.toList (extractFreeVarNs decl) ++ Set.toList (extractDataConNs decl) ++ Set.toList (extractFieldNs decl)
           implTypes =  catMaybes $
                        map (Env.getDepDataType globalEnv (Env.fromHsk modul)) used_names
           usedTypes = case decl of
-                        HsDataDecl _ _ _ _ _ _ _
+                        Hs.DataDecl _ _ _ _ _ _ _
                             -> map canonicalize $ Set.toList $ extractTypeConNs decl
                         _ -> []
       in [(decl, name , used_names ++ usedTypes ++ implTypes) | name <- names]
@@ -65,7 +65,7 @@ makeEdgesFromHsDecl globalEnv modul decl
 {-|
   ???
 -}
-handleDuplicateEdges :: [(HsDecl, Env.EnvName, [Env.EnvName])] -> [(HsDecl, Env.EnvName, [Env.EnvName])]
+handleDuplicateEdges :: [(Hs.Decl, Env.EnvName, [Env.EnvName])] -> [(Hs.Decl, Env.EnvName, [Env.EnvName])]
 handleDuplicateEdges edges
     = concatMap handleGroup (groupBy (\(_,x,_) (_,y,_) -> x == y) edges)
     where handleGroup edges
@@ -75,11 +75,11 @@ handleDuplicateEdges edges
           ambiguous_edges edges
               = (length edges > 1) && any (\e -> not ((isClass e) || (isInstance e))) edges
 
-          isTypeAnnotation (HsTypeSig _ _ _, _ , _) = True
+          isTypeAnnotation (Hs.TypeSig _ _ _, _ , _) = True
           isTypeAnnotation _                        = False
-          isInstance (HsInstDecl _ _ _ _ _, _, _)   = True
+          isInstance (Hs.InstDecl _ _ _ _ _, _, _)   = True
           isInstance _                              = False
-          isClass (HsClassDecl _ _ _ _ _ _, _, _)   = True
+          isClass (Hs.ClassDecl _ _ _ _ _ _, _, _)   = True
           isClass _                                 = False
 
 
@@ -95,7 +95,7 @@ handleDuplicateEdges edges
   on each other in a mutually recursive way.
 -}
 
-flattenDeclDepGraph :: HskDeclDepGraph -> [[HsDecl]]
+flattenDeclDepGraph :: HskDeclDepGraph -> [[Hs.Decl]]
 flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
     -- We first partition the graph into groups of mutually-dependent declarations
     -- (i.e. its strongly-connected components); we then sort these components according

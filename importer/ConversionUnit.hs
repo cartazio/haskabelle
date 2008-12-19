@@ -24,7 +24,7 @@ import Data.Set (Set)
 import Data.Tree
 import qualified Data.Map as Map hiding (Map)
 import Data.Map (Map)
-import Language.Haskell.Exts
+import qualified Language.Haskell.Exts as Hs
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Error
@@ -48,7 +48,7 @@ import Importer.Utilities.Hsk
   This data structure combines several Haskell modules and the corresponding environment.
   into one coherent unit.
 -}
-data HskUnit = HskUnit [HsModule] CustomTranslations Env.GlobalE
+data HskUnit = HskUnit [Hs.Module] CustomTranslations Env.GlobalE
   deriving (Show)
 
 {-|
@@ -61,14 +61,14 @@ data IsaUnit = IsaUnit [Isa.Cmd] [CustomTheory] Env.GlobalE
 newtype Conversion a = Conversion (ReaderT Config IO a)
     deriving (Functor, Monad, MonadReader Config, MonadIO, MonadError IOError)
 
-isCustomModule :: Module -> Conversion Bool
+isCustomModule :: Hs.ModuleName -> Conversion Bool
 isCustomModule
     = liftM isJust . getCustomTheory
 
 getCustomisations :: Conversion Customisations
 getCustomisations = ask >>= return . customisations
 
-getCustomTheory :: Module -> Conversion (Maybe CustomTheory)
+getCustomTheory :: Hs.ModuleName -> Conversion (Maybe CustomTheory)
 getCustomTheory mod =
     ask >>= return . (`Config.getCustomTheory` mod) . customisations
 
@@ -128,14 +128,14 @@ parseHskFiles paths
          (depGraph, fromVertex, _) <- makeDependencyGraph hsmodules
          let cycles = cyclesFromGraph depGraph
       --   when (not (null cycles)) -- not a DAG?
-      --        $ let toModuleName v = case fromVertex v of (_,Module n,_) -> n
+      --        $ let toModuleName v = case fromVertex v of (_, Hs.ModuleName n,_) -> n
       -- |           in fail (Msg.cycle_in_dependency_graph (map toModuleName (head cycles)))
-         let toHsModule v = case fromVertex v of (m,_,_) -> m
-         case map (map toHsModule . flatten) (components depGraph) of
+         let toModule v = case fromVertex v of (m,_,_) -> m
+         case map (map toModule . flatten) (components depGraph) of
            -- this should not happen
            [] -> fail $ "Internal error: No Haskell module was parsed!"
            modss -> 
-               let mkUnit mods = (HskUnit mods custTrans Env.initialGlobalEnv)
+               let mkUnit mods = HskUnit mods custTrans Env.initialGlobalEnv
                in return $ map mkUnit modss 
                
 {-|
@@ -151,24 +151,24 @@ cyclesFromGraph graph
   imported by the given module plus itself. The result comes with two functions to convert
   between the modules an the vertices of the graph (as provided by 'Data.Graph.graphFromEdges').
 -}
-makeDependencyGraph ::  [HsModule]
+makeDependencyGraph ::  [Hs.Module]
                     -> Conversion (Graph,
-                          Vertex -> (HsModule, Module, [Module]),
-                          Module -> Maybe Vertex)
+                          Vertex -> (Hs.Module, Hs.ModuleName, [Hs.ModuleName]),
+                          Hs.ModuleName -> Maybe Vertex)
 makeDependencyGraph hsmodules
     = do edges <- (mapM makeEdge hsmodules)
          return $ graphFromEdges edges
-    where makeEdge hsmodule@(HsModule _loc modul _exports imports _decls)
-              = do let imported_modules = map importModule imports
+    where makeEdge hsmodule@(Hs.Module _loc modul _ _ _exports imports _decls)
+              = do let imported_modules = map Hs.importModule imports
                    imported_modules'  <- filterM isCustomModule imported_modules
                    return (hsmodule, modul, imported_modules)
 
 
-type ModuleImport = (FilePath, Maybe Module)
+type ModuleImport = (FilePath, Maybe Hs.ModuleName)
 
 data GrovelS = GrovelS{gVisitedPaths :: Set FilePath,
                        gRemainingPaths :: [ModuleImport],
-                       gParsedModules :: [HsModule],
+                       gParsedModules :: [Hs.Module],
                        gCustTrans :: CustomTranslations}
 
 newtype GrovelM a = GrovelM (StateT GrovelS Conversion a)
@@ -182,10 +182,10 @@ liftConv = GrovelM . lift
 checkVisited :: FilePath -> GrovelM Bool
 checkVisited path = liftM (Set.member path . gVisitedPaths) get
                     
-addModule :: HsModule -> GrovelM ()
-addModule mod@(HsModule loc _ _ _ _)
+addModule :: Hs.Module -> GrovelM ()
+addModule mod@(Hs.Module loc _ _ _ _ _ _)
     = modify (\ state@(GrovelS{gVisitedPaths = visited, gParsedModules = mods}) -> 
-              state{gVisitedPaths = Set.insert (srcFilename loc)  visited, gParsedModules = mod:mods})
+              state{gVisitedPaths = Set.insert (Hs.srcFilename loc)  visited, gParsedModules = mod:mods})
 
 addImports :: [ModuleImport] -> GrovelM ()
 addImports imps = modify (\state@(GrovelS{gRemainingPaths = files}) -> state{gRemainingPaths = imps ++ files})
@@ -195,7 +195,7 @@ addImports imps = modify (\state@(GrovelS{gRemainingPaths = files}) -> state{gRe
   is it is added to the set of custom modules in the state and @True@
   is returned. Otherwise just @False@ is returned.
 -}       
-addCustMod :: Module -> GrovelM Bool
+-- addCustMod :: Hs.ModuleName -> GrovelM Bool
 addCustMod mod =
     do state <- get
        mbCustThy <- liftConv $ getCustomTheory mod
@@ -208,7 +208,7 @@ addCustMod mod =
 {-|
   Same as 'addCustMod' but @True@ and @False@ are swapped.
 -}
-addCustMod' :: Module -> GrovelM Bool 
+addCustMod' :: Hs.ModuleName -> GrovelM Bool 
 addCustMod' = liftM not . addCustMod
                    
 nextImport :: GrovelM (Maybe ModuleImport)
@@ -220,7 +220,7 @@ nextImport =
              do put $ state{gRemainingPaths = ps}
                 return$ Just p
 
-parseFilesAndDependencies :: [FilePath] -> Conversion ([HsModule],CustomTranslations)
+parseFilesAndDependencies :: [FilePath] -> Conversion ([Hs.Module],CustomTranslations)
 parseFilesAndDependencies files = 
     let GrovelM grovel = grovelImports
         mkImp file = (file,Nothing)
@@ -241,35 +241,35 @@ grovelFile imp@(file,_) =
     do v <- checkVisited file
        if v 
         then grovelImports
-        else do mod@(HsModule _ name _ _ _) <- parseHskFile imp
+        else do mod@(Hs.Module _ name _ _ _ _ _) <- parseHskFile imp
                 cust <- addCustMod name
                 if cust then grovelImports
                  else addModule mod
                       >> grovelModule mod
 
-grovelModule :: HsModule -> GrovelM ()
-grovelModule hsmodule@(HsModule loc baseMod _ imports _) = 
-    do let newModules = map (importModule) $ imports
+-- grovelModule :: Hs.ModuleName -> GrovelM ()
+grovelModule hsmodule@(Hs.Module loc baseMod _ _ _ imports _) = 
+    do let newModules = map Hs.importModule imports
        realModules <- filterM addCustMod' newModules
        let modImps = map mkModImp realModules
        liftIO $ mapM_ checkImp modImps
        addImports modImps
        grovelImports
-    where baseLoc = srcFilename loc
+    where baseLoc = Hs.srcFilename loc
           mkModImp mod = (computeSrcPath baseMod baseLoc mod, Just mod)
           checkImp (file,Just mod) =
               do ext <- doesFileExist file
-                 when (not ext) $ fail $ "The module \"" ++ showModule mod
-                          ++ "\" imported from module \"" ++ showModule baseMod 
+                 when (not ext) $ fail $ "The module \"" ++ showModuleName mod
+                          ++ "\" imported from module \"" ++ showModuleName baseMod 
                                  ++ "\" cannot be found at \"" ++ file ++ "\"!"
 
 {-|
   This function computes the path where to look for an imported module.
 -}
 
-computeSrcPath :: Module      -- ^the module that is importing
+computeSrcPath :: Hs.ModuleName      -- ^the module that is importing
                -> FilePath     -- ^the path to the importing module
-               -> Module       -- ^the module that is to be imported
+               -> Hs.ModuleName       -- ^the module that is to be imported
                -> FilePath     -- ^the assumed path to the module to be imported
 computeSrcPath importingMod basePath m
     = let curDir = takeDirectory basePath
@@ -284,20 +284,20 @@ shrinkPath = joinPath . shrinkPath' . splitPath
               | x /= "/" && y `elem` ["..", "../"] = shrinkPath' xs
               | otherwise = x : shrinkPath' (y:xs)
     
-parseHskFile :: ModuleImport -> GrovelM HsModule
+parseHskFile :: ModuleImport -> GrovelM Hs.Module
 parseHskFile (file, mbMod)  = 
-    do result <- liftIO $ parseFile file `catch`
+    do result <- liftIO $ Hs.parseFile file `catch`
                 (\ioError -> fail $ "An error occurred while reading module file \"" ++ file ++ "\": " ++ show ioError)
        case result of
-         (ParseFailed loc msg) ->
+         (Hs.ParseFailed loc msg) ->
              fail $ "An error occurred while parsing module file: " ++ Msg.failed_parsing loc msg
-         (ParseOk m@(HsModule _ mName _ _ _)) ->
+         (Hs.ParseOk m@(Hs.Module _ mName _ _ _ _ _)) ->
              case mbMod of
                Nothing -> return m
                Just expMod ->
                    if mName == expMod
                    then return m
                    else fail $ "Name mismatch: Name of imported module in \"" 
-                            ++ file ++"\" is " ++ showModule mName
-                                   ++ ", expected was " ++ showModule expMod
+                            ++ file ++"\" is " ++ showModuleName mName
+                                   ++ ", expected was " ++ showModuleName expMod
 
