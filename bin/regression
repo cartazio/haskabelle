@@ -8,7 +8,6 @@
 
 PRG="$(basename "$0")"
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
-ISABELLE="$HASKABELLE_HOME/bin/isabelle"
 
 ## diagnostics
 
@@ -52,7 +51,7 @@ then
     THY_NAME="$(basename $THY .thy)"
     DST="../../ex/dst_hs/"
     echo "re-importing $THY_NAME..."
-    "$ISABELLE" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail "Could not re-import $THY"
+    "$HASKABELLE_HOME/bin/isabelle" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail "Could not re-import $THY"
   done
 fi
 

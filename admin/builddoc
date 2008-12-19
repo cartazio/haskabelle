@@ -8,7 +8,6 @@
 
 PRG="$(basename "$0")"
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
-ISABELLE="$HASKABELLE_HOME/bin/isabelle"
 
 ## diagnostics
 
@@ -21,5 +20,5 @@ function fail()
 ## building
 
 cd "$HASKABELLE_HOME/doc-src/Haskabelle"
-"$ISABELLE" make || fail "building documentation sources failed"
+"$HASKABELLE_HOME/bin/isabelle" make || fail "building documentation sources failed"
 make doc || fail "building documentation pdf failed"
