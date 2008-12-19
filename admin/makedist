@@ -93,9 +93,9 @@ then
   bin/regression || fail "Could not issue regression test"
 fi
 
-## remove admin
+## remove admin, build
 
-rm -rf admin
+rm -rf admin build
 
 ## dist bundle
 
