@@ -8,8 +8,12 @@
 
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
 cd "$HASKABELLE_HOME"
+
 MAIL=admin/mail-attach
+
 . admin/config
+
+export ISABELLE_PATH
 export ISABELLE_TOOL
 export ISABELLE_PROCESS
 export GHC
