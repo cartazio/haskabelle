@@ -5,6 +5,7 @@
 # Configuration for automatic Haskabelle test.
 
 ISABELLE_HOME=/home/isatest/isadist/Isabelle
+ISABELLE_PATH=/home/isatest/isabelle-at-poly-para-e/heaps
 ISABELLE_PROCESS="$ISABELLE_HOME/bin/isabelle-process"
 ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"
 GHC=/usr/local/ldist/bin/ghc
