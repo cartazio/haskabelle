@@ -10,5 +10,7 @@ ISABELLE_PROCESS="$ISABELLE_HOME/bin/isabelle-process"
 ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"
 GHC=/usr/local/ldist/bin/ghc
 
+REPOSITORY=/home/haftmann/shared/haskabelle
+
 #NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tum.de'
 NOTIFY='haftmann@in.tum.de'

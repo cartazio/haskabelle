@@ -17,6 +17,7 @@ export ISABELLE_DOC_SRC
 export ISABELLE_TOOL
 export ISABELLE_PROCESS
 export GHC
+export REPOSITORY
 export DIST_HOME
 
 ## log
