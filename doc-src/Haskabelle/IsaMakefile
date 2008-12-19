@@ -18,7 +18,7 @@ ISABELLE_TOOL = $(ISATOOL) # probably legacy
 USEDIR = $(ISABELLE_TOOL) usedir -v true -i false -d false -C false -D document
 
 ifeq ($(ISABELLE_DOC_SRC),)
-ISABELLE_DOC_SRC=$(ISABELLE_HOME)/doc-src
+#ISABELLE_DOC_SRC=$(ISABELLE_HOME)/doc-src
 endif
 
 
@@ -29,7 +29,6 @@ THY = $(LOG)/HOL-Thy.gz
 Thy: $(THY)
 
 $(THY): Thy/ROOT.ML Thy/Setup.thy Thy/Haskabelle.thy
-	echo ../Makefile.in: $(ISABELLE_DOC_SRC)
 	@$(USEDIR) HOL Thy
 
 
