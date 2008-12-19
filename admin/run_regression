@@ -13,9 +13,11 @@ MAIL=admin/mail-attach
 
 . admin/config
 
+export ISABELLE_DOC_SRC
 export ISABELLE_TOOL
 export ISABELLE_PROCESS
 export GHC
+export DIST_HOME
 
 ## log
 

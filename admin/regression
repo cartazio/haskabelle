@@ -34,7 +34,8 @@ cd "$HASKABELLE_HOME" || fail "Could not cd to $HASKABELLE_HOME"
 
 ## cleaning
 
-rm -rf "$HOME/tmp/haskabelle-dist"
+DIST_HOME="${DIST_HOME:-$HOME/tmp/haskabelle-dist}"
+rm -rf "$DIST_HOME"
 
 ## building distribution
 

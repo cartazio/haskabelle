@@ -4,6 +4,7 @@
 #
 # Configuration for automatic Haskabelle test.
 
+ISABELLE_DOC_SRC=/home/isatest/hg-isabelle/doc-src
 ISABELLE_HOME=/home/isatest/isadist/Isabelle
 ISABELLE_PROCESS="$ISABELLE_HOME/bin/isabelle-process"
 ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"

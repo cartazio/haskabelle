@@ -78,13 +78,6 @@ fi
 
 ## building generated files
 
-echo Settings:
-echo
-echo ISABELLE_PATH=$ISABELLE_PATH
-echo ISABELLE_PROCESS=$ISABELLE_PROCESS
-echo ISABELLE_TOOL=$ISABELLE_TOOL
-echo
-
 admin/builddoc || fail "Could not buld documentation"
 bin/mk_adapt || fail "Could not build adaption table"
 
