@@ -38,11 +38,4 @@ rm -rf "$HOME/tmp/haskabelle-dist"
 
 ## building distribution
 
-echo Settings:
-echo
-echo ISABELLE_PATH=$ISABELLE_PATH
-echo ISABELLE_PROCESS=$ISABELLE_PROCESS
-echo ISABELLE_TOOL=$ISABELLE_TOOL
-echo
-
 admin/makedist --regression || fail "Could not check distribution"

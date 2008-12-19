@@ -13,7 +13,6 @@ MAIL=admin/mail-attach
 
 . admin/config
 
-export ISABELLE_PATH
 export ISABELLE_TOOL
 export ISABELLE_PROCESS
 export GHC
