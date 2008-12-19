@@ -8,6 +8,8 @@
 
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
 
+echo "set: $ISABELLE_TOOL"
+
 if [ -z "$ISABELLE_TOOL" ]
 then
   if type -t isatool > /dev/zero
