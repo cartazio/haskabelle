@@ -8,45 +8,60 @@ section {* Introduction *}
 
 subsection {* What is Haskabelle? *}
 
-text {* 
-  Haskabelle is an importer from Haskell source files to
-  Isabelle/HOL \cite{isa-tutorial} theories implemented
-  in Haskell itself.
+text {* @{text Haskabelle} is an importer from @{text Haskell} source
+  files to @{text "Isabelle/HOL"} \cite{isa-tutorial} theories
+  implemented in @{text Haskell} itself.
 *}
 
 subsection {* Installation hints *}
 
 text {*
-  To get Haskabelle run, install the following:
+  We give here some hints which software you have to install
+  to get @{text Haskabelle} run.  Some familiarity with
+  the usual @{text Haskell} deployment facilities is assumed.
+  For @{text UNIX} users with some experience the
+  @{text README} files shipped with the tarballs should provide
+  all necessary clues to succeed.  The given version just
+  indicate which constellation has been tested -- others may
+  work, too.
 
   \begin{description}
 
-    \item[GHC] \url{http://www.haskell.org/ghc/}
-
-    \item[mtl]
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/mtl-1.1.0.1}
-
-    \item[Happy] \url{http://www.haskell.org/happy/}
-
-    \item[HSX]
-       \url{http://www.cs.chalmers.se/~d00nibro/haskell-src-exts/} \\
-       \shell{darcs get http://code.haskell.org/HSP/haskell-src-exts}
-
-    \item[Uniplate]
-       \shell{darcs get --partial http://www.cs.york.ac.uk/fp/darcs/uniplate}
-
-    \item[xml]
-        \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/xml}
-
-    \item[QuickCheck]
-        \url{http://hackage.haskell.org/packages/archive/QuickCheck/2.1.0.1/QuickCheck-2.1.0.1.tar.gz}
+    \item[GHC] Glasgow Haskell Compiler \url{http://www.haskell.org/ghc/}
+       (version 6.10.1)
 
   \end{description}
 
-  \noindent It is assumed that you have a suitable version of Isabelle
-  installed to really use the theories generated from Haskabelle.
+  \begin{description}
 
-  \noindent Throughout this documentation, qualified paths
+    \item[mtl] Monad transformer library. \\
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/mtl-1.1.0.1}
+
+    \item[xml] A simple XML library. \\
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/xml-1.3.3}
+
+    \item[uniplate] Uniform type generic traversals. \\
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/uniplate-1.2.0.3}
+
+    \item[cpphs] A liberalised re-implementation of cpp, the C pre-processor. \\
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/cpphs-1.6}
+
+    \item[Happy] Happy is a parser generator for Haskell. \\
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/happy-1.18.2}
+
+       The installation process provides a binary \shell{happy}
+       which must be accessible on your \shell{PATH} to
+       proceed!
+
+    \item[haskell-src-ext] Manipulating Haskell source: abstract syntax, lexer, parser, and pretty-printer. \\
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/haskell-src-exts-0.4.6}
+
+  \end{description}
+
+  \noindent It is assumed that you have a suitable version of @{text Isabelle}
+  running to really use the theories generated from @{text Haskabelle}.
+
+  \noindent Throughout this tutorial, qualified paths
   of executables on the shell prompt are relative to the
   root directory of the Haskabelle distribution.
 *}
