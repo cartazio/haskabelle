@@ -37,6 +37,12 @@ cd "$HASKABELLE_HOME" || fail "Could not cd to $HASKABELLE_HOME"
 DIST_HOME="${DIST_HOME:-$HOME/tmp/haskabelle-dist}"
 rm -rf "$DIST_HOME"
 
+## preparing isatest Isabelle distribution
+
+SETTINGS=~/settings/$SHORT
+cat $SETTINGS >> $ISABELLE_HOME/etc/settings
+ 
+
 ## building distribution
 
 admin/makedist --regression || fail "Could not check distribution"
