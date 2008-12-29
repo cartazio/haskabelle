@@ -13,5 +13,6 @@ GHC=/usr/local/ldist/bin/ghc
 
 REPOSITORY=/home/haftmann/shared/haskabelle
 
-#NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tum.de'
-NOTIFY='haftmann@in.tum.de'
+TEST_HOME=/home/isatest
+
+NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tum.de'
