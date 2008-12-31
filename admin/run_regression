@@ -15,6 +15,7 @@ MAIL=admin/mail-attach
 . admin/config
 export ISABELLE_TOOL
 export ISABELLE_PROCESS
+export ISABELLE_DOC_SRC
 export GHC
 
 ERRORDIR="$TEST_HOME/var"
