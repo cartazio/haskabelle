@@ -6,7 +6,7 @@ Generic functions.
 module Importer.Utilities.Misc (
   assert, trace, concatMapM, map2, hasDuplicates,
   unfoldr, unfoldr1, unfoldl, unfoldl1, lookupBy, wordsBy,
-  prettyShow', prettyShow, prettyHsx, groupAlist
+  prettyShow', prettyShow, prettyHsx, groupAlist, fold
 ) where
 
 import Control.Exception (assert)
@@ -62,6 +62,12 @@ hasDuplicates :: Eq a => [a] -> Bool
 hasDuplicates list = or (map (\(x:xs) -> x `elem` xs) tails')
     where tails' = filter (not . null) (List.tails list)
 
+fold :: (a -> b -> b) -> [a] -> b -> b
+fold f [] y = y
+fold f (x:xs) y = fold f xs (f x y)
+
+
+-- FIXME the following really needed?
 
 prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
                              (Hsx.ParseOk (Hsx.Module _ _ _ _ _ _ decls)) 

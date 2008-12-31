@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fglasgow-exts -O -o bin/haskabelle_bin -odir build -hidir build -stubdir build #-}
 
-{-  Author:     Florian Haftmann, TU Muenchen
+{-  Author: Florian Haftmann, TU Muenchen
 
 Toplevel interface to Haskabelle importer.
 -}
