@@ -1,6 +1,6 @@
-(*  Author:     Florian Haftmann, TU Muenchen
+(*  Author: Tobias C. Rittweiler and Florian Haftmann, TU Muenchen
 
-Adaption table.
+Default adaption table.
 *)
 
 classes
