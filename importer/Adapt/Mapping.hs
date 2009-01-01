@@ -11,18 +11,18 @@ import List (intersperse, group, groupBy, sort, sortBy, nub)
 import Data.Maybe
 import qualified Data.Map as Map
 
-import qualified Language.Haskell.Exts as Hs
-
 import Importer.Utilities.Misc (wordsBy, hasDuplicates, prettyShow', trace, assert)
 import Importer.Utilities.Hsk (string2Name, extractBindingNs)
 
+import qualified Language.Haskell.Exts as Hsx
 import qualified Importer.LexEnv as Env
 import qualified Importer.IsaSyntax as Isa
-import Importer.Configuration
 
 import Importer.Adapt.Common
-
 import Importer.Adapt.Raw (raw_adaption_table)
+
+import Importer.Configuration
+
 
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
   deriving Show
@@ -42,7 +42,7 @@ extractIsaEntries (AdaptionTable mapping) = map snd mapping
 -- 
 -- Hence, we have to remove entries from `adaptionTable' which are
 -- defined in one of the source files.
-makeAdaptionTable_FromHsModule :: Env.GlobalE -> [Hs.Module] -> AdaptionTable
+makeAdaptionTable_FromHsModule :: Env.GlobalE -> [Hsx.Module] -> AdaptionTable
 makeAdaptionTable_FromHsModule env hsmodules
     = let initial_class_env = makeGlobalEnv_FromAdaptionTable
                                   (filterAdaptionTable (Env.isClass . fst) adaptionTable)
@@ -55,8 +55,8 @@ makeAdaptionTable_FromHsModule env hsmodules
                          in fromN `notElem` defined_names && toN `notElem` defined_names)
           adaptionTable
     where
-      extractDefNames :: Env.GlobalE -> Hs.Module -> [String]
-      extractDefNames globalEnv (Hs.Module _ m _ _ _ _ decls)
+      extractDefNames :: Env.GlobalE -> Hsx.Module -> [String]
+      extractDefNames globalEnv (Hsx.Module _ m _ _ _ _ decls)
           = mapMaybe (\n -> let m'   = Env.fromHsk m
                                 n'   = Env.fromHsk n
                                 ids  = Env.lookupIdentifiers_OrLose m' n' globalEnv
@@ -166,10 +166,10 @@ makeIdentifier Type m identifier t
 makeTypeAnnot :: Env.LexInfo -> Env.Identifier
 makeTypeAnnot lexinfo = Env.Constant (Env.TypeAnnotation lexinfo)
 
-parseType :: String -> Hs.Type
+parseType :: String -> Hsx.Type
 parseType string
-    = let (Hs.ParseOk (Hs.Module _ _ _ _ _ _ [Hs.TypeSig _ _ t])) 
-              = Hs.parseFileContents ("__foo__ :: " ++ string)
+    = let (Hsx.ParseOk (Hsx.Module _ _ _ _ _ _ [Hsx.TypeSig _ _ t])) 
+              = Hsx.parseFileContents ("__foo__ :: " ++ string)
       in t
 
 transformAssoc :: Assoc -> Env.EnvAssoc

@@ -34,19 +34,25 @@ module Importer.Configuration
       getMonadLift
     ) where
 
-import Importer.IsaSyntax (Theory (..))
-import qualified Language.Haskell.Exts as Hs (ModuleName (..), Type(..), QName(..))
-import Text.XML.Light hiding (findAttr)
-import qualified Text.XML.Light as XML
-import Control.Monad
 import Data.Maybe
 import Data.List
-import Control.Monad.Error
-import Data.Generics
-import System.FilePath
-import System.Directory
 import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)
+import Data.Generics
+
+import Text.XML.Light hiding (findAttr)
+import qualified Text.XML.Light as XML
+
+import Control.Monad
+import Control.Monad.Error
+
+import System.FilePath
+import System.Directory
+
+import Importer.IsaSyntax (Theory (..))
+import qualified Language.Haskell.Exts as Hsx
+  (ModuleName (..), Type(..), QName(..))
+
 
 ---------------------
 -- Data Structures --
@@ -56,12 +62,12 @@ import qualified Data.Map as Map hiding (Map)
   This type represents sets of custom translations, i.e., mappings from Haskell
   modules to custom theories.
 -}
-type CustomTranslations = Map Hs.ModuleName CustomTheory
+type CustomTranslations = Map Hsx.ModuleName CustomTheory
 
 {-|
   This type represents single custom translations.
 -}
-type CustomTranslation = (Hs.ModuleName, CustomTheory)
+type CustomTranslation = (Hsx.ModuleName, CustomTheory)
 
 {-|
   This type represents locations  declared in a configuration.
@@ -72,7 +78,7 @@ newtype Location = FileLocation{ fileLocation :: FilePath}
 {-|
   This type represents information that customise the actual translation.
 -}
-data Customisations = Customisations{ customTheoryCust :: Map Hs.ModuleName CustomTheory, monadInstanceCust ::  Map String MonadInstance}
+data Customisations = Customisations{ customTheoryCust :: Map Hsx.ModuleName CustomTheory, monadInstanceCust ::  Map String MonadInstance}
     deriving (Show, Eq, Data, Typeable)
 
 {-|
@@ -107,7 +113,7 @@ data Config = Config{inputLocations :: [InputLocation], outputLocation :: Output
   This type represents a particular kind of a translation customisation. An element
   of this type describes how a Haskell module can be replaced by an Isabelle theory.
 -}
-data Replace = Replace{ moduleRepl :: Hs.ModuleName, customTheoryRepl :: CustomTheory}
+data Replace = Replace{ moduleRepl :: Hsx.ModuleName, customTheoryRepl :: CustomTheory}
                deriving (Show, Eq, Data, Typeable)
 
 {-|
@@ -197,7 +203,7 @@ noMonadConstants = ExplicitMonadConstants (Map.empty)
   replaced with according to the given customisations or @nothing@ if
   no such translation was declared for the given module.
 -}
-getCustomTheory :: Customisations -> Hs.ModuleName -> Maybe CustomTheory
+getCustomTheory :: Customisations -> Hsx.ModuleName -> Maybe CustomTheory
 getCustomTheory Customisations{ customTheoryCust = custs} mod = Map.lookup mod custs
 
 
@@ -520,8 +526,8 @@ parseThyMonadsElem el = return .words . strContent $ el
   This function reads a module name stored in the given @module@
   XML element.
 -}            
-parseModuleNameElem :: Element -> XMLReader Hs.ModuleName
-parseModuleNameElem el = liftM Hs.ModuleName $ findSAttr "name" el
+parseModuleNameElem :: Element -> XMLReader Hsx.ModuleName
+parseModuleNameElem el = liftM Hsx.ModuleName $ findSAttr "name" el
 
 ---------------------
 -- Monad Instances --

@@ -7,7 +7,7 @@ module Importer.Adapt.Common (OpKind(..), RawClassInfo(..), Assoc(..), AdaptionE
                               primitive_tycon_table, primitive_datacon_table,
                               hsk_infix_ops) where
 
-import qualified Language.Haskell.Exts as Hs
+import qualified Language.Haskell.Exts as Hsx
 
 data RawClassInfo = RawClassInfo 
     { superclasses :: [String],
@@ -32,20 +32,19 @@ data AdaptionEntry = Haskell String OpKind
                    | Isabelle String OpKind
   deriving (Eq, Show)
 
-
-primitive_tycon_table, primitive_datacon_table :: [(Hs.SpecialCon, Hs.QName)]
+primitive_tycon_table, primitive_datacon_table :: [(Hsx.SpecialCon, Hsx.QName)]
 
 primitive_tycon_table 
-    = [(Hs.ListCon,    Hs.Qual (Hs.ModuleName "Prelude") (Hs.Ident "ListTyCon")),
-       (Hs.UnitCon,    Hs.Qual (Hs.ModuleName "Prelude") (Hs.Ident "UnitTyCon")),
-       (Hs.TupleCon 2, Hs.Qual (Hs.ModuleName "Prelude") (Hs.Ident "PairTyCon"))
+    = [(Hsx.ListCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "ListTyCon")),
+       (Hsx.UnitCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "UnitTyCon")),
+       (Hsx.TupleCon 2, Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "PairTyCon"))
       ]
 
 primitive_datacon_table 
-    = [(Hs.Cons,       Hs.Qual (Hs.ModuleName "Prelude") (Hs.Ident ":")),
-       (Hs.ListCon,    Hs.Qual (Hs.ModuleName "Prelude") (Hs.Ident "[]")),
-       (Hs.UnitCon,    Hs.Qual (Hs.ModuleName "Prelude") (Hs.Ident "()")),
-       (Hs.TupleCon 2, Hs.Qual (Hs.ModuleName "Prelude") (Hs.Ident "PairDataCon"))
+    = [(Hsx.Cons,       Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident ":")),
+       (Hsx.ListCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "[]")),
+       (Hsx.UnitCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "()")),
+       (Hsx.TupleCon 2, Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "PairDataCon"))
       ]
 
 hsk_infix_ops :: [(String, OpKind)]

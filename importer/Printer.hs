@@ -12,20 +12,19 @@ module Importer.Printer
 import Maybe
 import Control.Monad
 
+import qualified Text.PrettyPrint as P
+
 import Importer.Utilities.Misc
 import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, 
                                mk_InstanceCmd_name)
+
+import Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
 
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.LexEnv as Env
 
 import Importer.Adapt.Mapping (adaptionTable, AdaptionTable(..))
 import Importer.Adapt.Raw (used_thy_names, reserved_keywords)
-
-import Language.Haskell.Exts.Syntax as Hs (SpecialCon(..), QName(..))
-
-import qualified Text.PrettyPrint as P
-
 
 
 data PPState = PPState { globalEnv        :: Env.GlobalE,
@@ -509,9 +508,9 @@ mk_isFoo foo n
                        Special con -> con == foo
                        _ -> False
 
-isNil     = mk_isFoo Hs.ListCon
-isCons    = mk_isFoo Hs.Cons
-isPairCon = mk_isFoo (Hs.TupleCon 2)
+isNil     = mk_isFoo Hsx.ListCon
+isCons    = mk_isFoo Hsx.Cons
+isPairCon = mk_isFoo (Hsx.TupleCon 2)
 
 isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
 isEmptySig _ = False
