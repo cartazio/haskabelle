@@ -34,6 +34,8 @@ import System.Directory
 
 import qualified Language.Haskell.Exts as Hsx
 
+import Importer.Adapt.Read (Adaption)
+
 import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
 
@@ -116,8 +118,8 @@ traverseDir dirpath op = do
 getOutputDir :: Conversion FilePath
 getOutputDir = ask >>= return . fileLocation . outputLocation
 
-runConversion :: Config -> Conversion a -> IO a
-runConversion config (Conversion parser) = runReaderT parser config
+runConversion :: Config -> Adaption -> Conversion a -> IO a
+runConversion config adapt (Conversion parser) = runReaderT parser config
 
 
 {-|

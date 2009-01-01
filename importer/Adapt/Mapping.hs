@@ -3,7 +3,7 @@
 
 module Importer.Adapt.Mapping 
     (AdaptionTable(..), extractHskEntries, extractIsaEntries,
-     makeAdaptionTable_FromHsModule, adaptionTable)
+     makeAdaptionTable_FromHsModule)
 where
 
 import List (intersperse, group, groupBy, sort, sortBy, nub)
@@ -19,7 +19,7 @@ import qualified Importer.LexEnv as Env
 import qualified Importer.IsaSyntax as Isa
 
 import Importer.Adapt.Common
-import Importer.Adapt.Raw (raw_adaption_table)
+import Importer.Adapt.Read (Adaption (..))
 
 import Importer.Configuration
 
@@ -27,11 +27,10 @@ import Importer.Configuration
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
   deriving Show
 
-adaptionTable :: AdaptionTable
-adaptionTable 
-    = AdaptionTable 
-        $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
-              (check_raw_adaption_table raw_adaption_table)
+mkAdaptionTable :: Adaption -> AdaptionTable
+mkAdaptionTable adapt = AdaptionTable 
+  $ map (\(hEntry, iEntry) -> (parseEntry hEntry, parseEntry iEntry))
+      (check_raw_adaption_table (rawAdaptionTable adapt))
 
 extractHskEntries (AdaptionTable mapping) = map fst mapping
 extractIsaEntries (AdaptionTable mapping) = map snd mapping
@@ -42,32 +41,29 @@ extractIsaEntries (AdaptionTable mapping) = map snd mapping
 -- 
 -- Hence, we have to remove entries from `adaptionTable' which are
 -- defined in one of the source files.
-makeAdaptionTable_FromHsModule :: Env.GlobalE -> [Hsx.Module] -> AdaptionTable
-makeAdaptionTable_FromHsModule env hsmodules
-    = let initial_class_env = makeGlobalEnv_FromAdaptionTable
-                                  (filterAdaptionTable (Env.isClass . fst) adaptionTable)
-          tmp_env           = Env.unionGlobalEnvs initial_class_env env
-          defined_names     = concatMap (extractDefNames tmp_env) hsmodules
-      in 
-        filterAdaptionTable 
-          (\(from,to) -> let fromN = Env.nameOf (Env.lexInfoOf from)
-                             toN = Env.nameOf (Env.lexInfoOf to)
-                         in fromN `notElem` defined_names && toN `notElem` defined_names)
-          adaptionTable
-    where
-      extractDefNames :: Env.GlobalE -> Hsx.Module -> [String]
-      extractDefNames globalEnv (Hsx.Module _ m _ _ _ _ decls)
-          = mapMaybe (\n -> let m'   = Env.fromHsk m
-                                n'   = Env.fromHsk n
-                                ids  = Env.lookupIdentifiers_OrLose m' n' globalEnv
-                                name = Env.nameOf . Env.lexInfoOf
-                            in 
-                              case filter Env.isType ids of
+makeAdaptionTable_FromHsModule :: Adaption -> Env.GlobalE -> [Hsx.Module] -> AdaptionTable
+makeAdaptionTable_FromHsModule adapt env hsmodules = let
+  adaptionTable = mkAdaptionTable adapt
+  initial_class_env = makeGlobalEnv_FromAdaptionTable
+    (filterAdaptionTable (Env.isClass . fst) adaptionTable)
+  tmp_env = Env.unionGlobalEnvs initial_class_env env
+  defined_names = concatMap (extractDefNames tmp_env) hsmodules
+  extractDefNames :: Env.GlobalE -> Hsx.Module -> [String]
+  extractDefNames globalEnv (Hsx.Module _ m _ _ _ _ decls) =
+    mapMaybe (\n -> let m'   = Env.fromHsk m
+                        n'   = Env.fromHsk n
+                        ids  = Env.lookupIdentifiers_OrLose m' n' globalEnv
+                        name = Env.nameOf . Env.lexInfoOf
+                    in  case filter Env.isType ids of
                                 []                       -> Just $ name (head ids)
                                 [id] | Env.isInstance id -> Just $ name id
                                      | otherwise         -> Nothing)
               $ concatMap extractBindingNs decls
-
+  in filterAdaptionTable (\(from, to) -> let
+    fromN = Env.nameOf (Env.lexInfoOf from)
+    toN = Env.nameOf (Env.lexInfoOf to)
+    in fromN `notElem` defined_names && toN `notElem` defined_names) adaptionTable
+  
 makeGlobalEnv_FromAdaptionTable :: AdaptionTable -> Env.GlobalE
 makeGlobalEnv_FromAdaptionTable adaptionTable
     = Env.makeGlobalEnv importNothing exportAll (extractHskEntries adaptionTable)

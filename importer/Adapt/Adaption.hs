@@ -114,8 +114,8 @@ qualifyTypeName globalEnv mID name
         $ Env.resolveTypeName globalEnv mID name
 
 
-adaptGlobalEnv :: Env.GlobalE -> AdaptionTable -> Env.GlobalE
-adaptGlobalEnv env tbl
+adaptGlobalEnv :: AdaptionTable -> Env.GlobalE -> Env.GlobalE
+adaptGlobalEnv tbl env
     = Env.updateGlobalEnv 
         (\n -> case translateName tbl n of 
                  Just new_id -> [new_id]
@@ -219,8 +219,8 @@ adaptClass classN = do let ignore = Isa.Name "_"
                        let (Isa.TyScheme [(_, [classN'])] _) = t
                        return classN'
 
-adaptIsaUnit :: Env.GlobalE -> AdaptionTable -> IsaUnit -> IsaUnit
-adaptIsaUnit globalEnv adaptionTable (IsaUnit thycmds custThys adaptedGlobalEnv)
+adaptIsaUnit :: AdaptionTable -> Env.GlobalE -> IsaUnit -> IsaUnit
+adaptIsaUnit adaptionTable globalEnv (IsaUnit thycmds custThys adaptedGlobalEnv)
     = let run thunk = runAdaption globalEnv adaptedGlobalEnv adaptionTable thunk
           thycmds'  = run (mapM adapt thycmds)
       in IsaUnit thycmds' custThys adaptedGlobalEnv

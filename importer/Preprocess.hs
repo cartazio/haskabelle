@@ -31,8 +31,6 @@ import Importer.Utilities.Gensym
 
 import qualified Importer.Msg as Msg
 
-import Importer.Adapt.Raw (used_const_names, used_thy_names)
-
 
 -- import Importer.Test.Generators
 -- import Test.QuickCheck
@@ -44,14 +42,14 @@ import Importer.Adapt.Raw (used_const_names, used_thy_names)
   This function preprocesses the given Haskell module to make things easier for the
   conversion.
 -}
-preprocessModule :: Hsx.Module -> Hsx.Module
-preprocessModule (Hsx.Module loc modul pragmas warning exports imports topdecls)
+preprocessModule :: [String] -> Hsx.Module -> Hsx.Module
+preprocessModule reserved (Hsx.Module loc modul pragmas warning exports imports topdecls)
     = Hsx.Module loc modul pragmas warning exports imports topdecls4
       where topdecls1    =  map (whereToLet .  deguardify) topdecls
             ((topdecls2 ,topdecls2'), gensymcount) 
                          = runGensym 0 (evalDelocaliser Set.empty (delocaliseAll topdecls1))
             topdecls3    = topdecls2 ++ topdecls2'
-            topdecls4    = evalGensym gensymcount (mapM normalizeNames_Decl topdecls3)
+            topdecls4    = evalGensym gensymcount (mapM (normalizeNames_Decl reserved) topdecls3)
 
 
 {-|
@@ -320,22 +318,21 @@ flattenTypeSig (Hsx.TypeSig loc names typ)
 -- We simply rename all those identifiers.
 --
 
-normalizeNames_Decl :: Hsx.Decl -> GensymM Hsx.Decl
-
-should_be_renamed :: Hsx.QName -> Bool
-should_be_renamed qn = case qn of
+should_be_renamed :: [String] -> Hsx.QName -> Bool
+should_be_renamed reserved qn = case qn of
                          Hsx.Qual _ n -> consider n
                          Hsx.UnQual n -> consider n
-    where consider (Hsx.Ident s)  = s `elem` used_const_names
-          consider (Hsx.Symbol s) = s `elem` used_const_names
+    where consider (Hsx.Ident s)  = s `elem` reserved
+          consider (Hsx.Symbol s) = s `elem` reserved
 
-normalizeNames_Decl (Hsx.FunBind matchs)
+normalizeNames_Decl :: [String] -> Hsx.Decl -> GensymM Hsx.Decl
+normalizeNames_Decl reserved (Hsx.FunBind matchs)
     = do matchs' <- mapM normalizePatterns_Match matchs
          return (Hsx.FunBind matchs')
     where
       normalizePatterns_Match (Hsx.Match loc name pats (Hsx.UnGuardedRhs body) where_binds)
           = let bound_var_ns = bindingsFromPats pats
-                clashes      = filter should_be_renamed bound_var_ns
+                clashes      = filter (should_be_renamed reserved) bound_var_ns
             in do renames <- freshIdentifiers clashes
                   pats'   <- return (map (renamePat renames) pats)
                   body'   <- return (renameFreeVars renames body)
@@ -343,10 +340,10 @@ normalizeNames_Decl (Hsx.FunBind matchs)
                   return (Hsx.Match loc name pats' (Hsx.UnGuardedRhs body') binds') 
 
       normalizeNames_Binds (Hsx.BDecls decls)
-          = do decls' <- mapM normalizeNames_Decl decls
+          = do decls' <- mapM (normalizeNames_Decl reserved) decls
                return (Hsx.BDecls decls')
 
-normalizeNames_Decl decl 
+normalizeNames_Decl reserved decl 
     -- There aren't any subdecls in decl anymore after delocalization.
     = return decl
 

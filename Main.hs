@@ -11,9 +11,18 @@ import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 
 import Importer.FilePrinter (importProject, importFiles)
-import Importer.Adapt.Read (readAdapt, Adaption)
+import Importer.Adapt.Read (readAdapt, Adaption (..))
+import qualified Importer.Adapt.Raw as Adapt -- FIXME
 import Importer.Configuration (readConfig)
 import Importer.Version
+
+-- FIXME
+staticAdaption :: Adaption
+staticAdaption = Adaption {
+  rawAdaptionTable = Adapt.raw_adaption_table,
+  reservedKeywords = Adapt.reserved_keywords,
+  usedConstNames = Adapt.used_const_names,
+  usedThyNames = Adapt.used_thy_names }
 
 usage :: String -> IO ()
 usage executableName = do
@@ -29,9 +38,9 @@ usage executableName = do
 mainInterface :: [String] -> IO ()
 mainInterface [executableName, "--config", configFile] = do
   config <- readConfig configFile
-  importProject config
+  importProject config staticAdaption
 mainInterface (executableName : srcs_dst @ (_ : _ : _)) =
-  importFiles (init srcs_dst) (last srcs_dst)
+  importFiles staticAdaption (init srcs_dst) (last srcs_dst)
 mainInterface (executableName : _) =
   usage executableName 
 

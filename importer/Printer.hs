@@ -5,9 +5,7 @@
 Pretty printing of abstract Isar/HOL theory.
 -}
 
-module Importer.Printer
-    ( pprint
-    ) where
+module Importer.Printer (pprint) where
 
 import Maybe
 import Control.Monad
@@ -23,8 +21,7 @@ import Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
 import qualified Importer.IsaSyntax as Isa
 import qualified Importer.LexEnv as Env
 
-import Importer.Adapt.Mapping (adaptionTable, AdaptionTable(..))
-import Importer.Adapt.Raw (used_thy_names, reserved_keywords)
+import Importer.Adapt.Mapping (AdaptionTable(..))
 
 
 data PPState = PPState { globalEnv        :: Env.GlobalE,
@@ -218,52 +215,49 @@ accentuate d list = map (d<>) list
 
 indent = 3
 
--- data Info ...
-
 class Printer a where
-    pprint' :: a -> DocM P.Doc
-    pprint  :: a -> Env.GlobalE -> P.Doc
-    pprint obj env = let DocM sf          = pprint' obj
-                         (result, _state) = sf (emptyPPState { globalEnv = env })
-                         doc              = result
-                     in doc
-
+    pprint' :: AdaptionTable -> [String] -> a -> DocM P.Doc
+    pprint  :: AdaptionTable -> [String] -> Env.GlobalE -> a -> P.Doc
+    pprint adapt reserved env obj = let
+      DocM sf = pprint' adapt reserved obj
+      (doc, _state) = sf (emptyPPState { globalEnv = env })
+      in doc
 
 instance Printer Isa.DatatypeDef where
-    pprint' (Isa.DatatypeDef tyspec dataspecs)
-        = pprint' tyspec 
+    pprint' adapt reserved (Isa.DatatypeDef tyspec dataspecs)
+        = pprint' adapt reserved tyspec 
           <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
                                   (map ppconstr dataspecs))
           where ppconstr (Isa.Constructor con types) 
-                    = hsep $ pprint' con : map pprint' types
+                    = hsep $ pprint' adapt reserved con : map (pprint' adapt reserved) types
 
 
 instance Printer Isa.Cmd where
-    pprint' (Isa.Comment string) = empty -- blankline $ comment string
-    pprint' (Isa.Block cmds)     = blankline $ vcat $ map pprint' cmds
-    pprint' (Isa.TheoryCmd thy imps cmds)
+    pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
+    pprint' adapt reserved (Isa.Block cmds)     = blankline $ vcat $ map (pprint' adapt reserved) cmds
+    pprint' adapt reserved (Isa.TheoryCmd thy imps cmds)
         = do env <- queryPP globalEnv
-             let imps' = map pprint' (imps ++ [Isa.Theory Env.prelude])
+             let imps' = map (pprint' adapt reserved) (imps ++ [Isa.Theory Env.prelude])
              withCurrentTheory thy $
-               text "theory" <+> pprint' thy                     $+$
+               text "theory" <+> pprint' adapt reserved thy                     $+$
                text "imports " <> fsep  imps'    $+$
                text "begin"                                      $+$
-               (vcat $ map pprint' cmds)                         $+$
+               (vcat $ map (pprint' adapt reserved) cmds)                         $+$
                text "\nend"
 
-    pprint' (Isa.DatatypeCmd (def:defs)) = 
-        let fstDef = text "datatype" <+> pprint' def
-            restDefs = map ((text "and     " <+>) . pprint') defs
+    pprint' adapt reserved (Isa.DatatypeCmd (def:defs)) = 
+        let fstDef = text "datatype" <+> pprint' adapt reserved def
+            restDefs = map ((text "and     " <+>) . pprint' adapt reserved) defs
         in blankline $ vcat (fstDef:restDefs)
           
 
-    pprint' (Isa.RecordCmd tyspec conspecs)
+    pprint' adapt reserved (Isa.RecordCmd tyspec conspecs)
         = blankline $
-          text "record" <+> pprint' tyspec <+> equals $$
+          text "record" <+> pprint' adapt reserved tyspec <+> equals $$
           space <+> vcat (map pp conspecs)
-          where pp (slotName, slotType) = pprint' slotName <+> text "::" <+> pprint' slotType
+          where pp (slotName, slotType) = pprint' adapt reserved slotName <+> text "::" <+> pprint' adapt reserved slotType
 
-    pprint' (Isa.DefinitionCmd vname tysig matching)
+    pprint' adapt reserved (Isa.DefinitionCmd vname tysig matching)
         = case matching of
             (pat, term)
                 -> blankline $
@@ -272,38 +266,38 @@ instance Printer Isa.Cmd where
                    space <+> (maybeWithinHOL $ ppEquation pat term)
         where 
           ppHeader n sig
-              | isEmptySig sig = pprint' n
-              | otherwise      = pprint' n <+> text "::" <+> maybeWithinHOL (pprint' sig)
+              | isEmptySig sig = pprint' adapt reserved n
+              | otherwise      = pprint' adapt reserved n <+> text "::" <+> maybeWithinHOL (pprint' adapt reserved sig)
           ppEquation pat term
               = do thy <- queryPP currentTheory 
                    env <- queryPP globalEnv
                    let lookup = (\n -> lookupIdentifier thy n env)
-                   pprint' pat <+> equals <+> parensIf (isCompound term lookup) (pprint' term)
+                   pprint' adapt reserved pat <+> equals <+> parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
 
-    pprint' (Isa.PrimrecCmd fnames tysigs equations)
-        = printFunDef "primrec" fnames tysigs equations
+    pprint' adapt reserved (Isa.PrimrecCmd fnames tysigs equations)
+        = printFunDef adapt reserved "primrec" fnames tysigs equations
 
-    pprint' (Isa.FunCmd fnames tysigs equations)
-        = printFunDef "fun" fnames tysigs equations
+    pprint' adapt reserved (Isa.FunCmd fnames tysigs equations)
+        = printFunDef adapt reserved "fun" fnames tysigs equations
 
-    pprint' (Isa.ClassCmd classN superclassNs typesigs)
+    pprint' adapt reserved (Isa.ClassCmd classN superclassNs typesigs)
         = blankline $
-          text "class" <+> pprint' classN 
+          text "class" <+> pprint' adapt reserved classN 
                        <+> equals 
-                       <+> hsep (punctuate plus (map pprint' superclassNs))
+                       <+> hsep (punctuate plus (map (pprint' adapt reserved) superclassNs))
                        <+> (if null typesigs then empty else plus) $$
           space <> space <> vcat (zipWith (<+>) (repeat (text "fixes"))
                                                 (map ppSig typesigs))
         where ppSig (Isa.TypeSig n t)
-                  = pprint' n <+> text "::" <+> pprint' t
+                  = pprint' adapt reserved n <+> text "::" <+> pprint' adapt reserved t
           
-    pprint' (Isa.InstanceCmd classN typ cmds)
+    pprint' adapt reserved (Isa.InstanceCmd classN typ cmds)
         = do thy <- queryPP currentTheory
              let cmds' = map (renameInstanceCmd thy typ) cmds
              blankline $
-               text "instantiation" <+> pprint' typ <+> text "::" <+> pprint' classN $$
+               text "instantiation" <+> pprint' adapt reserved typ <+> text "::" <+> pprint' adapt reserved classN $$
                text "begin" $$
-               space <> space <> vcat (map pprint' cmds') $$
+               space <> space <> vcat (map (pprint' adapt reserved) cmds') $$
                (blankline $
                 text "instance .." $$
                 text "end")
@@ -312,16 +306,16 @@ instance Printer Isa.Cmd where
               = let renams = [ (n, mk_InstanceCmd_name n t) | n <- namesFromIsaCmd c ]
                 in renameIsaCmd thy renams c
  
-    pprint' (Isa.InfixDeclCmd op assoc prio)
-        = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' op
+    pprint' adapt reserved (Isa.InfixDeclCmd op assoc prio)
+        = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' adapt reserved op
           where pp Isa.AssocNone  = text ""
                 pp Isa.AssocLeft  = text "l"
                 pp Isa.AssocRight = text "r"
     
-    pprint' (Isa.TypesCmd aliases) = text "type" <+> vcat (map pp aliases)
-        where pp (spec, typ) = pprint' spec <+> equals <+> pprint' typ
+    pprint' adapt reserved (Isa.TypesCmd aliases) = text "type" <+> vcat (map pp aliases)
+        where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
 
-printFunDef cmd fnames tysigs equations
+printFunDef adapt reserved cmd fnames tysigs equations
     = blankline $
       text cmd <+> vcat (punctuate (text " and ") (map ppHeader (zip fnames tysigs))) $$
       text "where" $$
@@ -329,35 +323,34 @@ printFunDef cmd fnames tysigs equations
             (map ppEquation equations))
     where 
       ppHeader (fn, sig)
-          | isEmptySig sig = pprint' fn
-          | otherwise      = pprint' fn <+> text "::" <+> maybeWithinHOL (pprint' sig)
+          | isEmptySig sig = pprint' adapt reserved fn
+          | otherwise      = pprint' adapt reserved fn <+> text "::" <+> maybeWithinHOL (pprint' adapt reserved sig)
       ppEquation (fname, pattern, term) 
           = do thy <- queryPP currentTheory 
                env <- queryPP globalEnv
                let lookup = (\n -> lookupIdentifier thy n env)
                maybeWithinHOL $
-                              pprint' fname <+> 
-                              hsep (map pprint' pattern) <+> 
+                              pprint' adapt reserved fname <+> 
+                              hsep (map (pprint' adapt reserved) pattern) <+> 
                               equals <+> 
-                              parensIf (isCompound term lookup) (pprint' term)
+                              parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
 
 instance Printer Isa.Theory where
-    pprint' (Isa.Theory name) = text name
+    pprint' adapt reserved (Isa.Theory name) = text name
 
 instance Printer Isa.TypeSpec where
-    pprint' (Isa.TypeSpec [] tycon)
-        = pprint' tycon
-    pprint' (Isa.TypeSpec tyvars tycon)
+    pprint' adapt reserved (Isa.TypeSpec [] tycon)
+        = pprint' adapt reserved tycon
+    pprint' adapt reserved (Isa.TypeSpec tyvars tycon)
         = let tyvars' = parens . hsep . punctuate comma . accentuate apostroph $ 
-                        map pprint' tyvars
-          in tyvars' <+> pprint' tycon
+                        map (pprint' adapt reserved) tyvars
+          in tyvars' <+> pprint' adapt reserved tycon
 
 instance Printer Isa.Name where
-    pprint' n@(Isa.Name _)      = pprintName n
-    pprint' (Isa.QName _ str)   = pprintName (Isa.Name str) -- FIXME
+    pprint' adapt reserved n@(Isa.Name _)      = pprintName reserved n
+    pprint' adapt reserved (Isa.QName _ str)   = pprintName reserved (Isa.Name str) -- FIXME
 
-pprintName n@(Isa.Name str)
-    = withinHOL_if (isReservedKeyword str) 
+pprintName reserved n@(Isa.Name str) = withinHOL_if (isReservedKeyword str) 
       $ do thy <- queryPP currentTheory 
            env <- queryPP globalEnv
            app <- queryPP currentAppFlavor
@@ -367,164 +360,162 @@ pprintName n@(Isa.Name str)
                    in if (isInfixOp n lookup || isUnaryOp n lookup)
                       then parens $ text "op" <+> text str
                       else text str
-
+      where
+        isReservedKeyword :: String -> Bool
+        isReservedKeyword str = str `elem` reserved
 
 instance Printer Isa.Type where
-    pprint' (Isa.TyNone)      = text ""
-    pprint' (Isa.TyVar vname) 
+    pprint' adapt reserved (Isa.TyNone)      = text ""
+    pprint' adapt reserved (Isa.TyVar vname) 
         = do alist <- queryPP currentTyScheme
-             let tyvar_doc = apostroph <> pprint' vname
+             let tyvar_doc = apostroph <> pprint' adapt reserved vname
              case lookup vname alist of
                Nothing       -> tyvar_doc
-               Just [classN] -> parens (tyvar_doc <+> text "::" <+> pprint' classN)
+               Just [classN] -> parens (tyvar_doc <+> text "::" <+> pprint' adapt reserved classN)
                Just classNs  
                    -> parens $ tyvar_doc <+> 
                                text "::" <+> 
-                               (braces . vcat . punctuate comma . map pprint' $ classNs)
+                               (braces . vcat . punctuate comma . map (pprint' adapt reserved) $ classNs)
 
-    pprint' (Isa.TyCon cname []) = pprint' cname 
-    pprint' (Isa.TyCon cname tyvars) 
+    pprint' adapt reserved (Isa.TyCon cname []) = pprint' adapt reserved cname 
+    pprint' adapt reserved (Isa.TyCon cname tyvars) 
         = do maybeWithinHOL $
-               hsep (map pp tyvars) <+> pprint' cname
-          where pp tyvar = parensIf (isCompoundType tyvar) (pprint' tyvar)
+               hsep (map pp tyvars) <+> pprint' adapt reserved cname
+          where pp tyvar = parensIf (isCompoundType tyvar) (pprint' adapt reserved tyvar)
 
-    pprint' (Isa.TyScheme [] t)  = pprint' t
-    pprint' (Isa.TyScheme ctx t) = withTyScheme ctx (pprint' t)
+    pprint' adapt reserved (Isa.TyScheme [] t)  = pprint' adapt reserved t
+    pprint' adapt reserved (Isa.TyScheme ctx t) = withTyScheme ctx (pprint' adapt reserved t)
 
-    pprint' (Isa.TyFun t1 t2)
+    pprint' adapt reserved (Isa.TyFun t1 t2)
         = maybeWithinHOL $
-            case t1 of Isa.TyFun _ _ -> parens (pprint' t1) <+> text "=>" <+> pprint' t2
-                       _             -> pprint' t1          <+> text "=>" <+> pprint' t2
+            case t1 of Isa.TyFun _ _ -> parens (pprint' adapt reserved t1) <+> text "=>" <+> pprint' adapt reserved t2
+                       _             -> pprint' adapt reserved t1          <+> text "=>" <+> pprint' adapt reserved t2
 
-    pprint' (Isa.TyTuple types)
+    pprint' adapt reserved (Isa.TyTuple types)
         = maybeWithinHOL $
-            hsep (punctuate (space<>asterisk) (map pprint' types))
+            hsep (punctuate (space<>asterisk) (map (pprint' adapt reserved) types))
 
 
 instance Printer Isa.TypeSig where
-    pprint' (Isa.TypeSig _name typ) = pprint' typ
+    pprint' adapt reserved (Isa.TypeSig _name typ) = pprint' adapt reserved typ
 
 instance Printer Isa.Literal where
     -- We annotate Integer literals explicitly to be of our sort "num"
     -- (cf. Prelude.thy), because otherwise Isabelle's type inference
     -- would come up with a too general type, resulting in
     -- non-workingness.
-    pprint' (Isa.Int i)      = let cc = colon <> colon in
+    pprint' adapt reserved (Isa.Int i)      = let cc = colon <> colon in
                                integer i
                                -- parens $ integer i  <> cc <> text "_" <> cc <> text "num"
-    pprint' (Isa.Char ch)    = text "CHR " <+> quotes (quotes (char ch))
-    pprint' (Isa.String str) = quotes . quotes . text $ str
+    pprint' adapt reserved (Isa.Char ch)    = text "CHR " <+> quotes (quotes (char ch))
+    pprint' adapt reserved (Isa.String str) = quotes . quotes . text $ str
 
 instance Printer Isa.Term where
-    pprint' (Isa.Var vname)         = pprint' vname
-    pprint' (Isa.Literal lit)       = pprint' lit
-    pprint' (Isa.Parenthesized t)   
+    pprint' adapt reserved (Isa.Var vname)         = pprint' adapt reserved vname
+    pprint' adapt reserved (Isa.Literal lit)       = pprint' adapt reserved lit
+    pprint' adapt reserved (Isa.Parenthesized t)   
         = do thy <- queryPP currentTheory 
              env <- queryPP globalEnv
              let lookup = (\n -> lookupIdentifier thy n env)
-             parensIf (not (isSelfEvaluating t lookup)) 
-               $ pprint' t
+             parensIf (not (isSelfEvaluating adapt t lookup)) 
+               $ pprint' adapt reserved t
 
-    pprint' app @ (Isa.App t1 t2)   
+    pprint' adapt reserved app @ (Isa.App t1 t2)   
         = do thy <- queryPP currentTheory 
              env <- queryPP globalEnv
              let lookup = (\n -> lookupIdentifier thy n env)
-             let flavor = categorizeApp app lookup
+             let flavor = categorizeApp adapt app lookup
              withinApplication flavor $
                case flavor of
-                 ListApp  l      -> pprintAsList l
-                 TupleApp l      -> pprintAsTuple l
-                 InfixApp x op y -> let x' = parensIf (isCompound x lookup) $ pprint' x
-                                        y' = parensIf (isCompound y lookup) $ pprint' y
-                                    in  x' <+> pprint' op <+> y'
-                 FunApp          -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
-                 UnaryOpApp      -> pprint' t1 <+> parensIf (isCompound t2 lookup) (pprint' t2)
+                 ListApp  l      -> pprintAsList adapt reserved l
+                 TupleApp l      -> pprintAsTuple adapt reserved l
+                 InfixApp x op y -> let x' = parensIf (isCompound adapt x lookup) $ pprint' adapt reserved x
+                                        y' = parensIf (isCompound adapt y lookup) $ pprint' adapt reserved y
+                                    in  x' <+> pprint' adapt reserved op <+> y'
+                 FunApp          -> pprint' adapt reserved t1 <+> parensIf (isCompound adapt t2 lookup) (pprint' adapt reserved t2)
+                 UnaryOpApp      -> pprint' adapt reserved t1 <+> parensIf (isCompound adapt t2 lookup) (pprint' adapt reserved t2)
 
-    pprint' (Isa.If t1 t2 t3)
-        = fsep [text "if"   <+> pprint' t1,
-                text "then" <+> pprint' t2,
-                text "else" <+> pprint' t3]
+    pprint' adapt reserved (Isa.If t1 t2 t3)
+        = fsep [text "if"   <+> pprint' adapt reserved t1,
+                text "then" <+> pprint' adapt reserved t2,
+                text "else" <+> pprint' adapt reserved t3]
 
-    pprint' lexpr@(Isa.Lambda _ _)
+    pprint' adapt reserved lexpr@(Isa.Lambda _ _)
         = let (argNs, body) = flattenLambdas lexpr in 
-          fsep [text "%" <+> hsep (map pprint' argNs) <+> dot,
-                nest 2 (pprint' body)]
+          fsep [text "%" <+> hsep (map (pprint' adapt reserved) argNs) <+> dot,
+                nest 2 (pprint' adapt reserved body)]
 
-    pprint' (Isa.RecConstr recordN updates)
-        = pprint' recordN <+> (bananas . vcat . punctuate comma $ map pp updates)
-          where pp (vname, typ) = pprint' vname <+> equals <+> pprint' typ
+    pprint' adapt reserved (Isa.RecConstr recordN updates)
+        = pprint' adapt reserved recordN <+> (bananas . vcat . punctuate comma $ map pp updates)
+          where pp (vname, typ) = pprint' adapt reserved vname <+> equals <+> pprint' adapt reserved typ
 
-    pprint' (Isa.RecUpdate term updates)
-        = pprint' term <+> (bananas . vcat . punctuate comma $ map pp updates)
-          where pp (vname, typ) = pprint' vname <+> text ":=" <+> pprint' typ
+    pprint' adapt reserved (Isa.RecUpdate term updates)
+        = pprint' adapt reserved term <+> (bananas . vcat . punctuate comma $ map pp updates)
+          where pp (vname, typ) = pprint' adapt reserved vname <+> text ":=" <+> pprint' adapt reserved typ
 
-    pprint' (Isa.Case term matchs)
-         = hang (text "case" <+> pprint' term <+> text "of")
+    pprint' adapt reserved (Isa.Case term matchs)
+         = hang (text "case" <+> pprint' adapt reserved term <+> text "of")
                 1
                 (vcat $ zipWith (<+>) (space : repeat (char '|'))
                                       (map pp matchs))
-           where pp (pat, term) = (pprint' pat) <+> text "=>" <+> pprint' term
+           where pp (pat, term) = (pprint' adapt reserved pat) <+> text "=>" <+> pprint' adapt reserved term
 
 
-    pprint' (Isa.Let bindings body)
+    pprint' adapt reserved (Isa.Let bindings body)
         = text "let" <+> vcat (punctuate semi (map ppBinding bindings))
-                   $$ text "in" <+> pprint' body
+                   $$ text "in" <+> pprint' adapt reserved body
           where ppBinding (pat, term)
-                    = pprint' pat <+> equals <+> pprint' term
+                    = pprint' adapt reserved pat <+> equals <+> pprint' adapt reserved term
 
-    pprint' (Isa.ListComp body stmts)
-        = brackets $ pprint' body <+> text "." <+>
+    pprint' adapt reserved (Isa.ListComp body stmts)
+        = brackets $ pprint' adapt reserved body <+> text "." <+>
                        (vcat (punctuate comma (map ppStmt stmts)))
         where
           ppStmt (Isa.Guard b)
-              = pprint' b
+              = pprint' adapt reserved b
           ppStmt (Isa.Generator (p, e)) 
-              = pprint' p <+> text "<-" <+> pprint' e
+              = pprint' adapt reserved p <+> text "<-" <+> pprint' adapt reserved e
 
-    pprint' (Isa.DoBlock pre stmts post) = 
+    pprint' adapt reserved (Isa.DoBlock pre stmts post) = 
         text pre <+> (vcat $ (printStmts stmts) ++ [text post])
-        where printStmts [stmt] = [pprint' stmt]
-              printStmts (stmt:stmts) = (pprint' stmt <> semi) : (printStmts stmts)
+        where printStmts [stmt] = [pprint' adapt reserved stmt]
+              printStmts (stmt:stmts) = (pprint' adapt reserved stmt <> semi) : (printStmts stmts)
 
 instance Printer Isa.Stmt where
-    pprint' (Isa.DoGenerator pat exp) = pprint' pat <+> text "<-" <+> pprint' exp
-    pprint' (Isa.DoQualifier exp) = pprint' exp
+    pprint' adapt reserved (Isa.DoGenerator pat exp) = pprint' adapt reserved pat <+> text "<-" <+> pprint' adapt reserved exp
+    pprint' adapt reserved (Isa.DoQualifier exp) = pprint' adapt reserved exp
 
 
-reAdaptEnvName :: Env.EnvName -> Maybe Env.EnvName
-reAdaptEnvName name
-    = let AdaptionTable mappings = adaptionTable
+reAdaptEnvName :: AdaptionTable -> Env.EnvName -> Maybe Env.EnvName
+reAdaptEnvName adapt name
+    = let AdaptionTable mappings = adapt
           mappings' = [ (Env.identifier2name id2, Env.identifier2name id1) 
                             | (id1, id2) <- mappings ]
       in lookup name mappings'
 
-isNil, isCons, isPairCon :: Isa.Name -> Bool
+isNil, isCons, isPairCon :: AdaptionTable -> Isa.Name -> Bool
 
-mk_isFoo foo n
-    = let n' = reAdaptEnvName (Env.fromIsa n)
-      in case n' of
-           Nothing -> False
-           Just x -> case Env.toHsk x of
-                       Special con -> con == foo
-                       _ -> False
+mk_isFoo adapt foo n = case reAdaptEnvName adapt (Env.fromIsa n) of
+  Nothing -> False
+  Just x -> case Env.toHsk x of
+    Special con -> con == foo
+    _ -> False
 
-isNil     = mk_isFoo Hsx.ListCon
-isCons    = mk_isFoo Hsx.Cons
-isPairCon = mk_isFoo (Hsx.TupleCon 2)
+isNil adapt = mk_isFoo adapt Hsx.ListCon
+isCons adapt = mk_isFoo adapt Hsx.Cons
+isPairCon adapt = mk_isFoo adapt (Hsx.TupleCon 2)
 
 isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
 isEmptySig _ = False
 
-isReservedKeyword :: String -> Bool
-isReservedKeyword str = str `elem` reserved_keywords
+pprintAsList :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
+pprintAsList adapt reserved list = let
+  (xs, [Isa.Var nil]) = splitAt (length list - 1) list
+  in assert (isNil adapt nil)
+    $ brackets (hsep (punctuate comma (map (pprint' adapt reserved) xs)))
 
-pprintAsList :: [Isa.Term] -> DocM P.Doc
-pprintAsList list = let (xs, [Isa.Var nil]) = splitAt (length list - 1) list
-                    in assert (isNil nil) 
-                         $ brackets (hsep (punctuate comma (map pprint' xs)))
-
-pprintAsTuple :: [Isa.Term] -> DocM P.Doc
-pprintAsTuple = parens . hsep . punctuate comma . map pprint'
+pprintAsTuple :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
+pprintAsTuple adapt reserved = parens . hsep . punctuate comma . map (pprint' adapt reserved)
 
 
 data AppFlavor = ListApp [Isa.Term] 
@@ -540,31 +531,32 @@ data AppFlavor = ListApp [Isa.Term]
 -- Cf. http://www.haskell.org/ghc/docs/latest/html/users_guide/syntax-extns.html#pattern-guards
 --
 
-categorizeApp :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> AppFlavor
-categorizeApp app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
-    | isCons opN,    Just list <- flattenListApp app  = ListApp list
-    | isPairCon opN, Just list <- flattenTupleApp app = TupleApp list
+categorizeApp :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> AppFlavor
+categorizeApp adapt app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
+    | isCons adapt opN,    Just list <- flattenListApp adapt app  = ListApp list
+    | isPairCon adapt opN, Just list <- flattenTupleApp adapt app = TupleApp list
     | isInfixOp opN lookupFn                          = InfixApp t1 (Isa.Var opN) t2
-categorizeApp (Isa.App (Isa.Var opN) _) lookupFn
+categorizeApp _ (Isa.App (Isa.Var opN) _) lookupFn
     | isUnaryOp opN lookupFn                              = UnaryOpApp
     | otherwise                                           = FunApp
-categorizeApp _ _ = FunApp
+categorizeApp _ _ _ = FunApp
 
-flattenListApp :: Isa.Term -> Maybe [Isa.Term]
-flattenListApp app = let list = unfoldr1 split app in 
-                     case last list of -- proper list?
-                       (Isa.Var c) | isNil c -> Just list
-                       _ -> Nothing
+flattenListApp :: AdaptionTable -> Isa.Term -> Maybe [Isa.Term]
+flattenListApp adapt app = let
+  list = unfoldr1 split app
+  in case last list of -- proper list?
+    (Isa.Var c) | isNil adapt c -> Just list
+    _ -> Nothing
   where
-    split (Isa.App (Isa.App (Isa.Var c) x) xs) | isCons c = Just (x, xs)
+    split (Isa.App (Isa.App (Isa.Var c) x) xs) | isCons adapt c = Just (x, xs)
     split _ = Nothing
 
-flattenTupleApp :: Isa.Term -> Maybe [Isa.Term]
-flattenTupleApp app = let list = unfoldr1 split app in
+flattenTupleApp :: AdaptionTable -> Isa.Term -> Maybe [Isa.Term]
+flattenTupleApp adapt app = let list = unfoldr1 split app in
                       if (length list) > 1 then Just list
                                            else Nothing
   where
-    split (Isa.App (Isa.App (Isa.Var c) x) xs) | isPairCon c = Just (x, xs)
+    split (Isa.App (Isa.App (Isa.Var c) x) xs) | isPairCon adapt c = Just (x, xs)
     split _ = Nothing
 
 -- flattenLambdas ``%x . %y . %z . foo'' => ([x,y,z], foo)
@@ -576,13 +568,13 @@ flattenLambdas (Isa.Lambda arg1 (Isa.Lambda arg2 body))
 flattenLambdas (Isa.Lambda arg body) = ([arg], body)
 flattenLambdas t = ([], t)
 
-isSelfEvaluating :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
-isSelfEvaluating t lookupFn
+isSelfEvaluating :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
+isSelfEvaluating adapt t lookupFn
     = case t of
         Isa.Var _            -> True
         Isa.Literal _        -> True
         Isa.Parenthesized _  -> True
-        Isa.App _ _          -> case categorizeApp t lookupFn of
+        Isa.App _ _          -> case categorizeApp adapt t lookupFn of
                                   ListApp  _     -> True
                                   TupleApp _     -> True
                                   FunApp         -> False
@@ -590,13 +582,13 @@ isSelfEvaluating t lookupFn
                                   InfixApp _ _ _ -> False
         _ -> False
 
-isCompound :: Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
-isCompound t lookupFn
+isCompound :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
+isCompound adapt t lookupFn
     = case t of
         Isa.Var _            -> False
         Isa.Literal _        -> False
         Isa.Parenthesized _  -> False
-        Isa.App _ _          -> case categorizeApp t lookupFn of
+        Isa.App _ _          -> case categorizeApp adapt t lookupFn of
                                   ListApp  _     -> False
                                   TupleApp _     -> False
                                   FunApp         -> False

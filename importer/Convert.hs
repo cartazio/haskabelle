@@ -29,9 +29,9 @@ import Importer.Preprocess
 import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
 import Importer.DeclDependencyGraph
 
-import Importer.Adapt.Mapping (makeAdaptionTable_FromHsModule, extractHskEntries)
+import Importer.Adapt.Mapping (makeAdaptionTable_FromHsModule, extractHskEntries, AdaptionTable)
 import Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit)
-import Importer.Adapt.Raw (used_thy_names)
+import Importer.Adapt.Read (Adaption (..))
 
 import qualified Language.Haskell.Exts as Hsx
 
@@ -47,22 +47,22 @@ import qualified Importer.Configuration as Config (getMonadInstance)
   This is the main function of the conversion process; converts a Unit of Haskell
   ASTs into a Unit of Isar/HOL ASTs.
 -}
-convertHskUnit :: Customisations -> HskUnit -> IsaUnit
-convertHskUnit custs (HskUnit hsmodules custMods initialGlobalEnv)
-    = let hsmodules'     = map preprocessModule hsmodules
+convertHskUnit :: Customisations -> Adaption -> HskUnit -> (AdaptionTable, IsaUnit)
+convertHskUnit custs adapt (HskUnit hsmodules custMods initialGlobalEnv)
+    = let hsmodules'     = map (preprocessModule (usedConstNames adapt)) hsmodules
           env            = Env.environmentOf custs hsmodules' custMods
-          adaptionTable  = makeAdaptionTable_FromHsModule env hsmodules'
+          adaptionTable  = makeAdaptionTable_FromHsModule adapt env hsmodules'
           initial_env    = Env.augmentGlobalEnv initialGlobalEnv $ extractHskEntries adaptionTable
           global_env_hsk = Env.unionGlobalEnvs env initial_env
                              
           hskmodules     = map (toHskModule global_env_hsk) hsmodules'
           
-          isathys = fst $ runConversion custs global_env_hsk $ mapM convert hskmodules 
+          isathys = fst $ runConversion custs adapt global_env_hsk $ mapM convert hskmodules 
           custThys = Map.elems custMods
-          adaptedEnv = adaptGlobalEnv global_env_hsk adaptionTable
+          adaptedEnv = adaptGlobalEnv adaptionTable global_env_hsk
           isaunit = IsaUnit isathys custThys adaptedEnv
       in
-        adaptIsaUnit global_env_hsk adaptionTable isaunit
+        (adaptionTable, adaptIsaUnit adaptionTable global_env_hsk isaunit)
     where 
       toHskModule :: Env.GlobalE -> Hsx.Module -> HskModule
       toHskModule globalEnv (Hsx.Module loc modul _ _ _exports _imports decls)
@@ -91,20 +91,22 @@ newtype HskDependentDecls = HskDependentDecls [Hsx.Decl]
 {-|
   ???
 -}
-data Context    = Context
-    {     
-      _theory      :: Isa.Theory
-    , _globalEnv   :: Env.GlobalE
-    , _warnings    :: [Warning]
-    , _backtrace   :: [String]
-    , _monad       :: Maybe MonadInstance
-    }
+data Context = Context {
+  _theory :: Isa.Theory,
+  _globalEnv :: Env.GlobalE,
+  _warnings :: [Warning],
+  _backtrace :: [String],
+  _adapt :: Adaption,
+  _monad :: Maybe MonadInstance }
 
-emptyContext = Context { _theory      = Isa.Theory "Scratch", -- FIXME: Default Hsx.ModuleName in Haskell
-                         _globalEnv   = Env.initialGlobalEnv,  --  is called `Main'; clashes with Isabelle.
-                         _warnings    = [],
-                         _backtrace   = [],
-                         _monad = Nothing }
+initContext adapt env = Context {
+  _theory = Isa.Theory "Scratch", {- FIXME: Default Hsx.ModuleName in Haskell
+    is called `Main'; clashes with Isabelle. -}
+  _globalEnv = env,
+  _warnings = [],
+  _backtrace = [],
+  _adapt = adapt,
+  _monad = Nothing }
 
 {-|
   Instead of accessing a record directly by their `_foo' slots, we
@@ -122,6 +124,8 @@ warnings :: FieldSurrogate [Warning]
 warnings    = (_warnings,    \c f -> c { _warnings    = f })
 backtrace :: FieldSurrogate [String]
 backtrace   = (_backtrace,   \c f -> c { _backtrace   = f })
+adapt :: FieldSurrogate Adaption
+adapt       = (_adapt,       \c f -> c { _adapt       = f })
 monad     :: FieldSurrogate (Maybe MonadInstance)
 monad       = (_monad,       \c f -> c { _monad       = f })
 
@@ -205,8 +209,9 @@ liftGensym = ContextM . lift . lift
   This function executes the given conversion with the given environment as
   the context.
 -}
-runConversion :: Customisations -> Env.GlobalE -> ContextM v -> (v, Context)
-runConversion custs env (ContextM m) = evalGensym 0 $ runStateT (runReaderT m custs) (emptyContext { _globalEnv = env })
+runConversion :: Customisations -> Adaption -> Env.GlobalE -> ContextM v -> (v, Context)
+runConversion custs adapt env (ContextM m) =
+  evalGensym 0 $ runStateT (runReaderT m custs) (initContext adapt env)
 
 {-|
   This function queries the given field in the context monad
@@ -373,16 +378,20 @@ class Show a => Convert a b | a -> b where
                                in prettyShow' frameName hsexpr : bt)
                      $ convert' hsexpr
 
+foo :: forall a. FieldSurrogate a -> ContextM a
+foo = queryContext
+
 instance Convert HskModule Isa.Cmd where
     convert' (HskModule _loc modul dependentDecls)
         = do thy <- convert modul
              env <- queryContext globalEnv
+             adaption <- queryContext adapt
              custs <- queryCustomisations
-             let imps  = filter (not . isStandardTheory) (lookupImports thy env custs)
+             let imps = filter (not . isStandardTheory (usedThyNames adaption)) (lookupImports thy env custs)
              withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
                $ do cmds <- mapM convert dependentDecls
                     return (Isa.TheoryCmd thy imps cmds)
-        where isStandardTheory (Isa.Theory n) = n `elem` used_thy_names
+        where isStandardTheory usedThyNames (Isa.Theory n) = n `elem` usedThyNames
 
 
 lookupImports :: Isa.Theory -> Env.GlobalE -> Customisations -> [Isa.Theory]

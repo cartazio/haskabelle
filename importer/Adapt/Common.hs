@@ -3,9 +3,9 @@
 Basic data structures for adaption table.
 -}
 
-module Importer.Adapt.Common (OpKind(..), RawClassInfo(..), Assoc(..), AdaptionEntry(..),
-                              primitive_tycon_table, primitive_datacon_table,
-                              hsk_infix_ops) where
+module Importer.Adapt.Common (OpKind (..), RawClassInfo (..), Assoc (..),
+  AdaptionEntry (..), primitive_tycon_table, primitive_datacon_table,
+  hsk_infix_ops) where
 
 import qualified Language.Haskell.Exts as Hsx
 
