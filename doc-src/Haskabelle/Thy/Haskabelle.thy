@@ -8,7 +8,8 @@ section {* Introduction *}
 
 subsection {* What is Haskabelle? *}
 
-text {* @{text Haskabelle} is an converter from @{text Haskell} source
+text {*
+  @{text Haskabelle} is a converter from @{text Haskell} source
   files to @{text "Isabelle/HOL"} \cite{isa-tutorial} theories
   implemented in @{text Haskell} itself.
 *}
@@ -270,6 +271,12 @@ text %quote {*
 
 text {*
   \noindent This also includes some basic consistency checking.
+
+  If you have multiple @{text Isabelle} versions on your machine,
+  you can select one particular by setting the shell variable
+  \shell{ISABELLE_PROCESS}
+  (usually \shell{ISABELLE_HOME/bin/isabelle-process})
+  to the process wrapper of the desired @{text Isabelle}.
 *}
 
 subsubsection {* Use this adaption during conversion *}
@@ -294,6 +301,15 @@ text {*
 
 text %quote {*
   \shell{bin/regression}
+*}
+
+text {*
+  Each generated theory then is re-imported into @{text Isabelle}.
+  If you have multiple @{text Isabelle} versions on your machine,
+  you can select one particular by setting the shell variable
+  \shell{ISABELLE_TOOL}
+  (usually \shell{ISABELLE_HOME/bin/isabelle})
+  to the tool wrapper of the desired @{text Isabelle}.
 *}
 
 end
