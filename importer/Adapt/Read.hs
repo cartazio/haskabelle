@@ -72,7 +72,7 @@ evaluateEntryKind :: Hsx.Exp -> Adapt.OpKind
 evaluateEntryKind (Hsx.Paren (Hsx.App (Hsx.Con (Hsx.UnQual (Hsx.Ident "Class"))) cls)) =
   Adapt.Class (evaluateEntryClass cls)
 evaluateEntryKind (Hsx.Con (Hsx.UnQual (Hsx.Ident "Type"))) = Adapt.Type
-evaluateEntryKind (Hsx.Con (Hsx.UnQual (Hsx.Ident "Function"))) = Adapt.Type
+evaluateEntryKind (Hsx.Con (Hsx.UnQual (Hsx.Ident "Function"))) = Adapt.Function
 evaluateEntryKind (Hsx.Paren (Hsx.App (Hsx.App (Hsx.Con (Hsx.UnQual (Hsx.Ident "InfixOp")))
   (Hsx.Con (Hsx.UnQual (Hsx.Ident assc)))) (Hsx.Lit (Hsx.Int pri)))) =
     Adapt.InfixOp assoc (fromInteger pri) where

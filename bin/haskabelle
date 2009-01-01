@@ -8,6 +8,7 @@
 
 PRG="$(basename "$0")"
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+DEFAULT_ADAPT="$HASKABELLE_HOME/default"
 if [ -z "$GHC" ]
 then
   GHC=ghc
@@ -18,9 +19,9 @@ fi
 HASKABELLE_BIN="$HASKABELLE_HOME/bin/haskabelle_bin"
 if [ -x "$HASKABELLE_BIN" ]
 then
-  "$HASKABELLE_BIN" "$PRG" "$@" || exit $?
+  "$HASKABELLE_BIN" "$PRG" "$DEFAULT_ADAPT" "$@" || exit $?
 else
-  ARGS="\"$PRG\""
+  ARGS="\"$PRG\" \"$DEFAULT_ADAPT\""
   for ARG in "$@"
   do
     ARGS="$ARGS, \"$1\""

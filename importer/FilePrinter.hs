@@ -12,7 +12,7 @@ import Text.PrettyPrint (render)
 
 import Importer.ConversionUnit
 import Importer.Convert
-import Importer.Adapt.Read (Adaption (..))
+import Importer.Adapt.Read (Adaption (..), readAdapt)
 import Importer.Adapt.Mapping (AdaptionTable)
 import Importer.Configuration
 import Importer.Printer (pprint)
@@ -41,12 +41,14 @@ importProject' adapt = do
   (adaptTable, convertedUnits) <- convertFiles adapt (filter isHaskellSourceFile inFiles)
   sequence_ (map (writeIsaUnit adaptTable (reservedKeywords adapt)) convertedUnits)
 
-importProject :: Config -> Adaption -> IO ()
-importProject config adapt = runConversion config adapt (importProject' adapt)
+importProject :: Config -> FilePath -> IO ()
+importProject config adaptDir = do
+  adapt <- readAdapt (combine adaptDir "Raw.hs")
+  runConversion config adapt (importProject' adapt)
 
-importFiles :: Adaption -> [FilePath] -> FilePath -> IO ()
-importFiles adapt files out = importProject
-  (defaultConfig files out defaultCustomisations) adapt
+importFiles :: FilePath -> [FilePath] -> FilePath -> IO ()
+importFiles adaptDir files out
+  = importProject (defaultConfig files out defaultCustomisations) adaptDir
 
 
 {-|

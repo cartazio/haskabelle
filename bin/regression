@@ -44,7 +44,7 @@ done
 
 if [ "$1" != "no_reimport" ]
 then
-  cp -vu misc/Prelude.thy ex/dst_thy/
+  cp -vu default/Prelude.thy ex/dst_thy/
   cd ex/dst_thy/
   for THY in *.thy
   do
