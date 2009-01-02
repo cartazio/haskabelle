@@ -274,8 +274,8 @@ text {*
 
   If you have multiple @{text Isabelle} versions on your machine,
   you can select one particular by setting the shell variable
-  \shell{ISABELLE_PROCESS}
-  (usually \shell{ISABELLE_HOME/bin/isabelle-process})
+  \shell{ISABELLE\_PROCESS}
+  (usually \shell{ISABELLE\_HOME/bin/isabelle-process})
   to the process wrapper of the desired @{text Isabelle}.
 *}
 
@@ -307,8 +307,8 @@ text {*
   Each generated theory then is re-imported into @{text Isabelle}.
   If you have multiple @{text Isabelle} versions on your machine,
   you can select one particular by setting the shell variable
-  \shell{ISABELLE_TOOL}
-  (usually \shell{ISABELLE_HOME/bin/isabelle})
+  \shell{ISABELLE\_TOOL}
+  (usually \shell{ISABELLE\_HOME/bin/isabelle})
   to the tool wrapper of the desired @{text Isabelle}.
 *}
 
