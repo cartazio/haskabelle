@@ -42,7 +42,7 @@ fi
 
 admin/regression > "$LOG" 2>&1
 
-if [ -n $? ]
+if [ $? -ne 0 ]
 then
   MAILTEXT=/tmp/haskabelle-$(date +'%Y-%m-%d_%H:%M:%S').mail
 
