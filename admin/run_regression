@@ -41,9 +41,12 @@ fi
 ## run regression
 
 admin/regression > "$LOG" 2>&1
+EXIT=$?
+echo "Exited with $EXIT." >> "$LOG"
 
-if [ $? -ne 0 ]
+if [ $EXIT -ne 0 ]
 then
+
   MAILTEXT=/tmp/haskabelle-$(date +'%Y-%m-%d_%H:%M:%S').mail
 
   cat > "$MAILTEXT" <<EOF
@@ -60,6 +63,4 @@ EOF
   done
   rm "$MAILTEXT"
   
-else
-  echo Done. >> "$LOG"
 fi
