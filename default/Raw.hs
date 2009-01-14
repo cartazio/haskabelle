@@ -4,7 +4,7 @@
 module Raw where
 
 raw_adaption_table = [(Haskell "Prelude.Show" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.show", "a -> String")] })), Isabelle "Prelude.print" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.show", "a -> String")] }))),
-  (Haskell "Prelude.Eq" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(==)", "a -> a -> bool"), ("Prelude.(/=)", "a -> a -> bool")] })), Isabelle "Prelude.eq" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(==)", "a -> a -> bool"), ("Prelude.(/=)", "a -> a -> bool")] }))),
+  (Haskell "Prelude.Eq" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(==)", "a -> a -> bool"), ("Prelude.(/=)", "a -> a -> bool")] })), Isabelle "Prelude.heq" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(==)", "a -> a -> bool"), ("Prelude.(/=)", "a -> a -> bool")] }))),
   (Haskell "Prelude.Num" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [] })), Isabelle "Prelude.num" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [] }))),
   (Haskell "Prelude.Char" Type, Isabelle "List.char" Type),
   (Haskell "Prelude.String" Type, Isabelle "List.string" Type),
@@ -1523,10 +1523,10 @@ used_thy_names = ["Pure", "HOL", "Code_Setup", "Orderings", "Set", "Fun", "Latti
   "Wellfounded", "FunDef", "Recdef", "Hilbert_Choice", "ATP_Linkup",
   "Equiv_Relations", "Int", "SetInterval", "IntDiv", "NatBin",
   "Arith_Tools", "Groebner_Basis", "Presburger", "Nat_Int_Bij",
-  "Relation_Power", "Refute", "SAT", "Plain", "Lubs", "Dense_Linear_Order",
-  "GCD", "Rational", "PReal", "RealDef", "RComplete", "RealPow",
-  "RealVector", "Real", "SEQ", "Lim", "FrechetDeriv", "Series", "Fact",
+  "Relation_Power", "Refute", "SAT", "Plain", "Lubs", "GCD", "Rational",
+  "Dense_Linear_Order", "PReal", "RealDef", "RComplete", "RealPow",
+  "RealVector", "Real", "SEQ", "Series", "Lim", "FrechetDeriv", "Fact",
   "Parity", "List", "Univ_Poly", "Deriv", "NthRoot", "Transcendental",
-  "Log", "Complex", "Ln", "MacLaurin", "Taylor", "Integration",
+  "Complex", "Log", "Ln", "MacLaurin", "Taylor", "Integration",
   "Fundamental_Theorem_Algebra", "Map", "Code_Message", "Typerep",
   "Code_Eval", "Main", "Complex_Main", "Prelude"]

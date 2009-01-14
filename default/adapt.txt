@@ -6,7 +6,7 @@ Default adaption table.
 classes
   "Prelude.Show"        "Prelude.print"
     parameter "Prelude.show"    "a -> String"
-  "Prelude.Eq"          "Prelude.eq"
+  "Prelude.Eq"          "Prelude.heq"
     parameter "Prelude.(==)"    "a -> a -> bool"
     parameter "Prelude.(/=)"    "a -> a -> bool"
   "Prelude.Num"         "Prelude.num"
