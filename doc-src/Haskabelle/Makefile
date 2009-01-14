@@ -3,10 +3,15 @@
 
 default: dvi
 
+.PHONY: dvi pdf doc default
+
 
 ## dependencies
 
 include ../Makefile.in
+
+
+## output formats
 
 NAME = haskabelle
 
@@ -34,7 +39,9 @@ $(NAME).pdf: $(FILES) isabelle_isar.pdf
 	$(PDFLATEX) $(NAME)
 	$(PDFLATEX) $(NAME)
 
-.PHONY: doc
+
+## entry point
+
 doc: ../../doc/$(NAME).pdf
 ../../doc/$(NAME).pdf: $(NAME).pdf
 	( cd ../../doc && ln -s ../doc-src/Haskabelle/$(NAME).pdf $(NAME).pdf )

@@ -7,6 +7,8 @@ test: Thy
 
 all: images test
 
+.PHONY: Thy clean images test default
+
 
 ## global settings
 
@@ -34,9 +36,8 @@ $(THY): Thy/ROOT.ML Thy/Setup.thy Thy/Haskabelle.thy
 
 ## mimic isabelle document sources
 
-../Makefile.in: $(ISABELLE_DOC_SRC)
+../Makefile.in: $(ISABELLE_DOC_SRC)/Makefile.in
 	( cd .. && for NAME in $(ISABELLE_DOC_SRC)/*; do ln -s $$NAME $$(basename $$NAME); done )
-
 
 
 ## clean
