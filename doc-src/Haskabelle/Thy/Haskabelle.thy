@@ -14,22 +14,92 @@ text {*
   implemented in @{text Haskell} itself.
 *}
 
-subsection {* The concept behind *}
+subsection {* Motivation *}
+
+text {* 
+
+  @{text "Isabelle/HOL"} can be regarded as a combination of a functional
+  programming language and logic. Just like functional programming languages, it
+  has its foundation in the typed lambda calculus, but is additionally crafted
+  to allow the user to write arbitrary mathematical theorems in a structured and
+  convenient way. Its primary realm of application is machine-aided proof and
+  verification of such theorems.
+
+  @{text Haskell} is a functional programming language that has succeeded in
+  getting more and more momentum, not only in academia but increasingly also in
+  industry. It is used for all kinds of programming tasks despite (or,
+  perhaps, rather because) of its pureness, that is its complete lack of
+  side-effects.
+
+  This pureness makes @{text Haskell} relate to @{text "Isabelle/HOL"} more
+  closely than other functional languages. In fact, @{text "Isabelle/HOL"} can
+  be considered a subset\footnote{ It can likewise be considered a superset of
+  Haskell depending on your perspective, and your motivation.} of @{text
+  Haskell}---a subset which is semantically more restrictive to enable automatic
+  reasoning.
+
+  Writing a converter from the convertable subset of @{text Haskell} to @{text
+  "Isabelle/HOL"} seems thus like the obvious next step to faciliate
+  machine-aided verification of @{text Haskell} programs. @{text Haskabelle} is
+  exactly such a converter.
+
+*}
+
+subsection {* Implementation *}
 
 text {*
-  \begin{itemize}
 
-    \item ``dumb tool'', works on Abstract Syntax Trees only.
+  There is one major design decision which users have to keep in
+  mind. Haskabelle works on the Abstract Syntax Tree (AST) representation of
+  Haskell programs exclusively. As a result, it is very restricted on what it
+  knows about the validity of the program; for example, it does not perform type
+  inference.
 
-    \item e.g.~no type inference
+  In fact, input source files are not checked at all beyond syntactic validity
+  that is perform by the parser. Users are supposed to run their Haskell
+  implementation of choice on the files first to catch programming mistakes.
+  (In practise, this is not an impediment as it matches the putative workflow:
+  Haskabelle is supposed to help the verification of already-written, or
+  just-written programs.)
 
-    \item we delegate the hard work to Isabelle
-
-    \item Conclusion: Only because the conversion succeeded, does not
-      mean that Isabelle won't choke\ldots
-
-  \end{itemize}
+  Neither is the validity of the output files checked; that work is delegated to
+  Isabelle. This means that only because the conversion seemingly succeeded,
+  does not necessarily mean that Isabelle won't complain. A common example is
+  that a Haskell function could be syntactically transformed to a corresponding
+  Isabelle/HOL function, but Isabelle will refuse as it's not able to determine
+  termination by itself.
+  
 *}
+
+text {*
+
+  Haskabelle performs its work in the following 5 phases.
+
+*}
+
+subsubsection {* Parsing *}
+
+text {* Parsing. *}
+
+
+subsubsection {* Preprocessing *}
+
+text {* Preprocessing. *}
+
+
+subsubsection {* Converting *}
+
+text {* Converting. *}
+
+
+subsubsection {* Adapting *}
+
+text {* Adapting. *}
+
+
+subsubsection {* Printing *}
+
+text {* Printing. *}
 
 
 section {* Setup and usage *}
