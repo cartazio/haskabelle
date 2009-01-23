@@ -56,9 +56,9 @@ text {*
   inference.
 
   In fact, input source files are not checked at all beyond syntactic validity
-  that is perform by the parser. Users are supposed to run their Haskell
-  implementation of choice on the files first to catch programming mistakes.
-  (In practise, this is not an impediment as it matches the putative workflow:
+  that is performed by the parser. Users are supposed to first run their Haskell
+  implementation of choice on the files to catch programming mistakes.  (In
+  practise, this is not an impediment as it matches the putative workflow:
   Haskabelle is supposed to help the verification of already-written, or
   just-written programs.)
 
@@ -66,8 +66,8 @@ text {*
   Isabelle. This means that only because the conversion seemingly succeeded,
   does not necessarily mean that Isabelle won't complain. A common example is
   that a Haskell function could be syntactically transformed to a corresponding
-  Isabelle/HOL function, but Isabelle will refuse as it's not able to determine
-  termination by itself.
+  Isabelle/HOL function, but Isabelle will refuse to accept it as it's not able
+  to determine termination by itself.
   
 *}
 
@@ -77,19 +77,79 @@ text {*
 
 *}
 
+
 subsubsection {* Parsing *}
 
-text {* Parsing. *}
+text {* 
+
+  Each Haskell input file is parsed into an Haskell Abstract Syntax Tree
+  representation. Additionally, module resolution is performed, i.e. the source
+  files of the modules that the input files depend on are also read and
+  parsed. So the actual output of this phase is a forest of Haskell ASTs.
+
+*}
 
 
 subsubsection {* Preprocessing *}
 
-text {* Preprocessing. *}
+text {* 
+
+  Each Haskell AST is normalized to a semantically equivalent but canonicalized
+  form to simplify the subsequent converting phase. At the moment, the following
+  transformations are performed:
+
+  \begin{itemize}
+
+  \item{
+    identifiers that would clash with reserved keywords or constants in
+    Isabelle/HOL are renamed.
+  }
+
+  \item{
+    pattern guards are transformed into nested \code{if} expressions.
+  }
+
+  \item{
+    \code{where} clauses are transformed into \code{let} expressions.
+  }
+
+  \item{
+    local function definitions are made global by renaming then uniquely.
+  }
+
+  \end{itemize}
+
+*}
 
 
 subsubsection {* Converting *}
 
-text {* Converting. *}
+text {* 
+
+  After preprocessing, each Haskell AST consists entirely of toplevel
+  definitions. Before the actual conversion, a dependency graph is generated for
+  these toplevel definitions for two purposes: first to ensure that definitions
+  appear textually before their uses; second to group mutually-recursive
+  function together. Both points are necessary to comply with requirements
+  imposed by Isabelle/HOL.
+
+*}
+
+text {* 
+
+  Furthermore, a global environment is built in this phase that contains
+  information about all identifiers, e.g. what they represent, in which module
+  they belong to, whether they're exported, etc.
+
+*}
+
+
+text {* 
+
+  What Haskell language features are translated to which Isabelle/HOL
+  constructs, is explained in section \ref{sec:Haskabelle-what-is-supported}.
+ 
+*}
 
 
 subsubsection {* Adapting *}
@@ -239,7 +299,7 @@ text %quote {*
 *}
 
 
-section {* A bluffer's glance at Haskabelle *}
+section {* A bluffer's glance at Haskabelle \label{sec:Haskabelle-what-is-supported}*}
 
 subsection {* Facilities and limits *}
 
@@ -383,3 +443,4 @@ text {*
 *}
 
 end
+
