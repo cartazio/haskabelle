@@ -151,16 +151,64 @@ text {*
  
 *}
 
+text {*
+
+  The output of this phase is a forest of Isabelle/HOL ASTs.
+
+*}
+
 
 subsubsection {* Adapting *}
 
-text {* Adapting. *}
+text {* 
+
+  While the previous phase converted the Haskell ASTs into their syntactically
+  equivalent Isabelle/HOL ASTs, it has not attempted to map functions,
+  operators, or algebraic data types, that preexist in Haskell, to their pedants
+  in Isabelle/HOL. Such a mapping (or adaption) is performed in this phase.
+
+ *}
+
+text {*
+    
+  The adaption phase was primarely designed to be user-extensible; there are
+  the following two parts involved:
+
+  \begin{itemize}
+  \item{ 
+    A configuration file\footnote{\code{haskabelle/default/adapt.txt} in
+    Haskabelle's source directory.} in a simple domain-specific language which
+    specifies a table between identifiers of classes, types, functions, and
+    operators in Haskell to their equivalent identifiers in Isabelle/HOL.
+  }
+
+  \item{
+    A file\footnote{\code{haskabelle/default/Prelude.thy}} containing a
+    Isabelle/HOL base environment where Haskabelle's output is supposed to
+    be run implicitly within.
+  }
+  \end{itemize}
+
+*}
+
+text {*
+
+  Note that it is allowed to add mappings to the table file which reference
+  definitions from the environment file. This way it is possible to adapt even
+  more complex features of the Haskell programming language.
+
+*}
 
 
 subsubsection {* Printing *}
 
-text {* Printing. *}
+text {*
 
+  The Isabelle/HOL ASTs are pretty-printed into an human-readable format so
+  users can subsequently work with the resulting definitions, supply additional
+  theorems, and verify their work.
+
+*}
 
 section {* Setup and usage *}
 
