@@ -183,7 +183,7 @@ text {*
   The given version numbers just indicate which constellation has
   been tested -- others might work, too.
 
-  First, the @{text Haskell} suite itself:
+  \noindent First, the @{text Haskell} suite itself:
 
   \begin{description}
 
@@ -192,7 +192,7 @@ text {*
 
   \end{description}
   
-  The following libraries are required:
+  \noindent The following libraries are required:
 
   \begin{description}
 
