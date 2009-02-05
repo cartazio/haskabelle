@@ -37,6 +37,13 @@ mainInterface (executableName : defaultAdaptDir : srcs_dst @ (_ : _ : _)) =
   importFiles defaultAdaptDir (init srcs_dst) (last srcs_dst)
 mainInterface (executableName : _) =
   usage executableName 
+mainInterface [] = do
+  putStrLn "Do not invoke linked Haskabelle binary directly"
+  putStrLn "  -- invoke it as described in the Haskabelle manual."
+  putStrLn ""
+  putStrLn "Have a nice day!"
+  putStrLn ""
+  exitWith (ExitFailure 2)
 
 main :: IO ()
 main = getArgs >>= mainInterface

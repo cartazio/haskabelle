@@ -21,7 +21,7 @@ if [ -x "$HASKABELLE_BIN" ]
 then
   "$HASKABELLE_BIN" "$PRG" "$DEFAULT_ADAPT" "$@" || exit $?
 else
-  ARGS="\"$PRG\" \"$DEFAULT_ADAPT\""
+  ARGS="\"$PRG\", \"$DEFAULT_ADAPT\""
   for ARG in "$@"
   do
     ARGS="$ARGS, \"$1\""
