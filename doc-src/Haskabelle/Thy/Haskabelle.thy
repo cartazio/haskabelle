@@ -349,69 +349,139 @@ text %quote {*
 
 section {* A bluffer's glance at Haskabelle \label{sec:Haskabelle-what-is-supported}*}
 
+text {*
+  
+  In this section we want to provide a few examples to give the reader
+  an impression of Haskabelle's capabilities.
+
+*}
+
+text {*
+
+  The following Haskell code represents a very simple interpreter:
+
+*}
+
 text %quote {* 
 
   \isatypewriter
   
-  foo x y = x * y \\
-  ~\\
-          | foo
-    
+  module Example where
+  \\
+  \\
+  evalExp :: Exp -> Int
 
+  evalExp (Plus e1 e2) ~= evalExp e1 + evalExp e2 \\
+  evalExp (Times e1 e2) = evalExp e1 * evalExp e2 \\
+  evalExp (Cond b e1 e2) \\
+  \hspace*{0pt}  ~~| evalBexp b = evalExp e1 \\ 
+  \hspace*{0pt}  ~~| otherwise ~= evalExp e2 \\
+  evalExp (Val i) = i
+  \\
+  \\
+  evalBexp :: Bexp -> Bool
+
+  evalBexp (Equal e1 e2) ~~= evalExp e1 == evalExp e2\\
+  evalBexp (Greater e1 e2) = evalExp e1 > evalExp e2
+  \\
+  \\
+  data Exp ~= Plus Exp Exp\\
+  \hspace*{0pt}  ~~~~~~~~~| Times Exp Exp\\
+  \hspace*{0pt}  ~~~~~~~~~| Cond Bexp Exp Exp\\
+  \hspace*{0pt}  ~~~~~~~~~| Val Int\\
+  
+  data Bexp = Equal Exp Exp\\
+  \hspace*{0pt}  ~~~~~~~~~| Greater Exp Exp
+ 
 *}
-
-
-subsection {* Facilities and limits *}
 
 text {*
 
-  What we can:
+  Haskabelle will transform the above into the following:
+
+*}
+
+text %quote {*
+
+  \isatypewriter
+
+  theory Example\\
+  imports Prelude\\
+  begin\\
+  \\
+  datatype Exp = Plus Exp Exp\\
+  \hspace*{0pt}  ~~~~~~~~~| Times Exp Exp\\
+  \hspace*{0pt}  ~~~~~~~~~| Cond Bexp Exp Exp\\
+  \hspace*{0pt}  ~~~~~~~~~| Val int\\
+  and      Bexp = Equal Exp Exp\\
+  \hspace*{0pt}  ~~~~~~~~~| Greater Exp Exp\\
+  \\
+  \\
+  \\
+  \\
+  \\
+  fun evalExp ~:: "Exp => int" and\\
+  \hspace*{0pt}  ~~~evalBexp :: "Bexp => bool"\\
+  where\\
+  \hspace*{0pt}  ~"evalExp (Plus e1 e2) = (evalExp e1 + evalExp e2)"\\
+  | "evalExp (Times e1 e2) = (evalExp e1 * evalExp e2)"\\
+  | "evalExp (Cond b e1 e2) = (if evalBexp b then evalExp e1\\
+  \hspace*{0pt}  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~else evalExp e2)"\\
+  | "evalExp (Val i) = i"\\
+  | "evalBexp (Equal e1 e2) = heq (evalExp e1) (evalExp e2)"\\
+  | "evalBexp (Greater e1 e2) = (evalExp e1 > evalExp e2)"\\
+
+*}
+
+text {*
+
+  We can note a couple of things at this point:  
 
   \begin{itemize}
-\item Hs.ModuleName Resolution
-\end{itemize}
-~
 
-\begin{itemize}
-\item Declarations: %
-\begin{itemize}
-\item functions (\texttt{\small fun})
-\item constants (\texttt{\small definition})
-\item algebraic data types (\texttt{\small datatype})
-\item classes \& instances (\texttt{\small class}, \texttt{\small instantiation})
-\end{itemize}
-\end{itemize}
-~
+  \item{
+    The data type definitions have been moved before their uses.
+  }
 
-\begin{itemize}
-\item Linearization of declarations
-\end{itemize}
+  \item{
+    The two data type definitions have been chained together by an
+    explicit {\isatypewriter and} keyword. Likewise the function definitions have
+    been grouped together. This stems from the mutual recursion
+    inherent in the definitions.
+  }
 
-\begin{itemize}
-\item Expressions: %
-\begin{itemize}
-\item literals (integers, strings, characters)
-\item applications, incl. infix applications and sections
-\item lambda abstractions
-\item if, let, case
-\item pattern guards
-\item list comprehensions
-\end{itemize}
-\end{itemize}
+  \item{ 
+    The pattern guards in {\isatypewriter evalExp} have been
+    transformed to an {\isatypewriter if} expression.
+  }
 
-  What we can't:
+  \item{
+    Preexisting Haskell functions and operators have been mapped to
+    Isabelle/HOL counterparts.
+  }
 
-  \ldots
+  \item{
+    Haskell modules inherit from an implicit Module {\isatypewriter
+    Prelude}; Haskabelle comes with a {\isatypewriter Prelude.thy}
+    which provides necessary context to cope with some Haskell
+    features. We can see that an importion of this the {\isatypewriter
+    Prelude} module is explicitly added by Haskabelle.
+  } 
 
-5 Phases:
+  \item{
+    The Haskell comparasion operator {\isatypewriter ==} has been
+    transformed to {isatypewriter heq} which is not defined by with
+    Isabelle/HOL itself but within the {\isatypewriter Prelude.thy}
+    file. It names both an operator and a type class which has been
+    constructed to match {\isatypewriter ==}, and Haskell's type class
+    {\isatypewriter Eq}.
+  }
+  \end{itemize}
+*}
 
-\begin{itemize}
-\item Parsing
-\item Preprocessing
-\item Converting
-\item Adapting
-\item Printing
-\end{itemize}
+text {*
+
+  FIXME: Add example with type classes.
 
 *}
 
