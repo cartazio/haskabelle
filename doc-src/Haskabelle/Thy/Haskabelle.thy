@@ -349,6 +349,18 @@ text %quote {*
 
 section {* A bluffer's glance at Haskabelle \label{sec:Haskabelle-what-is-supported}*}
 
+text %quote {* 
+
+  \isatypewriter
+  
+  foo x y = x * y \\
+  ~\\
+          | foo
+    
+
+*}
+
+
 subsection {* Facilities and limits *}
 
 text {*

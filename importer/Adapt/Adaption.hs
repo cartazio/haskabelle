@@ -8,7 +8,6 @@ import List (partition)
 
 import Control.Monad.State
 import qualified Data.Map as Map
-import Data.Generics.Biplate (transformBi)
 
 import qualified Importer.LexEnv as Env
 import Importer.ConversionUnit
@@ -319,8 +318,35 @@ instance Adapt Isa.Term where
     adapt (Isa.Var n)           = adaptName n >>= (return . Isa.Var)
     adapt (Isa.Parenthesized t) = adapt t     >>= (return . Isa.Parenthesized)
 
-    adapt (Isa.App t1 t2)       = do t1' <- adapt t1 ; t2' <- adapt t2
-                                     return (Isa.App t1' t2')
+    adapt (Isa.App t1 t2)       = do Just mID <- query currentModuleID
+                                     oldEnv   <- query oldGlobalEnv
+                                     newEnv   <- query adaptedGlobalEnv
+                                     t1'      <- adapt t1 
+                                     t2'      <- adapt t2
+                                     -- t1 may have been an InfixOp and was adapted to
+                                     -- a function. In this case, we have to make sure that
+                                     -- all the arguments passed to this function are 
+                                     -- parenthesized.
+                                     let n1   = find_applied_op t1
+                                     let n1'  = find_applied_op t1'
+                                     case (n1, n1') of 
+                                       (Just n1, Just n1')
+                                           -> if isInfixOp mID n1 oldEnv && not (isInfixOp mID n1' newEnv)
+                                              then return $ Isa.App t1' (Isa.Parenthesized t2')
+                                              else return $ Isa.App t1' t2'
+                                       _   -> return (Isa.App t1' t2')
+        where isInfixOp mID n env
+                  = case Env.lookupConstant mID (Env.fromIsa n) env of
+                      Nothing -> False
+                      Just c  -> Env.isInfixOp c
+              find_applied_op :: Isa.Term -> Maybe Isa.Name
+              find_applied_op t 
+                  = case t of
+                      Isa.Var n            -> Just n
+                      Isa.App t1 t2        -> find_applied_op t1
+                      Isa.Parenthesized t' -> find_applied_op t'
+                      _                    -> Nothing -- the remaining cases are 
+                                                      -- too complicated, so we give up.
 
     adapt (Isa.If c t e)        = do c' <- adapt c ; t' <- adapt t ; e' <- adapt e
                                      return (Isa.If c' t' e')

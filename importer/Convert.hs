@@ -989,8 +989,8 @@ fixOperatorFixities :: Hsx.Exp -> ContextM Hsx.Exp
 -- application that we might have to consider during fixup.
 --  
 fixOperatorFixities app@(Hsx.InfixApp (Hsx.InfixApp e1 op1 e2) op2 e3)
-    -- We assume that `(t1, op1, t2)' is correct already
-    -- and from above, we also know that `t3' cannot possibly
+    -- We assume that `(e1, op1, e2)' is correct already
+    -- and from above, we also know that `e3' cannot possibly
     -- interfere, so we just have to find the proper place of `op2'.
     = do (assoc1', prio1)  <- lookupInfixOp op1
          (assoc2', prio2)  <- lookupInfixOp op2
