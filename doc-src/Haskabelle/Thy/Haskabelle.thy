@@ -363,7 +363,6 @@ text {*
 *}
 
 text %quote {* 
-
   \isatypewriter
   
   module Example where
@@ -402,7 +401,6 @@ text {*
 *}
 
 text %quote {*
-
   \isatypewriter
 
   theory Example\\
@@ -430,7 +428,8 @@ text %quote {*
   | "evalExp (Val i) = i"\\
   | "evalBexp (Equal e1 e2) = heq (evalExp e1) (evalExp e2)"\\
   | "evalBexp (Greater e1 e2) = (evalExp e1 > evalExp e2)"\\
-
+  \\
+  end
 *}
 
 text {*
@@ -448,6 +447,10 @@ text {*
     explicit {\isatypewriter and} keyword. Likewise the function definitions have
     been grouped together. This stems from the mutual recursion
     inherent in the definitions.
+  }
+
+  \item{
+    We use Isabelle's function package. (FIXME: Add reference.)
   }
 
   \item{ 
@@ -481,8 +484,107 @@ text {*
 
 text {*
 
-  FIXME: Add example with type classes.
+  The next example illustrates a simple use of type classes.
+ 
+*}
 
+text %quote {*
+  \isatypewriter
+
+  module Classes where
+  
+  class Monoid a where\\
+  \hspace*{0pt}  ~~nothing :: a\\
+  \hspace*{0pt}  ~~plus :: a -> a -> a
+  \\
+  \\  
+  instance Monoid Integer where\\
+  \hspace*{0pt}  ~~nothing = 0\\
+  \hspace*{0pt}  ~~plus    = (+)
+  \\
+  \\
+  -- prevent name clash with Prelude.sum\\
+  summ :: (Monoid a) => [a] -> a\\
+  summ [] = nothing\\
+  summ (x:xs) = plus x (summ xs)
+  \\
+  \\
+  class (Monoid a) => Group a where\\
+  \hspace*{0pt}  ~~inverse :: a -> a
+  \\
+  \\
+  instance Group Integer where\\
+  \hspace*{0pt}  ~~inverse = negate
+  \\
+  \\
+  sub :: (Group a) => a -> a -> a\\
+  sub a b = plus a (inverse b)  
+
+*}
+
+text {*
+
+  Haskabelle will transform this into the following:
+
+*}
+
+text %quote {*
+  \isatypewriter
+
+  theory Classes\\
+  imports Nats Prelude\\
+  begin
+  \\ 
+  class Monoid = type +\\
+  \hspace*{0pt}  ~~fixes nothing :: 'a\\
+  \hspace*{0pt}  ~~fixes plus :: "'a => 'a => 'a"
+  \\
+  \\
+  instantiation int :: Monoid\\
+  begin\\
+  \hspace*{0pt}  ~~definition nothing\_int :: "int"\\
+  \hspace*{0pt}  ~~where\\
+  \hspace*{0pt}  ~~~~"nothing\_int = 0"     \\
+  \hspace*{0pt}  ~~definition plus\_int :: "int => int => int"\\
+  \hspace*{0pt}  ~~where\\
+  \hspace*{0pt}  ~~~~"plus\_int = (op +)"   \\
+  instance ..\\
+  end
+  \\
+  \\
+  fun summ :: "('a :: Monoid) list => ('a :: Monoid)"\\
+  where\\
+  \hspace*{0pt}  ~~"summ Nil = nothing"\\
+  |~~"summ (x \# xs) = plus x (summ xs)"
+  \\
+  \\
+  class Group = Monoid +\\
+  \hspace*{0pt}  ~~fixes inverse :: "'a => 'a"
+  \\
+  \\
+  instantiation int :: Group\\
+  begin     \\
+  \hspace*{0pt}  ~~definition inverse\_int :: "int => int"\\
+  \hspace*{0pt}  ~~where\\
+  \hspace*{0pt}  ~~~~"inverse\_int = uminus"   \\
+  instance ..\\
+  end
+  \\
+  \\
+  fun sub :: "('a :: Group) => ('a :: Group) => ('a :: Group)"\\
+  where\\
+  \hspace*{0pt}  ~~"sub a b = plus a (inverse b)"\\
+  \\
+  end
+*}
+
+text {*
+
+  FIXME: Add reference to class paper
+
+  FIXME: Describe insertion of class annotations.
+
+  FIXME: Explain constraints.
 *}
 
 section {* Configuring and adapting *}
