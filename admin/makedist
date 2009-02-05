@@ -63,7 +63,7 @@ cd "$ARCHIVE"
 
 ## remove junk
 
-rm AGENDA
+rm AGENDA README
 rm .hgignore
 rm .hg_archival.txt
 rm doc/*
