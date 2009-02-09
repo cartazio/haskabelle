@@ -378,7 +378,7 @@ text %quote {*
 
 text {*
 
-  @{text Haskabelle} will transform the above into the following:
+  \noindent @{text Haskabelle} will transform the above into the following:
 
 *}
 
@@ -416,7 +416,7 @@ text %quote {*
 
 text {*
 
-  We can note a couple of things at this point:
+  \noindent We can note a couple of things at this point:
 
   \begin{itemize}
 
@@ -457,7 +457,7 @@ text {*
 
 text {*
 
-  The next example illustrates a simple use of type classes.
+  \noindent The next example illustrates a simple use of type classes.
  
 *}
 
