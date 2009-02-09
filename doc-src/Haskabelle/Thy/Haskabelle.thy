@@ -34,10 +34,10 @@ text {*
   more closely than other functional languages. In fact, @{text
   "Isabelle/HOL"} can be considered a subset of @{text Haskell}.
 
-  Writing a converter from the convertable subset of @{text Haskell}
+  Writing a converter from the convertible subset of @{text Haskell}
   to @{text "Isabelle/HOL"} seems thus like the obvious next step to
-  faciliate machine-aided verification of @{text Haskell}
-  programs. @{text Haskabelle} is exactly such a converter.
+  facilitate machine-aided verification of @{text Haskell}
+  programs.  @{text Haskabelle} is exactly such a converter.
 
 *}
 
@@ -93,8 +93,8 @@ subsubsection {* Preprocessing *}
 
 text {* 
 
-  Each @{text Haskell} AST is normalized to a semantically equivalent
-  but canonicalized form to simplify the subsequent converting
+  Each @{text Haskell} AST is normalised to a semantically equivalent
+  but canonicalised form to simplify the subsequent converting
   phase. At the moment, the following transformations are performed:
 
   \begin{itemize}
@@ -317,7 +317,7 @@ subsubsection {* Compiling *}
 
 text {*
 
-  @{text Haskabelle} can be run directly from source; for efficent use
+  @{text Haskabelle} can be run directly from source; for efficient use
   it is recommended to build a binary from the sources, which is
   accomplished by invoking
 
@@ -440,7 +440,7 @@ text {*
   \item{ @{text Haskell} modules inherit from an implicit module
     {\isatypewriter Prelude}; @{text Haskabelle} comes with a
     {\isatypewriter Prelude.thy} which provides necessary context to
-    cope with some @{text Haskell} features. We can see that an importion of
+    cope with some @{text Haskell} features. We can see that an import of
     this the {\isatypewriter Prelude} module is explicitly added by
     @{text Haskabelle}.  }
 
@@ -681,9 +681,9 @@ text %quote {*
 
 text {*
 
-  Each generated theory then is re-imported into @{text Isabelle}.  If
-  you have multiple @{text Isabelle} versions on your machine, you can
-  select one particular by setting the shell variable
+  \noindent Each generated theory then is re-imported into @{text
+  Isabelle}.  If you have multiple @{text Isabelle} versions on your
+  machine, you can select one particular by setting the shell variable
   \shell{ISABELLE\_TOOL} (usually \shell{ISABELLE\_HOME/bin/isabelle})
   to the tool wrapper of the desired @{text Isabelle}.
 
