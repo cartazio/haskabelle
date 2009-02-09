@@ -63,10 +63,10 @@ cd "$ARCHIVE"
 
 ## remove junk
 
-rm AGENDA README
+rm README
 rm .hgignore
 rm .hg_archival.txt
-rm doc/*
+rm -rf doc/*
 rm $(find ex/src_hs -name "*.disabled")
 
 ## brand version
