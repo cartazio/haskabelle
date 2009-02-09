@@ -594,17 +594,17 @@ subsection {* Setting up your own adaption *}
 text {*
 
   @{text Haskabelle} provides some default adaptions already in
-  directory \shell{bin/default}.  You can setup your own adaption
+  directory \shell{default}.  You can setup your own adaption
   according to the following steps:
 
 *}
 
-subsubsection {* Copy \shell{bin/default} *}
+subsubsection {* Copy \shell{default} *}
 
 text {*
 
   Typically you will want to use the default adaption as a starting
-  point, so copy the \shell{bin/default} directory to a directory of
+  point, so copy the \shell{default} directory to a directory of
   your choice (which we will refer to as \shell{<ADAPT>}).
 
 *}
