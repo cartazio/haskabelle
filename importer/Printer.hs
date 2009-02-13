@@ -239,7 +239,7 @@ instance Printer Isa.Cmd where
         = do env <- queryPP globalEnv
              let imps' = map (pprint' adapt reserved) (imps ++ [Isa.Theory Env.prelude])
              withCurrentTheory thy $
-               text "theory" <+> pprint' adapt reserved thy                     $+$
+               text "theory" <+> pprint' adapt reserved thy $+$
                text "imports " <> fsep  imps'    $+$
                text "begin"                                      $+$
                (vcat $ map (pprint' adapt reserved) cmds)                         $+$
@@ -285,7 +285,7 @@ instance Printer Isa.Cmd where
           text "class" <+> pprint' adapt reserved classN 
                        <+> equals 
                        <+> hsep (punctuate plus (map (pprint' adapt reserved) superclassNs))
-                       <+> (if null typesigs then empty else plus) $$
+                       <+> (if null superclassNs || null typesigs then empty else plus) $$
           space <> space <> vcat (zipWith (<+>) (repeat (text "fixes"))
                                                 (map ppSig typesigs))
         where ppSig (Isa.TypeSig n t)
@@ -312,7 +312,7 @@ instance Printer Isa.Cmd where
                 pp Isa.AssocLeft  = text "l"
                 pp Isa.AssocRight = text "r"
     
-    pprint' adapt reserved (Isa.TypesCmd aliases) = text "type" <+> vcat (map pp aliases)
+    pprint' adapt reserved (Isa.TypesCmd aliases) = text "types" <+> vcat (map pp aliases)
         where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
 
 printFunDef adapt reserved cmd fnames tysigs equations
@@ -336,7 +336,9 @@ printFunDef adapt reserved cmd fnames tysigs equations
                               parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
 
 instance Printer Isa.Theory where
-    pprint' adapt reserved (Isa.Theory name) = text name
+    pprint' adapt reserved (Isa.Theory name) =
+      text (map (\c -> if c == '.' then '_' else c) name)
+      -- FIXME need uniform rename of theory names
 
 instance Printer Isa.TypeSpec where
     pprint' adapt reserved (Isa.TypeSpec [] tycon)

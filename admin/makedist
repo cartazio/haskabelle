@@ -29,7 +29,7 @@ fi
 
 if [ -z $REPOSITORY ]
 then
-  REPOSITORY="$("$HG" showconfig paths.default)"
+  REPOSITORY="file://$("$HG" root)"
 fi
 
 if [ "$1" == "--regression" ]

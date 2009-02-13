@@ -553,11 +553,9 @@ instance Convert Hsx.Decl Isa.Cmd where
         = check_class_decl decl
             $ do let superclassNs   = extractSuperclassNs ctx
                  superclassNs' <- mapM convert superclassNs
-                 let superclassNs'' = if null superclassNs' then [Isa.Name "type"]
-                                                            else superclassNs'
                  classN'       <- convert classN
                  typesigs'     <- concatMapM convertToTypeSig class_decls
-                 return (Isa.ClassCmd classN' superclassNs'' typesigs')
+                 return (Isa.ClassCmd classN' superclassNs' typesigs')
         where
           check_class_decl (Hsx.ClassDecl loc ctx classN varNs fundeps decls) cont
               | length varNs /= 1          = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)

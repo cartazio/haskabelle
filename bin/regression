@@ -46,12 +46,18 @@ if [ "$1" != "no_reimport" ]
 then
   cp -vu default/Prelude.thy ex/dst_thy/
   cd ex/dst_thy/
+  DST="../../ex/dst_hs/"
+  mkdir -p "$DST"
   for THY in *.thy
   do
     THY_NAME="$(basename $THY .thy)"
-    DST="../../ex/dst_hs/"
     echo "re-importing $THY_NAME..."
     "$HASKABELLE_HOME/bin/isabelle" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail "Could not re-import $THY"
+    HS_FILE="$DST$THY_NAME.hs"
+    if [ ! -e "$HS_FILE" ]
+    then
+      fail "Something went wrong generating $HS_FILE"
+    fi
   done
 fi
 
