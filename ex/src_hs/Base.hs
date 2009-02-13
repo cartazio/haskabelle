@@ -31,9 +31,9 @@ sups f = foldr (suplist_ins f) []
 unordered_pairs [] = []
 unordered_pairs (x:xs) = map ((,) x) (x:xs) ++ unordered_pairs xs
 
-pos_neg_filter p xs = pnf p xs ([], [])
+{- pos_neg_filter p xs = pnf p xs ([], [])
     where pnf p [] (pos, neg) = (reverse pos, reverse neg)
           pnf p (x:xs) (pos, neg)
               | p x       = pnf p xs (x:pos, neg)
-              | otherwise = pnf p xs (pos, x:neg)
+              | otherwise = pnf p xs (pos, x:neg) -}
 
