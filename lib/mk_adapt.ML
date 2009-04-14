@@ -1,5 +1,4 @@
-(*  ID:         $Id$
-    Author:     Florian Haftmann, TU Muenchen
+(* Author:     Florian Haftmann, TU Muenchen
 
 Decorate importer adaption table with current Isabelle syntax.
 *)
@@ -18,7 +17,7 @@ fun used_constants thy = []
   |> Symtab.fold (fn (c, (_, NONE)) => cons c | _ => I)
        ((snd o #constants o Consts.dest o #consts o Sign.rep_sg) thy)
   |> map (Sign.extern_const thy)
-  |> filter_out NameSpace.is_qualified;
+  |> filter_out Long_Name.is_qualified;
 
 
 (* concrete output syntax *)
