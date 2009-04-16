@@ -1,4 +1,4 @@
-(* Author:     Florian Haftmann, TU Muenchen
+(*  Author:  Florian Haftmann, TU Muenchen
 
 Decorate importer adaption table with current Isabelle syntax.
 *)
@@ -100,7 +100,7 @@ val prep_string =
   #> quote
   #> Pretty.str;
 
-fun run thy src_loc dst_loc =
+fun main thy src_loc dst_loc =
   let
     val _ = writeln ("Reading from " ^ src_loc);
     val src = File.read (Path.explode src_loc);
@@ -125,5 +125,8 @@ fun run thy src_loc dst_loc =
     val _ = File.write dst_path (cat_lines dsts);
     val _ = writeln ("Written to " ^ dst_loc);
   in () end;
+
+fun run thy src_loc dst_loc = main thy src_loc dst_loc
+  handle ERROR e => (writeln ("ERROR: " ^ e); OS.Process.exit OS.Process.failure);
 
 end;
