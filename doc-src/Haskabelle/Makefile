@@ -44,4 +44,4 @@ $(NAME).pdf: $(FILES) isabelle_isar.pdf
 
 doc: ../../doc/$(NAME).pdf
 ../../doc/$(NAME).pdf: $(NAME).pdf
-	( cd ../../doc && ln -s ../doc-src/Haskabelle/$(NAME).pdf $(NAME).pdf )
+	( cd ../../doc && ln -fs ../doc-src/Haskabelle/$(NAME).pdf $(NAME).pdf )

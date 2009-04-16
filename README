@@ -9,9 +9,9 @@ a suitable Isabelle source (!) distribution, as available from
 
     http://isabelle.in.tum.de/repos/isabelle
     
-Currently, Isabelle 2008 is recommended:
+Currently, Isabelle 2009 is recommended:
 
-    http://isabelle.in.tum.de/repos/isabelle/rev/2cf13a72e170
+    http://isabelle.in.tum.de/
 
 Then, invoke
 
@@ -21,6 +21,6 @@ By default, this uses the Isabelle version accessible on your PATH.
 Set shell variable ISABELLE_TOOL explicitly if this does not use 
 the desired Isabelle version.
 
-Sources of the importer itself are available via mercurial:
+Sources of Haskabelle itself are available via mercurial:
 
-    http://www4.in.tum.de/~haftmann/cgi-bin/hgweb.cgi/haskabelle/
+    https://isabelle.in.tum.de/repos/haskabelle
