@@ -64,7 +64,6 @@ cd "$ARCHIVE"
 ## remove junk
 
 rm README
-rm haskabelle.cabal
 rm .hgignore
 rm .hg_archival.txt
 rm -rf doc/*
