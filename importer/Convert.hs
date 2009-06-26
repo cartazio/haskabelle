@@ -794,7 +794,7 @@ instance Convert Hsx.Exp Isa.Term where
                  let updates' = map (\(Hsx.FieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
                      toSimplePat (Env.RecordField iden _) = 
                          case lookup iden updates' of
-                           Nothing -> Hsx.Var (Hsx.UnQual (Hsx.Ident "arbitrary"))
+                           Nothing -> Hsx.Var (Hsx.UnQual (Hsx.Ident "undefined"))
                            Just exp -> exp
                      recArgs = map toSimplePat recFields
                  in convert' $ foldl Hsx.App (Hsx.Con qname) recArgs
