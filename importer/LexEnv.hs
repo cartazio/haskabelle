@@ -532,14 +532,12 @@ instance Hsk2Env Hsx.Type EnvType where
       in EnvTyFun type1' type2'
 
     fromHsk (Hsx.TyForall _ [] typ)  = fromHsk typ
-    fromHsk (Hsx.TyForall _ ctx typ) = EnvTyScheme (frobContext ctx) (fromHsk typ)
-        where frobContext [] = []
-              frobContext (Hsx.ClassA classqN tys : rest_ctx)
-                  = assert (all isTyVar tys) $
-                    groupAlist [ (fromHsk tyvarN, fromHsk classqN) | Hsx.TyVar tyvarN <- tys ]
-                    ++ frobContext rest_ctx
-              isTyVar (Hsx.TyVar _) = True
-              isTyVar _           = False
+    fromHsk (Hsx.TyForall _ ctx typ) =
+      EnvTyScheme (groupAlist $ concatMap dest_entry ctx) (fromHsk typ)
+      where
+        dest_entry (Hsx.ClassA classqN typs) =
+          [ (fromHsk tyvarN, fromHsk classqN) | tyvarN <- map dest_tyvar typs ]
+        dest_tyvar (Hsx.TyVar tyvarN) = tyvarN
 
     -- Types aren't curried or partially appliable in HOL, so we must pull a nested
     -- chain of type application inside out:
