@@ -1,5 +1,5 @@
 -- THIS IS A GENERATED FILE - DO NOT EDIT!
--- Haskell syntax is only superficially.
+-- Haskell syntax is only superficial.
 
 module Raw where
 
