@@ -41,26 +41,12 @@ class num = number_ring + abs + sgn + eq + print
 
 instance int :: num ..
 
+axiomatization error :: "string \<Rightarrow> 'a"
+
 
 subsection {* Fundamental prelude ingredients *}
 
 definition rapp :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 60) where
   "f $ x = f x"
-
-
-subsection {* Somehow arbitrary additions *}
-
-primrec hsk_foldr :: "('b => 'a => 'a) => 'a => 'b list => 'a" where
-    "hsk_foldr f a (x # xs) = f x (hsk_foldr f a xs)"
-  | "hsk_foldr f a Nil = a"
-
-fun zipWith :: "('a => 'b => 'c) => 'a list => 'b list => 'c list" where
-    "zipWith z (a # as) (b # bs) = (z a b # zipWith z as bs)"
-  | "zipWith _ _ _ = Nil"
-
-fun list_and :: "(bool list) \<Rightarrow> bool" where
-    "list_and Nil = True"
-  | "list_and (True # xs) = list_and xs"
-  | "list_and (False # _) = False"
 
 end

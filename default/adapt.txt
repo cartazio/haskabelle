@@ -30,6 +30,7 @@ consts
   "Prelude.(||)"        "op |"
 
   "Prelude._|_"         "HOL.undefined"
+  "Prelude.error"       "Prelude.error"
 
   "Prelude.($)"         "Prelude.rapp"
   "Prelude.id"          "Fun.id"
@@ -60,9 +61,6 @@ consts
   "Prelude.filter"      "List.filter"
   "Prelude.length"      "List.length"
   "Prelude.foldl"       "List.foldl"
-  "Prelude.and"         "Prelude.list_and"
-  "Prelude.foldr"       "Prelude.hsk_foldr"
-  "Prelude.zipWith"     "Prelude.zipWith"
 
   "Prelude.Nothing"     "Option.None"
   "Prelude.Just"        "Option.Some"

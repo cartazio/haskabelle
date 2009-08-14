@@ -1,39 +1,39 @@
 module Base where
 
--- General stuff
 fold f [] y = y
-fold f (x:xs) y = fold f xs (f x y)
-
+fold f (x : xs) y = fold f xs (f x y)
 
 fold_map :: (a -> s -> (b, s)) -> [a] -> s -> ([b], s)
 fold_map f [] y = ([], y)
 fold_map f (x:xs) y =
-      let (x', y') = f x y
-          (xs', y'') = fold_map f xs y'
-      in (x' : xs', y'')
+  let
+    (x', y') = f x y
+    (xs', y'') = fold_map f xs y'
+  in (x' : xs', y'')
 
+maps :: (a -> [b]) -> [a] -> [b]
+maps f [] = []
+maps f (x : xs) = f x ++ maps f xs
 
-cprod [] = [[]]
-cprod (xs:xss) = [ y : ys | y <- xs, ys <- cprod xss ]
+{-map_index :: ((Int, a) -> b) -> [a] -> [b]
+map_index f = mapp 0 where
+  mapp _ [] = []
+  mapp i (x : xs) = f (i, x) : mapp (i + 1) xs-}
 
-distincts [] = [] -- FIXME: make tail recursive
-distincts (x:xs) | elem x xs' = xs'
-                | otherwise  = x : xs'
-    where xs' = distincts xs
+map2 :: (a -> b -> c) -> [a] -> [b] -> [c]
+map2 _ [] [] = []
+map2 f (x : xs) (y : ys) = f x y : map2 f xs ys
+map2 _ _ _ = error "unequals length"
 
-suplist_ins f x [] = [x]
-suplist_ins f x ys 
-      | any (f x) ys = ys 
-      | otherwise     = x : filter (\y -> not (f y x)) ys
+map_split :: (a -> (b, c)) -> [a] -> ([b], [c])
+map_split f [] = ([], [])
+map_split f (x : xs) =
+  let
+    (y, w) = f x
+    (ys, ws) = map_split f xs
+  in (y : ys, w : ws)
 
-sups f = foldr (suplist_ins f) []
-
-unordered_pairs [] = []
-unordered_pairs (x:xs) = map ((,) x) (x:xs) ++ unordered_pairs xs
-
-{- pos_neg_filter p xs = pnf p xs ([], [])
-    where pnf p [] (pos, neg) = (reverse pos, reverse neg)
-          pnf p (x:xs) (pos, neg)
-              | p x       = pnf p xs (x:pos, neg)
-              | otherwise = pnf p xs (pos, x:neg) -}
-
+map_product :: (a -> b -> c) -> [a] -> [b] -> [c]
+map_product f _ [] = []
+map_product f [] _ = []
+map_product f (x : xs) ys = map (f x) ys ++ map_product f xs ys
