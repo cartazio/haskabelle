@@ -518,7 +518,7 @@ instance Convert Hsx.Decl Isa.Cmd where
                                                         -- first one.
              name'      <- convert' (names!!0)
              fsig'      <- (case ftype of Nothing -> return Isa.TyNone
-                                          Just t  -> convert' t) >>= (return . Isa.TypeSig name')
+                                          Just t -> convert' t) >>= (return . Isa.TypeSig name')
              fname'     <- convert (names!!0)          
              -- each pattern is itself a list of Hsx.Pat. 
              patsNames  <- mapM (mapM convert) patterns
