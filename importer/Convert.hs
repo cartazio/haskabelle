@@ -585,8 +585,6 @@ instance Convert Hsx.Decl Isa.Cmd where
                  let classVarN     = Env.classVarOf classinfo
                  let inst_envtype  = Env.fromHsk (head tys)
                  let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
-                 -- Methods must be explicitly annotated in Isar/HOL to keep
-                 -- the ability to resolve the types in all cases.
                  withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
                    do decls' <- mapM convert (map toHsDecl inst_decls)
                       return (Isa.InstanceCmd classqN' type' decls')

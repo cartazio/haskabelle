@@ -206,8 +206,9 @@ adaptEnvType t
          return (fromMaybe t (translateEnvType tbl qualify t))
 
 adaptName :: Isa.Name -> AdaptM Isa.Name
-adaptName n = do n' <- adaptEnvName (Env.fromIsa n); 
-                 return (Env.toIsa n')                 
+adaptName n = do
+  n' <- adaptEnvName (Env.fromIsa n)
+  return (Env.toIsa n')
 
 adaptType :: Isa.Type -> AdaptM Isa.Type
 adaptType t = do t' <- adaptEnvType (Env.fromIsa t); return (Env.toIsa t')
@@ -315,7 +316,13 @@ instance Adapt Isa.TypeSig where
 
 instance Adapt Isa.Term where
     adapt (Isa.Literal lit)     = return (Isa.Literal lit)
-    adapt (Isa.Var n)           = adaptName n >>= (return . Isa.Var)
+
+    adapt (Isa.Var n)           = adaptVar n >>= (return . Isa.Var)
+      where
+        adaptVar n = do
+          n' <- adaptEnvName (Env.fromIsa n)
+          return (Env.toIsa n')
+
     adapt (Isa.Parenthesized t) = adapt t     >>= (return . Isa.Parenthesized)
 
     adapt (Isa.App t1 t2)       = do Just mID <- query currentModuleID

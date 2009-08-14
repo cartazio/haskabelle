@@ -1,20 +1,19 @@
 
 module ClassAdaptions where
 
-data Nat = Suc Nat | Zero_nat deriving Show;
+data Nat = Succ Nat | Zero deriving Show;
 
 instance Eq Nat where
-  (==) Zero_nat Zero_nat = True
-  (==) (Suc m) (Suc n)   = m == n
-  (==) Zero_nat (Suc a)  = False
-  (==) (Suc a) Zero_nat  = False
+  Zero == Zero = True
+  (Succ m) == (Succ n) = m == n
+  Zero == (Succ n) = False
+  (Succ m) == Zero = False
 
-
-class (Eq a) => Neq a where
-    neq :: a -> a -> Bool
+class (Eq a) => Ident a where
+  ident :: a -> a -> Bool
 
 fromEq :: (Eq a) => a -> a -> b -> Maybe b
 fromEq a1 a2 b = if a1 == a2 then Just b else Nothing
 
-fromNeq :: (Neq a) => a -> a -> b -> Maybe b
-fromNeq a1 a2 b = if neq a1 a2 then Just b else Nothing
+fromIdent :: (Ident a) => a -> a -> b -> Maybe b
+fromIdent a1 a2 b = if ident a1 a2 then Just b else Nothing

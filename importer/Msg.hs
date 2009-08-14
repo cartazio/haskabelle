@@ -9,8 +9,9 @@ import List (intersperse)
 import Maybe (fromMaybe)
 
 import Importer.Utilities.Hsk (srcloc2string, module2FilePath)
-import Importer.Utilities.Misc (prettyShow', prettyHsx)
+import Importer.Utilities.Misc (prettyShow')
 
+import qualified Language.Haskell.Exts as Hsx
 
 spacify x = x ++ " "
 linify  x = x ++ "\n\n"
@@ -49,6 +50,8 @@ failed_parsing loc msg
 cycle_in_dependency_graph moduleNs
     = "Dependency graph is not a DAG. In particular, a cycle was found between\n"
       ++ "the following modules: " ++ concatMap (spacify . quote) moduleNs
+
+prettyHsx hs = Hsx.prettyPrint hs
 
 free_vars_found loc freeVariableNames
     = srcloc2string loc ++ ": " ++ "Closures disallowed. The following variables occur free: "
