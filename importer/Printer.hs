@@ -189,7 +189,7 @@ comment d = text "(*" <+> d <+> text "*)"
 ($$) = liftM2 (P.$$)
 ($+$) = liftM2 (P.$+$)
 
-ncat, hcat,hsep,vcat,sep,cat,fsep,fcat :: [Doc] -> Doc
+ncat, hcat, hsep, vcat, sep, cat, fsep, fcat, parcommas, brcommas :: [Doc] -> Doc
 ncat = foldr ($+$) empty
 hcat dl = sequence dl >>= return . P.hcat
 hsep dl = sequence dl >>= return . P.hsep
@@ -198,6 +198,8 @@ sep dl  = sequence dl >>= return . P.sep
 cat dl  = sequence dl >>= return . P.cat
 fsep dl = sequence dl >>= return . P.fsep
 fcat dl = sequence dl >>= return . P.fcat
+parcommas dl = sequence dl >>= return . P.parens . P.hsep . P.punctuate P.comma
+brcommas dl = sequence dl >>= return . P.braces . P.hsep . P.punctuate P.comma
 
 -- Some More
 
@@ -282,12 +284,13 @@ instance Printer Isa.Cmd where
 
     pprint' adapt reserved (Isa.ClassCmd classN superclassNs typesigs)
         = blankline $
-          text "class" <+> pprint' adapt reserved classN 
-                       <+> equals 
-                       <+> hsep (punctuate plus (map (pprint' adapt reserved) superclassNs))
-                       <+> (if null superclassNs || null typesigs then empty else plus) $$
-          space <> space <> vcat (zipWith (<+>) (repeat (text "fixes"))
-                                                (map ppSig typesigs))
+          text "class"
+          <+> pprint' adapt reserved classN 
+          <+> (if null superclassNs && null typesigs then empty else equals)
+          <+> hsep (punctuate plus (map (pprint' adapt reserved) superclassNs))
+          <+> (if null superclassNs || null typesigs then empty else plus) $$
+            space <> space <>
+              vcat (zipWith (<+>) (repeat (text "fixes")) (map ppSig typesigs))
         where ppSig (Isa.TypeSig n t)
                   = pprint' adapt reserved n <+> text "::" <+> pprint' adapt reserved t
           
@@ -372,18 +375,21 @@ instance Printer Isa.Type where
         = do alist <- queryPP currentTyScheme
              let tyvar_doc = apostroph <> pprint' adapt reserved vname
              case lookup vname alist of
-               Nothing       -> tyvar_doc
-               Just [classN] -> parens (tyvar_doc <+> text "::" <+> pprint' adapt reserved classN)
-               Just classNs  
-                   -> parens $ tyvar_doc <+> 
-                               text "::" <+> 
-                               (braces . vcat . punctuate comma . map (pprint' adapt reserved) $ classNs)
+               Nothing -> tyvar_doc
+               Just [classN] -> parens (tyvar_doc <+> text "::"
+                 <+> pprint' adapt reserved classN)
+               Just classNs -> parens (tyvar_doc <+> text "::"
+                 <+> (brcommas $ map (pprint' adapt reserved) classNs))
 
     pprint' adapt reserved (Isa.TyCon cname []) = pprint' adapt reserved cname 
-    pprint' adapt reserved (Isa.TyCon cname tyvars) 
-        = do maybeWithinHOL $
-               hsep (map pp tyvars) <+> pprint' adapt reserved cname
-          where pp tyvar = parensIf (isCompoundType tyvar) (pprint' adapt reserved tyvar)
+    pprint' adapt reserved (Isa.TyCon cname [typ]) =
+      maybeWithinHOL $
+        parensIf (isCompoundType typ) (pprint' adapt reserved typ)
+        <+> pprint' adapt reserved cname
+    pprint' adapt reserved (Isa.TyCon cname typs) =
+      maybeWithinHOL $
+        parcommas (map (pprint' adapt reserved) typs)
+        <+> pprint' adapt reserved cname
 
     pprint' adapt reserved (Isa.TyScheme [] t)  = pprint' adapt reserved t
     pprint' adapt reserved (Isa.TyScheme ctx t) = withTyScheme ctx (pprint' adapt reserved t)
