@@ -62,8 +62,8 @@ makeEdgesFromDecl globalEnv modul decl
                         Hsx.DataDecl _ _ _ _ _ _ _
                             -> map canonicalize $ Set.toList $ extractTypeConNs decl
                         _ -> []
-      in [(decl, name , used_names ++ usedTypes ++ implTypes) | name <- names]
-             
+      in [(decl, name, used_names ++ usedTypes ++ implTypes) | name <- names]
+
 {-|
   ???
 -}

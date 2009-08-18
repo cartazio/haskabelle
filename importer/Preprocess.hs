@@ -67,10 +67,17 @@ preprocessModule reserved (Hsx.Module loc modul pragmas warning exports imports 
   We keep track of the names that are directly bound by a declaration,
   as functions must not close over them. See below for an explanation.
  -}
-newtype DelocaliserM a = DelocaliserM (ReaderT HskNames (WriterT [Hsx.Decl] GensymM) a )
+newtype DelocaliserM a = DelocaliserM (ReaderT HskNames (WriterT [Hsx.Decl] GensymM) a)
     deriving (Monad, Functor, MonadFix, MonadReader HskNames, MonadWriter [Hsx.Decl])
 
+{-instance MonadWriter [Hsx.Decl] DelocaliserM where
+    tell _ = error ""
+    listen _ = error ""
+    pass _ = error ""
 
+[Hsx.Decl] -> DelocaliserM ()
+DelocaliserM a -> DelocaliserM (a, [Hsx.Decl])
+DelocaliserM (a, [Hsx.Decl] -> [Hsx.Decl]) -> DelocaliserM a-}
 
 addTopDecls :: [Hsx.Decl] -> DelocaliserM ()
 addTopDecls = tell
