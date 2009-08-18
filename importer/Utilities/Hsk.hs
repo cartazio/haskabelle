@@ -456,11 +456,15 @@ extractDataConNs node = everything Set.union (mkQ Set.empty fromPat) node
   This function extracts the names of type constructors in the given piece of
   Haskell syntax
 -}
-extractTypeConNs :: Data a => a -> HskNames
-extractTypeConNs node = everything Set.union (mkQ Set.empty fromType) node
-    where fromType :: Hsx.Type -> HskNames
-          fromType (Hsx.TyCon name) = Set.singleton name
-          fromType _ = Set.empty
+extractTypeConNs node = everything Set.union (mkQ Set.empty fromType) node where
+  fromType :: Hsx.Type -> HskNames
+  fromType (Hsx.TyCon name) = Set.singleton name
+  fromType (Hsx.TyVar _) = Set.empty
+  fromType (Hsx.TyTuple Hsx.Boxed typs) = Set.unions (map fromType typs)
+  fromType (Hsx.TyFun typ1 typ2) = Set.union (fromType typ1) (fromType typ2)
+  fromType (Hsx.TyForall _ _ typ)  = fromType typ
+  fromType (Hsx.TyApp typ1 typ2) = Set.union (fromType typ1) (fromType typ2)
+  fromType typ = error ("extractTypeConNs: bad type " ++ show typ)
 
 {-|
   This function returns the set of names of free variables
