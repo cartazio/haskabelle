@@ -50,19 +50,15 @@ makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
   module.
 -}
 makeEdgesFromDecl :: Env.GlobalE -> Hsx.ModuleName -> Hsx.Decl -> [(Hsx.Decl, Env.EnvName, [Env.EnvName])]
-makeEdgesFromDecl globalEnv modul decl
-    = let canonicalize hsqname = (let mID  = Env.fromHsk modul
-                                      envN = Env.fromHsk hsqname
-                                  in Env.resolveEnvName_OrLose globalEnv mID envN)
-          names = map canonicalize $ (namesFromDecl decl)
-          used_names = map canonicalize $ Set.toList (extractFreeVarNs decl) ++ Set.toList (extractDataConNs decl) ++ Set.toList (extractFieldNs decl)
-          implTypes =  catMaybes $
-                       map (Env.getDepDataType globalEnv (Env.fromHsk modul)) used_names
-          usedTypes = case decl of
-                        Hsx.DataDecl _ _ _ _ _ _ _
-                            -> map canonicalize $ Set.toList $ extractTypeConNs decl
-                        _ -> []
-      in [(decl, name, used_names ++ usedTypes ++ implTypes) | name <- names]
+makeEdgesFromDecl globalEnv modul decl =
+  let
+    canonicalize hsqname = Env.resolveEnvName_OrLose globalEnv (Env.fromHsk modul) (Env.fromHsk hsqname)
+    names = map canonicalize $ namesFromDecl decl
+    used_names = Set.map canonicalize $ Set.unions [extractFreeVarNs decl, extractDataConNs decl, extractFieldNs decl]
+    used_types = Set.map canonicalize $ extractTypeConNs decl
+    impl_types = catMaybes $ Set.toList $ Set.map (Env.getDepDataType globalEnv (Env.fromHsk modul)) used_names
+  in
+    [ (decl, name, Set.toList (Set.union used_names used_types) ++ impl_types) | name <- names ]
 
 {-|
   ???
@@ -75,14 +71,14 @@ handleDuplicateEdges edges
                 in if ambiguous_edges edges' then error (Msg.ambiguous_decl_definitions edges')
                                              else edges'
           ambiguous_edges edges
-              = (length edges > 1) && any (\e -> not ((isClass e) || (isInstance e))) edges
+              = length edges > 1 && any (\e -> not (isClass e || isInstance e)) edges
 
           isTypeAnnotation (Hsx.TypeSig _ _ _, _ , _) = True
-          isTypeAnnotation _                        = False
-          isInstance (Hsx.InstDecl _ _ _ _ _, _, _)   = True
-          isInstance _                              = False
-          isClass (Hsx.ClassDecl _ _ _ _ _ _, _, _)   = True
-          isClass _                                 = False
+          isTypeAnnotation _ = False
+          isInstance (Hsx.InstDecl _ _ _ _ _, _, _) = True
+          isInstance _ = False
+          isClass (Hsx.ClassDecl _ _ _ _ _ _, _, _) = True
+          isClass _ = False
 
 
 
@@ -133,3 +129,4 @@ flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
 
 arrangeDecls :: Env.GlobalE -> Hsx.ModuleName -> [Hsx.Decl] -> [[Hsx.Decl]]
 arrangeDecls globalEnv modul = flattenDeclDepGraph . makeDeclDepGraph globalEnv modul
+
