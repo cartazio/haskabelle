@@ -49,4 +49,10 @@ subsection {* Fundamental prelude ingredients *}
 definition rapp :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 60) where
   "f $ x = f x"
 
+definition curry :: "('a \<times> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<Rightarrow> 'b \<Rightarrow> 'c" where
+  "curry f x y = f (x, y)"
+
+definition uncurry :: "('a \<Rightarrow> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<times> 'b \<Rightarrow> 'c" where
+  "uncurry = split"
+
 end

@@ -33,6 +33,8 @@ consts
   "Prelude.error"       "Prelude.error"
 
   "Prelude.($)"         "Prelude.rapp"
+  "Prelude.curry"       "Prelude.curry"
+  "Prelude.uncurry"     "Prelude.uncurry"
   "Prelude.id"          "Fun.id"
   "Prelude.(.)"         "Fun.comp"
 
