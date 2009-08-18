@@ -10,6 +10,8 @@ module Importer.IsaSyntax where
 import Data.Generics.Basics
 import Data.Generics.Instances
 
+import Data.Graph as Graph
+
 {-|
   This type represents the name of a theory.
 -}
@@ -211,3 +213,11 @@ data Stmt = DoGenerator Pat Term
 data ListCompStmt = Generator (Pat, Term)
                   | Guard Term
   deriving (Show, Data, Typeable)
+
+
+topologize :: Ord b => (a -> (b, [b])) -> [a] -> [[a]]
+topologize f xs = (map list_of_SCC . stronglyConnComp . map add_edges) xs
+  where
+    add_edges x = let (node, nodes) = f x in (x, node, nodes)
+    list_of_SCC (Graph.AcyclicSCC x) = [x]
+    list_of_SCC (Graph.CyclicSCC xs) = xs
