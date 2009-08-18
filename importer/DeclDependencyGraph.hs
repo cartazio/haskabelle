@@ -2,7 +2,7 @@
 -}
 
 module Importer.DeclDependencyGraph 
-    (HskDeclDepGraph(..), makeDeclDepGraph, flattenDeclDepGraph) where
+    (arrangeDecls) where
 
 import Maybe
 import List (groupBy, sortBy, intersect)
@@ -130,3 +130,6 @@ flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
                         in orderDeclsBySourceLine decl1 decl2
             where 
               isContained xs ys = not (null (intersect xs ys))
+
+arrangeDecls :: Env.GlobalE -> Hsx.ModuleName -> [Hsx.Decl] -> [[Hsx.Decl]]
+arrangeDecls globalEnv modul = flattenDeclDepGraph . makeDeclDepGraph globalEnv modul

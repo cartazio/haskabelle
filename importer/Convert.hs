@@ -67,7 +67,7 @@ convertHskUnit custs adapt (HskUnit hsmodules custMods initialGlobalEnv)
       toHskModule :: Env.GlobalE -> Hsx.Module -> HskModule
       toHskModule globalEnv (Hsx.Module loc modul _ _ _exports _imports decls) =
           HskModule loc modul
-            $ map HskDependentDecls (flattenDeclDepGraph (makeDeclDepGraph globalEnv modul decls))
+            $ map HskDependentDecls (arrangeDecls globalEnv modul decls)
 
 
 -- The naming scheme "HsFoo" is treated as being owned by the parser
