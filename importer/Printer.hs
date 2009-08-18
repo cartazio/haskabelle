@@ -250,7 +250,7 @@ instance Printer Isa.Cmd where
     pprint' adapt reserved (Isa.DatatypeCmd (def:defs)) = 
         let fstDef = text "datatype" <+> pprint' adapt reserved def
             restDefs = map ((text "and     " <+>) . pprint' adapt reserved) defs
-        in blankline $ vcat (fstDef:restDefs)
+        in vcat (fstDef : restDefs)
           
 
     pprint' adapt reserved (Isa.RecordCmd tyspec conspecs)
