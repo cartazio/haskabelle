@@ -4,7 +4,7 @@ Generic functions.
 -}
 
 module Importer.Utilities.Misc (
-  assert, trace, concatMapM, map2, hasDuplicates,
+  assert, trace, concatMapM, map2, hasDuplicates, map_both,
   unfoldr, unfoldr1, unfoldl, unfoldl1, lookupBy, wordsBy,
   prettyShow', prettyShow, groupAlist, fold, tracing
 ) where
@@ -19,6 +19,12 @@ import qualified Language.Haskell.Exts as Hsx
 
 tracing :: (a -> String) -> a -> a
 tracing f x = trace (f x) x
+
+uncurry :: (a -> b -> c) -> (a, b) -> c
+uncurry f (x, y) = f x y
+
+map_both :: (a -> b) -> (a, a) -> (b, b)
+map_both f (x, y) = (f x, f y)
 
 fold :: (a -> b -> b) -> [a] -> b -> b
 fold f [] y = y
