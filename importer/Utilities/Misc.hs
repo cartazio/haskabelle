@@ -50,7 +50,7 @@ wordsBy pred l     =  case dropWhile pred l of
                       l' -> w : wordsBy pred l''
                             where (w, l'') = break pred l'
 
-unfoldr, unfoldl    :: (b -> Maybe (a,b)) -> b -> [a]
+unfoldr, unfoldl    :: (b -> Maybe (a, b)) -> b -> [a]
 unfoldr1, unfoldl1  :: (a -> Maybe (a, a)) -> a -> [a]
 
 unfoldr f x = List.unfoldr f x
