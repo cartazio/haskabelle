@@ -352,17 +352,18 @@ instance Printer Isa.TypeSpec where
           in tyvars' <+> pprint' adapt reserved tycon
 
 instance Printer Isa.Name where
-    pprint' adapt reserved n@(Isa.Name _)      = pprintName reserved n
-    pprint' adapt reserved (Isa.QName _ str)   = pprintName reserved (Isa.Name str) -- FIXME
+  pprint' adapt reserved n = case n of
+    Isa.Name str -> pprintName reserved str
+    Isa.QName _ str -> pprintName reserved str -- FIXME
 
-pprintName reserved n@(Isa.Name str) = withinHOL_if (isReservedKeyword str) 
+pprintName reserved str = withinHOL_if (isReservedKeyword str) 
       $ do thy <- queryPP currentTheory 
            env <- queryPP globalEnv
            app <- queryPP currentAppFlavor
            case app of
              Just (InfixApp _ _ _) -> text str
-             _  -> let lookup = (\n -> lookupIdentifier thy n env)
-                   in if (isInfixOp n lookup || isUnaryOp n lookup)
+             _  -> let lookup s = lookupIdentifier thy (Isa.Name s) env
+                   in if (isInfixOp lookup str || isUnaryOp lookup str)
                       then parens $ text "op" <+> text str
                       else text str
       where
@@ -541,12 +542,12 @@ data AppFlavor = ListApp [Isa.Term]
 
 categorizeApp :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> AppFlavor
 categorizeApp adapt app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
-    | isCons adapt opN,    Just list <- flattenListApp adapt app  = ListApp list
+    | isCons adapt opN, Just list <- flattenListApp adapt app = ListApp list
     | isPairCon adapt opN, Just list <- flattenTupleApp adapt app = TupleApp list
-    | isInfixOp opN lookupFn                          = InfixApp t1 (Isa.Var opN) t2
+    | isInfixOp lookupFn opN = InfixApp t1 (Isa.Var opN) t2
 categorizeApp _ (Isa.App (Isa.Var opN) _) lookupFn
-    | isUnaryOp opN lookupFn                              = UnaryOpApp
-    | otherwise                                           = FunApp
+    | isUnaryOp lookupFn opN = UnaryOpApp
+    | otherwise = FunApp
 categorizeApp _ _ _ = FunApp
 
 flattenListApp :: AdaptionTable -> Isa.Term -> Maybe [Isa.Term]
@@ -610,14 +611,14 @@ isCompoundType t = case t of
                      Isa.TyCon _ [] -> False
                      _              -> True
                      
-isInfixOp :: Isa.Name -> (Isa.Name -> Maybe Env.Identifier) -> Bool                 
-isInfixOp name lookupFn
+isInfixOp :: (a -> Maybe Env.Identifier) -> a -> Bool
+isInfixOp lookupFn name 
     = case lookupFn name of
         Just id -> Env.isInfixOp id
         _       -> False
 
-isUnaryOp :: Isa.Name -> (Isa.Name -> Maybe Env.Identifier) -> Bool
-isUnaryOp name lookupFn
+isUnaryOp :: (a -> Maybe Env.Identifier) -> a -> Bool
+isUnaryOp lookupFn name
     = case lookupFn name of
         Just id -> Env.isUnaryOp id
         _       -> False
