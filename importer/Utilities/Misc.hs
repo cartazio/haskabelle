@@ -6,7 +6,7 @@ Generic functions.
 module Importer.Utilities.Misc (
   assert, trace, concatMapM, map2, hasDuplicates,
   unfoldr, unfoldr1, unfoldl, unfoldl1, lookupBy, wordsBy,
-  prettyShow', prettyShow, groupAlist, fold
+  prettyShow', prettyShow, groupAlist, fold, tracing
 ) where
 
 import Control.Exception (assert)
@@ -15,6 +15,10 @@ import Monad (liftM)
 import qualified List
 
 import qualified Language.Haskell.Exts as Hsx
+
+
+tracing :: (a -> String) -> a -> a
+tracing f x = trace (f x) x
 
 fold :: (a -> b -> b) -> [a] -> b -> b
 fold f [] y = y
