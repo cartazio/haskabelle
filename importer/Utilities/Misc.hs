@@ -20,9 +20,6 @@ import qualified Language.Haskell.Exts as Hsx
 tracing :: (a -> String) -> a -> a
 tracing f x = trace (f x) x
 
-uncurry :: (a -> b -> c) -> (a, b) -> c
-uncurry f (x, y) = f x y
-
 map_both :: (a -> b) -> (a, a) -> (b, b)
 map_both f (x, y) = (f x, f y)
 
