@@ -5,7 +5,7 @@
 Abstract syntactic representation of Isar/HOL theory.
 -}
 
-module Importer.IsaSyntax (module Importer.IsaSyntax) where
+module Importer.IsaSyntax where
 
 import Data.Generics.Basics
 import Data.Generics.Instances
