@@ -75,7 +75,7 @@ import Debug.Trace
 import qualified Language.Haskell.Exts as Hsx
 
 import qualified Importer.Msg as Msg
-import qualified Importer.IsaSyntax as Isa
+import qualified Importer.Isa as Isa
 
 import Importer.Utilities.Hsk
 import Importer.Utilities.Misc
@@ -542,9 +542,9 @@ instance Hsk2Env Hsx.Type EnvType where
     -- Types aren't curried or partially appliable in HOL, so we must pull a nested
     -- chain of type application inside out:
     --
-    --  T a b ==> Hsx.TyApp (Hsx.TyApp (Hsx.TyCon T) (Hsx.TyVar a)) (Hsx.TyVar b)
+    --  T a b ==> Hsx.TyApp (Hsx.TyApp (Hsx.Type T) (Hsx.TyVar a)) (Hsx.TyVar b)
     --       
-    --        ==> EnvTyCon T [(EnvTyVar a), (EnvTyVar b)]   
+    --        ==> EnvType T [(EnvTyVar a), (EnvTyVar b)]   
     --
     fromHsk tyapp@(Hsx.TyApp _ _) 
         = let tycon:tyvars = unfoldl1 split tyapp
@@ -552,7 +552,7 @@ instance Hsk2Env Hsx.Type EnvType where
               tyvars'      = map fromHsk tyvars
           in case tycon' of EnvTyCon n [] -> EnvTyCon n tyvars'
           where split (Hsx.TyApp tyapp x) = Just (x, tyapp)
-                split (Hsx.TyCon _)       = Nothing         -- Note that this Hsx.TyCon will become
+                split (Hsx.TyCon _)       = Nothing         -- Note that this Hsx.Type will become
                 split junk                                --  the head of the returned list.
                     = error ("Hsx.Type -> EnvType (split Hsx.TyApp): " ++ (show junk))
 
@@ -600,9 +600,9 @@ class Isa2Env a b where
     toIsa   :: (Show b, Isa2Env a b) => b -> a
     toIsa b = error ("(toIsa) Internal Error: Don't know how to lift " ++ show b)
 
-instance Isa2Env Isa.Theory ModuleID where
-    fromIsa (Isa.Theory thyN) = thyN
-    toIsa moduleID            = Isa.Theory moduleID
+instance Isa2Env Isa.ThyName ModuleID where
+    fromIsa (Isa.ThyName thyN) = thyN
+    toIsa moduleID            = Isa.ThyName moduleID
 
 instance Isa2Env Isa.Name EnvName where
     fromIsa (Isa.QName thy n)       = EnvQualName (fromIsa thy) n
@@ -625,7 +625,7 @@ instance Isa2Env Isa.Type EnvType where
     fromIsa (Isa.TyVar n)         = EnvTyVar (fromIsa n)
     fromIsa (Isa.TyTuple types)   = EnvTyTuple (map fromIsa types)
     fromIsa (Isa.TyFun t1 t2)     = EnvTyFun (fromIsa t1) (fromIsa t2)
-    fromIsa (Isa.TyCon qn tyvars) = EnvTyCon (fromIsa qn) (map fromIsa tyvars)
+    fromIsa (Isa.Type qn tyvars) = EnvTyCon (fromIsa qn) (map fromIsa tyvars)
     fromIsa (Isa.TyScheme ctx t)  = EnvTyScheme ctx' (fromIsa t)
         where ctx' = [ (fromIsa vN, map fromIsa cNs) | (vN, cNs) <- ctx ]
     
@@ -633,7 +633,7 @@ instance Isa2Env Isa.Type EnvType where
     toIsa (EnvTyVar n)            = Isa.TyVar (toIsa n)
     toIsa (EnvTyTuple types)      = Isa.TyTuple (map toIsa types)
     toIsa (EnvTyFun t1 t2)        = Isa.TyFun (toIsa t1) (toIsa t2)
-    toIsa (EnvTyCon qn tyvars)    = Isa.TyCon (toIsa qn) (map toIsa tyvars)
+    toIsa (EnvTyCon qn tyvars)    = Isa.Type (toIsa qn) (map toIsa tyvars)
     toIsa (EnvTyScheme ctx t)     = Isa.TyScheme ctx' (toIsa t)
         where ctx' = [ (toIsa vN, map toIsa cNs) | (vN, cNs) <- ctx ]
 
@@ -903,7 +903,7 @@ computeConstantMappings modul decl
            Hsx.InstDecl _ _ _ ts _       -> [Type (Instance defaultLexInfo $ [makeInstanceInfo (fromHsk (head ts))])]
            Hsx.DataDecl _ _ _ conN tyvarNs condecls _
                -> assert (fromHsk conN == nameID) $
-                  let tycon = mkTyCon (fromHsk name) tyvarNs
+                  let tycon = mkType (fromHsk name) tyvarNs
                       constructors = map (mkDataCon tycon) condecls
                       constructors' = map (Constant . Constructor) constructors
                       fields = concatMap mkRecordFields constructors
@@ -918,7 +918,7 @@ computeConstantMappings modul decl
                  mkRecordFields constr@(RecordConstr _ _ fields) = 
                      let mkField (RecordField id ty) = (id,Constant (Field (LexInfo id ty moduleID) [constr]))
                      in map mkField fields
-                 mkTyCon name tyvarNs 
+                 mkType name tyvarNs 
                    = EnvTyCon name $ map (EnvTyVar . fromHsk) tyvarNs
                  conNe = case fromHsk conN of
                            EnvUnqualName name -> EnvQualName moduleID name

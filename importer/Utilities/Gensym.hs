@@ -8,7 +8,7 @@ module Importer.Utilities.Gensym where
 import Control.Monad.State
 
 import qualified Language.Haskell.Exts as Hsx (Name(..), QName(..))
-import qualified Importer.IsaSyntax as Isa (Name(..))
+import qualified Importer.Isa as Isa (Name(..))
 
 
 newtype GensymM a = GensymM (State Int a)

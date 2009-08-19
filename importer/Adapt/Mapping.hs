@@ -16,7 +16,7 @@ import Importer.Utilities.Hsk (string2Name, extractBindingNs)
 
 import qualified Language.Haskell.Exts as Hsx
 import qualified Importer.LexEnv as Env
-import qualified Importer.IsaSyntax as Isa
+import qualified Importer.Isa as Isa
 
 import Importer.Adapt.Common
 import Importer.Adapt.Read (Adaption (..))

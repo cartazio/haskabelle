@@ -15,7 +15,7 @@ import Importer.Utilities.Misc
 
 import Importer.Adapt.Mapping (AdaptionTable(..))
 
-import qualified Importer.IsaSyntax as Isa
+import qualified Importer.Isa as Isa
 import Language.Haskell.Exts
 
 
@@ -307,7 +307,7 @@ instance Adapt Isa.Cmd where
 
 instance Adapt Isa.TypeSpec where
     adapt (Isa.TypeSpec tyvarNs tycoN)
-        = do (Isa.TyCon tycoN' tyvars') <- adaptType (Isa.TyCon tycoN (map Isa.TyVar tyvarNs))
+        = do (Isa.Type tycoN' tyvars') <- adaptType (Isa.Type tycoN (map Isa.TyVar tyvarNs))
              return $ Isa.TypeSpec (map (\(Isa.TyVar n) -> n) tyvars') tycoN'
 
 instance Adapt Isa.TypeSig where
@@ -317,9 +317,9 @@ instance Adapt Isa.TypeSig where
 instance Adapt Isa.Term where
     adapt (Isa.Literal lit)     = return (Isa.Literal lit)
 
-    adapt (Isa.Var n)           = adaptVar n >>= (return . Isa.Var)
+    adapt (Isa.Const n)           = adaptConst n >>= (return . Isa.Const)
       where
-        adaptVar n = do
+        adaptConst n = do
           n' <- adaptEnvName (Env.fromIsa n)
           return (Env.toIsa n')
 
@@ -349,7 +349,7 @@ instance Adapt Isa.Term where
               find_applied_op :: Isa.Term -> Maybe Isa.Name
               find_applied_op t 
                   = case t of
-                      Isa.Var n            -> Just n
+                      Isa.Const n            -> Just n
                       Isa.App t1 t2        -> find_applied_op t1
                       Isa.Parenthesized t' -> find_applied_op t'
                       _                    -> Nothing -- the remaining cases are 
@@ -358,9 +358,9 @@ instance Adapt Isa.Term where
     adapt (Isa.If c t e)        = do c' <- adapt c ; t' <- adapt t ; e' <- adapt e
                                      return (Isa.If c' t' e')
 
-    adapt (Isa.Lambda boundN body)
+    adapt (Isa.Abs boundN body)
         = shadowing [boundN] $
-            adapt body >>= (return . Isa.Lambda boundN)
+            adapt body >>= (return . Isa.Abs boundN)
 
     adapt (Isa.Let bindings body)
         = do pats' <- mapM adapt (map fst bindings)
@@ -399,7 +399,7 @@ instance Adapt Isa.Stmt where
 
                
 extractNames :: Isa.Term -> [Isa.Name]
-extractNames (Isa.Var n)                   = [n]
+extractNames (Isa.Const n)                   = [n]
 extractNames (Isa.App t1 t2)               = extractNames t1 ++ extractNames t2
 extractNames etc = []
 

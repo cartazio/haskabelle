@@ -18,14 +18,14 @@ import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd,
 
 import Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
 
-import qualified Importer.IsaSyntax as Isa
+import qualified Importer.Isa as Isa
 import qualified Importer.LexEnv as Env
 
 import Importer.Adapt.Mapping (AdaptionTable(..))
 
 
 data PPState = PPState { globalEnv        :: Env.GlobalE,
-                         currentTheory    :: Isa.Theory,
+                         currentTheory    :: Isa.ThyName,
                          -- Are we in an Infix Application?
                          currentAppFlavor :: Maybe AppFlavor,
                          currentTyScheme  :: [(Isa.Name, [Isa.Name])],
@@ -36,7 +36,7 @@ data PPState = PPState { globalEnv        :: Env.GlobalE,
 data DocM v = DocM (PPState -> (v, PPState))
 
 emptyPPState = PPState { globalEnv = Env.initialGlobalEnv,
-                         currentTheory = Isa.Theory "Scratch",
+                         currentTheory = Isa.ThyName "Scratch",
                          currentAppFlavor = Nothing,
                          currentTyScheme = [],
                          withinHOL = False
@@ -132,7 +132,7 @@ parensIf :: Bool -> Doc -> Doc
 parensIf True  = parens
 parensIf False = id
 
-withCurrentTheory :: Isa.Theory -> Doc -> Doc
+withCurrentTheory :: Isa.ThyName -> Doc -> Doc
 withCurrentTheory thy d
     = do oldthy <- queryPP (\pps -> currentTheory pps)
          updatePP (\pps -> pps { currentTheory = thy })
@@ -239,7 +239,7 @@ instance Printer Isa.Cmd where
     pprint' adapt reserved (Isa.Block cmds)     = blankline $ vcat $ map (pprint' adapt reserved) cmds
     pprint' adapt reserved (Isa.TheoryCmd thy imps cmds)
         = do env <- queryPP globalEnv
-             let imps' = map (pprint' adapt reserved) (imps ++ [Isa.Theory Env.prelude])
+             let imps' = map (pprint' adapt reserved) (imps ++ [Isa.ThyName Env.prelude])
              withCurrentTheory thy $
                text "theory" <+> pprint' adapt reserved thy $+$
                text "imports " <> fsep  imps'    $+$
@@ -338,8 +338,8 @@ printFunDef adapt reserved cmd fnames tysigs equations
                               equals <+> 
                               parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
 
-instance Printer Isa.Theory where
-    pprint' adapt reserved (Isa.Theory name) =
+instance Printer Isa.ThyName where
+    pprint' adapt reserved (Isa.ThyName name) =
       text (map (\c -> if c == '.' then '_' else c) name)
       -- FIXME need uniform rename of theory names
 
@@ -382,12 +382,12 @@ instance Printer Isa.Type where
                Just classNs -> parens (tyvar_doc <+> text "::"
                  <+> (brcommas $ map (pprint' adapt reserved) classNs))
 
-    pprint' adapt reserved (Isa.TyCon cname []) = pprint' adapt reserved cname 
-    pprint' adapt reserved (Isa.TyCon cname [typ]) =
+    pprint' adapt reserved (Isa.Type cname []) = pprint' adapt reserved cname 
+    pprint' adapt reserved (Isa.Type cname [typ]) =
       maybeWithinHOL $
         parensIf (isCompoundType typ) (pprint' adapt reserved typ)
         <+> pprint' adapt reserved cname
-    pprint' adapt reserved (Isa.TyCon cname typs) =
+    pprint' adapt reserved (Isa.Type cname typs) =
       maybeWithinHOL $
         parcommas (map (pprint' adapt reserved) typs)
         <+> pprint' adapt reserved cname
@@ -420,7 +420,7 @@ instance Printer Isa.Literal where
     pprint' adapt reserved (Isa.String str) = quotes . quotes . text $ str
 
 instance Printer Isa.Term where
-    pprint' adapt reserved (Isa.Var vname)         = pprint' adapt reserved vname
+    pprint' adapt reserved (Isa.Const vname)         = pprint' adapt reserved vname
     pprint' adapt reserved (Isa.Literal lit)       = pprint' adapt reserved lit
     pprint' adapt reserved (Isa.Parenthesized t)   
         = do thy <- queryPP currentTheory 
@@ -449,7 +449,7 @@ instance Printer Isa.Term where
                 text "then" <+> pprint' adapt reserved t2,
                 text "else" <+> pprint' adapt reserved t3]
 
-    pprint' adapt reserved lexpr@(Isa.Lambda _ _)
+    pprint' adapt reserved lexpr@(Isa.Abs _ _)
         = let (argNs, body) = flattenLambdas lexpr in 
           fsep [text "%" <+> hsep (map (pprint' adapt reserved) argNs) <+> dot,
                 nest 2 (pprint' adapt reserved body)]
@@ -519,7 +519,7 @@ isEmptySig _ = False
 
 pprintAsList :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
 pprintAsList adapt reserved list = let
-  (xs, [Isa.Var nil]) = splitAt (length list - 1) list
+  (xs, [Isa.Const nil]) = splitAt (length list - 1) list
   in assert (isNil adapt nil)
     $ brackets (hsep (punctuate comma (map (pprint' adapt reserved) xs)))
 
@@ -541,11 +541,11 @@ data AppFlavor = ListApp [Isa.Term]
 --
 
 categorizeApp :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> AppFlavor
-categorizeApp adapt app@(Isa.App (Isa.App (Isa.Var opN) t1) t2) lookupFn
+categorizeApp adapt app@(Isa.App (Isa.App (Isa.Const opN) t1) t2) lookupFn
     | isCons adapt opN, Just list <- flattenListApp adapt app = ListApp list
     | isPairCon adapt opN, Just list <- flattenTupleApp adapt app = TupleApp list
-    | isInfixOp lookupFn opN = InfixApp t1 (Isa.Var opN) t2
-categorizeApp _ (Isa.App (Isa.Var opN) _) lookupFn
+    | isInfixOp lookupFn opN = InfixApp t1 (Isa.Const opN) t2
+categorizeApp _ (Isa.App (Isa.Const opN) _) lookupFn
     | isUnaryOp lookupFn opN = UnaryOpApp
     | otherwise = FunApp
 categorizeApp _ _ _ = FunApp
@@ -554,10 +554,10 @@ flattenListApp :: AdaptionTable -> Isa.Term -> Maybe [Isa.Term]
 flattenListApp adapt app = let
   list = unfoldr1 split app
   in case last list of -- proper list?
-    (Isa.Var c) | isNil adapt c -> Just list
+    (Isa.Const c) | isNil adapt c -> Just list
     _ -> Nothing
   where
-    split (Isa.App (Isa.App (Isa.Var c) x) xs) | isCons adapt c = Just (x, xs)
+    split (Isa.App (Isa.App (Isa.Const c) x) xs) | isCons adapt c = Just (x, xs)
     split _ = Nothing
 
 flattenTupleApp :: AdaptionTable -> Isa.Term -> Maybe [Isa.Term]
@@ -565,22 +565,22 @@ flattenTupleApp adapt app = let list = unfoldr1 split app in
                       if (length list) > 1 then Just list
                                            else Nothing
   where
-    split (Isa.App (Isa.App (Isa.Var c) x) xs) | isPairCon adapt c = Just (x, xs)
+    split (Isa.App (Isa.App (Isa.Const c) x) xs) | isPairCon adapt c = Just (x, xs)
     split _ = Nothing
 
 -- flattenLambdas ``%x . %y . %z . foo'' => ([x,y,z], foo)
 --
 flattenLambdas :: Isa.Term -> ([Isa.Name], Isa.Term)
-flattenLambdas (Isa.Lambda arg1 (Isa.Lambda arg2 body)) 
+flattenLambdas (Isa.Abs arg1 (Isa.Abs arg2 body)) 
     = let (args, real_body) = flattenLambdas body
       in ([arg1,arg2]++args, real_body)
-flattenLambdas (Isa.Lambda arg body) = ([arg], body)
+flattenLambdas (Isa.Abs arg body) = ([arg], body)
 flattenLambdas t = ([], t)
 
 isSelfEvaluating :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
 isSelfEvaluating adapt t lookupFn
     = case t of
-        Isa.Var _            -> True
+        Isa.Const _            -> True
         Isa.Literal _        -> True
         Isa.Parenthesized _  -> True
         Isa.App _ _          -> case categorizeApp adapt t lookupFn of
@@ -594,7 +594,7 @@ isSelfEvaluating adapt t lookupFn
 isCompound :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
 isCompound adapt t lookupFn
     = case t of
-        Isa.Var _            -> False
+        Isa.Const _            -> False
         Isa.Literal _        -> False
         Isa.Parenthesized _  -> False
         Isa.App _ _          -> case categorizeApp adapt t lookupFn of
@@ -608,7 +608,7 @@ isCompound adapt t lookupFn
 isCompoundType :: Isa.Type -> Bool
 isCompoundType t = case t of
                      Isa.TyVar _    -> False
-                     Isa.TyCon _ [] -> False
+                     Isa.Type _ [] -> False
                      _              -> True
                      
 isInfixOp :: (a -> Maybe Env.Identifier) -> a -> Bool
@@ -623,6 +623,6 @@ isUnaryOp lookupFn name
         Just id -> Env.isUnaryOp id
         _       -> False
 
-lookupIdentifier :: Isa.Theory -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
+lookupIdentifier :: Isa.ThyName -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
 lookupIdentifier thy n globalEnv
     = Env.lookupConstant (Env.fromIsa thy) (Env.fromIsa n) globalEnv

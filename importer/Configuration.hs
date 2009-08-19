@@ -49,7 +49,7 @@ import Control.Monad.Error
 import System.FilePath
 import System.Directory
 
-import Importer.IsaSyntax (Theory (..))
+import qualified Importer.Isa as Isa (ThyName (..))
 import qualified Language.Haskell.Exts as Hsx
   (ModuleName (..), Type(..), QName(..))
 
@@ -93,7 +93,7 @@ data Customisation = CustReplace Replace
   to actual translations (which might be impossible) of necessary Haskell modules.
 -}
 data CustomTheory = CustomTheory {
-      custThyName :: Theory, -- ^The name of the theory.
+      custThyName :: Isa.ThyName, -- ^The name of the theory.
       custThyLocation :: Location, -- ^The location of the @*.thy@ file containing the theory.
       custThyConstants :: [String], -- ^The constants that the theory is supposed to define.
       custThyTypes :: [String], -- ^The types that the theory is supposed to define.
@@ -214,7 +214,7 @@ getCustomTheory Customisations{ customTheoryCust = custs} mod = Map.lookup mod c
 getCustomTheoryPath :: CustomTheory -> String
 getCustomTheoryPath CustomTheory{custThyLocation = FileLocation src} = src
 
-getCustomTheoryName :: CustomTheory -> Theory
+getCustomTheoryName :: CustomTheory -> Isa.ThyName
 getCustomTheoryName CustomTheory{custThyName = name} = name
 
 {-|
@@ -490,7 +490,7 @@ parseTheoryElem el = do thy <- findSAttr "name" el
                         types <- getTypes
                         monads <- getMonads
                         constants <- getConstants
-                        return $ CustomTheory (Theory thy)  (FileLocation path) constants types (Left monads)
+                        return $ CustomTheory (Isa.ThyName thy)  (FileLocation path) constants types (Left monads)
     where getTypes = (findSingleSElem "types" el >>=
                       parseThyTypesElem)
                      `defaultVal` []

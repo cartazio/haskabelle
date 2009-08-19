@@ -39,7 +39,7 @@ import Importer.Adapt.Read (Adaption)
 import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
 
-import qualified Importer.IsaSyntax as Isa
+import qualified Importer.Isa as Isa
 import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 

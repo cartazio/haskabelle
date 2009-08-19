@@ -35,7 +35,7 @@ import Importer.Adapt.Read (Adaption (..))
 
 import qualified Language.Haskell.Exts as Hsx
 
-import qualified Importer.IsaSyntax as Isa
+import qualified Importer.Isa as Isa
 import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 
@@ -91,7 +91,7 @@ newtype HskDependentDecls = HskDependentDecls [Hsx.Decl]
   ???
 -}
 data Context = Context {
-  _theory :: Isa.Theory,
+  _theory :: Isa.ThyName,
   _globalEnv :: Env.GlobalE,
   _warnings :: [Warning],
   _backtrace :: [String],
@@ -99,7 +99,7 @@ data Context = Context {
   _monad :: Maybe MonadInstance }
 
 initContext adapt env = Context {
-  _theory = Isa.Theory "Scratch", {- FIXME: Default Hsx.ModuleName in Haskell
+  _theory = Isa.ThyName "Scratch", {- FIXME: Default Hsx.ModuleName in Haskell
     is called `Main'; clashes with Isabelle. -}
   _globalEnv = env,
   _warnings = [],
@@ -115,7 +115,7 @@ initContext adapt env = Context {
 -}
 type FieldSurrogate field = (Context -> field, Context -> field -> Context) 
 
-theory :: FieldSurrogate Isa.Theory
+theory :: FieldSurrogate Isa.ThyName
 theory      = (_theory,      \c f -> c { _theory      = f })
 globalEnv :: FieldSurrogate Env.GlobalE
 globalEnv   = (_globalEnv,   \c f -> c { _globalEnv   = f })
@@ -129,7 +129,7 @@ monad     :: FieldSurrogate (Maybe MonadInstance)
 monad       = (_monad,       \c f -> c { _monad       = f })
 
 currentModule :: FieldSurrogate Hsx.ModuleName
-currentModule = (\c -> let (Isa.Theory n) = _theory c in Hsx.ModuleName n, \c f -> c)
+currentModule = (\c -> let (Isa.ThyName n) = _theory c in Hsx.ModuleName n, \c f -> c)
 
 getMonadInstance :: String -> ContextM (Maybe MonadInstance)
 getMonadInstance name = ask >>= (return . flip Config.getMonadInstance name)
@@ -294,7 +294,7 @@ generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _der
               decls = map strip condecls
           in do tyvars <- mapM convert tyvarNs
                 tycon  <- convert tyconN
-                let dataTy = Isa.TyCon tycon (map Isa.TyVar tyvars)
+                let dataTy = Isa.Type tycon (map Isa.TyVar tyvars)
                 let fieldNames = concatMap extrFieldNames decls
                 fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . Hsx.UnQual) (nub fieldNames)
                 let funBinds = map (mkAFunBinds (length decls) dataTy) fields
@@ -309,13 +309,13 @@ generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _der
                         in Isa.PrimrecCmd [fname'] [Isa.TypeSig fname' funTy] binds
                     mkAFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
-                            con = Isa.Var $ Isa.Name cname
+                            con = Isa.Const $ Isa.Name cname
                             genArg (Env.RecordField n _)
-                                | n == fname = Isa.Var (Isa.Name "x")
-                                | otherwise = Isa.Var (Isa.Name "_")
+                                | n == fname = Isa.Const (Isa.Name "x")
+                                | otherwise = Isa.Const (Isa.Name "_")
                             conArgs = map genArg fields
                             pat = Isa.Parenthesized $ foldl Isa.App con conArgs
-                            term = Isa.Var (Isa.Name "x")
+                            term = Isa.Const (Isa.Name "x")
                         in (fname', [pat], term)
                     mkUFunBinds numCon dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
                         let uname = "update_" ++ fname
@@ -325,18 +325,18 @@ generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _der
                         in Isa.PrimrecCmd [uname'] [Isa.TypeSig uname' funTy] binds
                     mkUFunBind fname uname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let uname' = Isa.Name uname
-                            con = Isa.Var $ Isa.Name cname
+                            con = Isa.Const $ Isa.Name cname
                             genPatArg (i,(Env.RecordField n _))
-                                | n == fname = Isa.Var (Isa.Name "_")
-                                | otherwise = Isa.Var (Isa.Name ("f" ++ show i))
+                                | n == fname = Isa.Const (Isa.Name "_")
+                                | otherwise = Isa.Const (Isa.Name ("f" ++ show i))
                             genTermArg (i,(Env.RecordField n _))
-                                | n == fname = Isa.Var (Isa.Name "x")
-                                | otherwise = Isa.Var (Isa.Name ("f" ++ show i))
+                                | n == fname = Isa.Const (Isa.Name "x")
+                                | otherwise = Isa.Const (Isa.Name ("f" ++ show i))
                             patArgs = map genPatArg (zip [1..] fields)
                             termArgs = map genTermArg (zip [1..] fields)
                             pat = Isa.Parenthesized $ foldl Isa.App con patArgs
                             term = Isa.Parenthesized $ foldl Isa.App con termArgs
-                            arg = Isa.Var (Isa.Name "x")
+                            arg = Isa.Const (Isa.Name "x")
                         in (uname', [arg,pat], term)
 
 
@@ -387,17 +387,17 @@ instance Convert HskModule Isa.Cmd where
              adaption <- queryContext adapt
              custs <- queryCustomisations
              let imps = filter (not . isStandardTheory (usedThyNames adaption)) (lookupImports thy env custs)
-             withUpdatedContext theory (\t -> assert (t == Isa.Theory "Scratch") thy) 
+             withUpdatedContext theory (\t -> assert (t == Isa.ThyName "Scratch") thy) 
                $ do cmds <- mapM convert dependentDecls
                     return (Isa.TheoryCmd thy imps cmds)
-        where isStandardTheory usedThyNames (Isa.Theory n) = n `elem` usedThyNames
+        where isStandardTheory usedThyNames (Isa.ThyName n) = n `elem` usedThyNames
 
 
-lookupImports :: Isa.Theory -> Env.GlobalE -> Customisations -> [Isa.Theory]
+lookupImports :: Isa.ThyName -> Env.GlobalE -> Customisations -> [Isa.ThyName]
 lookupImports thy globalEnv custs
     = map (rename .(\(Env.EnvImport name _ _) ->  Env.toIsa name))
         $ Env.lookupImports_OrLose (Env.fromIsa thy) globalEnv
-    where rename orig@(Isa.Theory name) = case getCustomTheory custs (Hsx.ModuleName name) of
+    where rename orig@(Isa.ThyName name) = case getCustomTheory custs (Hsx.ModuleName name) of
                                    Nothing -> orig
                                    Just ct -> getCustomTheoryName ct
 
@@ -432,7 +432,7 @@ instance Convert Hsx.Module Isa.Cmd where
 
 --- Trivially convertable stuff.
 
-instance Convert Hsx.ModuleName Isa.Theory where
+instance Convert Hsx.ModuleName Isa.ThyName where
     convert' m = return (Env.toIsa (Env.fromHsk m :: Env.ModuleID))
 
 instance Convert Hsx.Name Isa.Name where
@@ -452,8 +452,8 @@ instance Convert Hsx.BangType Isa.Type where
     convert' (Hsx.UnBangedTy typ) = convert typ
 
 instance Convert Hsx.QOp Isa.Term where
-    convert' (Hsx.QVarOp qname) = do qname' <- convert qname; return (Isa.Var qname')
-    convert' (Hsx.QConOp qname) = do qname' <- convert qname; return (Isa.Var qname')
+    convert' (Hsx.QVarOp qname) = do qname' <- convert qname; return (Isa.Const qname')
+    convert' (Hsx.QConOp qname) = do qname' <- convert qname; return (Isa.Const qname')
     -- convert' junk = pattern_match_exhausted "Hsx.QOp -> Isa.Term" junk
 
 instance Convert Hsx.Op Isa.Name where
@@ -571,7 +571,7 @@ instance Convert Hsx.Decl Isa.Cmd where
 
     convert' (Hsx.InstDecl loc ctx classqN tys inst_decls)
         | length tys /= 1          = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
-        | not (isTyCon (head tys)) = dieWithLoc loc (Msg.only_specializing_on_tycon_allowed)
+        | not (isType (head tys)) = dieWithLoc loc (Msg.only_specializing_on_tycon_allowed)
         | otherwise
             = do classqN'   <- convert classqN
                  type'      <- convert (head tys)
@@ -588,7 +588,7 @@ instance Convert Hsx.Decl Isa.Cmd where
                    do decls' <- mapM convert (map toHsDecl inst_decls)
                       return (Isa.InstanceCmd classqN' type' decls')
         where 
-          isTyCon t = case t of { Hsx.TyCon _ -> True; _ -> False }
+          isType t = case t of { Hsx.TyCon _ -> True; _ -> False }
           toHsDecl (Hsx.InsDecl decl) = decl
 
           mk_method_annotation :: Env.EnvName -> Env.EnvType -> Env.Identifier -> Env.Identifier
@@ -608,13 +608,13 @@ instance Convert Hsx.Binds [Isa.Cmd] where
 
 mkList :: [Isa.Term] -> Isa.Term
 mkList = foldr
-         (\x xs -> Isa.App (Isa.App (Isa.Var (Isa.Name "List.Cons")) x) xs)
-         (Isa.Var (Isa.Name "List.Nil"))
+         (\x xs -> Isa.App (Isa.App (Isa.Const (Isa.Name "List.Cons")) x) xs)
+         (Isa.Const (Isa.Name "List.Nil"))
 
 mkSimpleLet :: [(Isa.Name, Isa.Term)] -> Isa.Term -> Isa.Term
 mkSimpleLet [] body = body
 mkSimpleLet binds body = Isa.Let binds' body
-    where binds' = map (\(a,b) -> (Isa.Var a, b)) binds
+    where binds' = map (\(a,b) -> (Isa.Const a, b)) binds
 
 type PatternE = Bool
 type PatternO = [(Isa.Name,Isa.Term)]
@@ -640,7 +640,7 @@ addAlias = tell . (:[])
 convertPat :: Hsx.Pat -> PatternM Isa.Pat
 convertPat (Hsx.PVar name) = 
     do name' <- liftConvert $ convert name
-       return (Isa.Var name')
+       return (Isa.Const name')
 convertPat (Hsx.PLit lit) = 
     do lit' <- liftConvert $ convert lit
        return (Isa.Literal lit')
@@ -650,19 +650,19 @@ convertPat infixapp@Hsx.PInfixApp{} =
        p1' <- convertPat p1 
        qname'   <- liftConvert $ convert qname
        p2' <- convertPat p2
-       return (Isa.App (Isa.App (Isa.Var qname') p1') p2')
+       return (Isa.App (Isa.App (Isa.Const qname') p1') p2')
 
 convertPat (Hsx.PApp qname pats) = 
     do qname' <- liftConvert $ convert qname
        pats' <- mapM convertPat pats
-       return $ foldl Isa.App (Isa.Var qname') pats'
+       return $ foldl Isa.App (Isa.Const qname') pats'
        
 convertPat (Hsx.PTuple comps) = 
     convertPat (foldr hskPPair (Hsx.PParen (last comps)) (init comps))
 
 convertPat (Hsx.PList []) =
     do list_datacon_name <- liftConvert $ convert (Hsx.Special Hsx.ListCon)
-       return (Isa.Var list_datacon_name)
+       return (Isa.Const list_datacon_name)
 
 convertPat (Hsx.PList els) =
     convertPat $ foldr hskPCons hskPNil els
@@ -680,13 +680,13 @@ convertPat (Hsx.PRec qname fields) =
                     toSimplePat (Env.RecordField iden _) = 
                         case lookup iden fields' of
                           Nothing -> if isAs
-                                     then liftConvert . liftGensym . liftM Isa.Var . liftM Isa.Name $
+                                     then liftConvert . liftGensym . liftM Isa.Const . liftM Isa.Name $
                                           gensym "a"
-                                     else return (Isa.Var (Isa.Name "_"))
+                                     else return (Isa.Const (Isa.Name "_"))
                           Just pat -> convertPat pat
                 recArgs <- mapM toSimplePat recFields
                 qname' <- liftConvert $ convert qname
-                return $ Isa.Parenthesized (foldl Isa.App (Isa.Var qname') recArgs)
+                return $ Isa.Parenthesized (foldl Isa.App (Isa.Const qname') recArgs)
          _ -> liftConvert . die $ "Record constructor " ++ Msg.quote qname ++ " is not declared in environment!"
 
 convertPat (Hsx.PAsPat name pat) = 
@@ -697,9 +697,9 @@ convertPat (Hsx.PAsPat name pat) =
 convertPat (Hsx.PWildCard) = 
     do isAs <- isInsideAsPattern
        if isAs
-         then liftConvert . liftGensym . liftM Isa.Var . liftM Isa.Name $
+         then liftConvert . liftGensym . liftM Isa.Const . liftM Isa.Name $
               gensym "a"
-         else return (Isa.Var (Isa.Name "_"))
+         else return (Isa.Const (Isa.Name "_"))
 
 convertPat junk = liftConvert $ pattern_match_exhausted 
                   "Hsx.Pat -> Isa.Term" 
@@ -732,15 +732,15 @@ instance Convert Hsx.Exp Isa.Term where
     convert' (Hsx.Lit lit)       = convert lit   >>= (\l -> return (Isa.Literal l))
     convert' (Hsx.Var qname)     =
         do qname' <- getCurrentMonadFunction qname
-           convert qname' >>= (\n -> return (Isa.Var n))
-    convert' (Hsx.Con qname)     = convert qname >>= (\n -> return (Isa.Var n))
+           convert qname' >>= (\n -> return (Isa.Const n))
+    convert' (Hsx.Con qname)     = convert qname >>= (\n -> return (Isa.Const n))
     convert' (Hsx.Paren exp)     = convert exp   >>= (\e -> return (Isa.Parenthesized e))
-    -- convert' (Hsx.WildCard)      = return (Isa.Var (Isa.Name "_"))
+    -- convert' (Hsx.WildCard)      = return (Isa.Const (Isa.Name "_"))
     convert' (Hsx.NegApp exp)    = convert (hsk_negate exp)
 
     convert' (Hsx.List [])       = do
       list_datacon_name <- convert (Hsx.Special Hsx.ListCon)
-      return (Isa.Var list_datacon_name)
+      return (Isa.Const list_datacon_name)
     convert' (Hsx.List exps)
         = convert $ foldr hsk_cons hsk_nil exps
 
@@ -776,13 +776,13 @@ instance Convert Hsx.Exp Isa.Term where
         = do e'   <- convert e
              qop' <- convert qop
              g    <- liftGensym (genIsaName (Isa.Name "arg"))
-             return (makeLambda [g] $ Isa.App (Isa.App qop' e') (Isa.Var g))
+             return (makeAbs [g] $ Isa.App (Isa.App qop' e') (Isa.Const g))
 
     convert' (Hsx.RightSection qop e)
         = do e'   <- convert e
              qop' <- convert qop
              g <- liftGensym (genIsaName (Isa.Name "arg"))
-             return (makeLambda [g] $ Isa.App (Isa.App qop' (Isa.Var g)) e')
+             return (makeAbs [g] $ Isa.App (Isa.App qop' (Isa.Const g)) e')
 
     convert' (Hsx.RecConstr qname updates) = 
         do mbConstr <- lookupIdentifier_Constant qname
@@ -802,10 +802,10 @@ instance Convert Hsx.Exp Isa.Term where
            fstupd:upds <- mapM convUpd updates
            let updateFunction = Isa.Parenthesized (foldr comp fstupd upds)
            return $ Isa.App updateFunction exp'
-       where comp a b = Isa.App (Isa.App (Isa.Var (Isa.Name "o")) a) b
+       where comp a b = Isa.App (Isa.App (Isa.Const (Isa.Name "o")) a) b
              convUpd (Hsx.FieldUpdate fname fexp) =
                                 do fexp' <- convert fexp
-                                   let ufun = Isa.Var (Isa.Name ("update_" ++ unqual fname))
+                                   let ufun = Isa.Const (Isa.Name ("update_" ++ unqual fname))
                                    return $ Isa.App ufun fexp'
              unqual (Hsx.Qual _ n) = uname n
              unqual (Hsx.UnQual n) = uname n
@@ -827,10 +827,10 @@ instance Convert Hsx.Exp Isa.Term where
                  aliases' = concat aliases
              body'  <- convert body
              let body'' = mkSimpleLet aliases' body'
-             if all isVar pats' then return $ makeLambda [n | Isa.Var n <- pats'] body''
-                                else makePatternMatchingLambda pats' body''
-          where isVar (Isa.Var _)   = True
-                isVar _             = False
+             if all isConst pats' then return $ makeAbs [n | Isa.Const n <- pats'] body''
+                                else makePatternMatchingAbs pats' body''
+          where isConst (Isa.Const _)   = True
+                isConst _             = False
 
     convert' expr@(Hsx.Let (Hsx.BDecls bindings) body)
         = let (_, patbindings) = partition isTypeSig bindings
@@ -859,7 +859,7 @@ instance Convert Hsx.Exp Isa.Term where
                 return $ [Isa.Generator (p', e')] ++ gens
               convertListCompStmt (Hsx.LetStmt _)
                   = die "Let statements not supported in List Comprehensions."
-              mkSimpleGens = map (\(n,t) -> Isa.Generator (Isa.Var n, mkList [t]))
+              mkSimpleGens = map (\(n,t) -> Isa.Generator (Isa.Const n, mkList [t]))
     convert' (Hsx.Do stmts)
         = do isaStmts <- liftM concat $ mapM convert stmts
              mbDo <- getCurrentMonadDoSyntax
@@ -895,16 +895,16 @@ mkReturn = convert . Hsx.Var . Hsx.UnQual .Hsx.Ident $ "return"
 mkDoLet :: [(Isa.Name, Isa.Term)] -> ContextM [Isa.Stmt]
 mkDoLet aliases = 
     do ret <- mkReturn
-       let mkSingle (name, term) = Isa.DoGenerator (Isa.Var name) (Isa.App ret term)
+       let mkSingle (name, term) = Isa.DoGenerator (Isa.Const name) (Isa.App ret term)
        return $ map mkSingle aliases
 
 {-|
   We desugare lambda expressions to true unary functions, i.e. to
   lambda expressions binding only one argument.
  -}
-makeLambda :: [Isa.Name] -> Isa.Term -> Isa.Term
-makeLambda varNs body
-    = assert (not (null varNs)) $ foldr Isa.Lambda body varNs
+makeAbs :: [Isa.Name] -> Isa.Term -> Isa.Term
+makeAbs varNs body
+    = assert (not (null varNs)) $ foldr Isa.Abs body varNs
 
 {-|
   Since HOL doesn't have true n-tuple constructors (it uses nested
@@ -920,28 +920,28 @@ makeTupleDataCon n     -- n < 2  cannot happen (cf. Language.Haskell.Exts.Hsx.Tu
          args   <- return (map Hsx.Var argNs)
          argNs' <- mapM convert argNs
          args'  <- convert (Hsx.Tuple args)
-         return $ Isa.Parenthesized (makeLambda argNs' args')
+         return $ Isa.Parenthesized (makeAbs argNs' args')
     where pair x y = Hsx.App (Hsx.App (Hsx.Con (Hsx.Special (Hsx.TupleCon 2))) x) y
 
 {-|
   HOL does not support pattern matching directly within a lambda
-  expression, so we transform a @Hsx.Lambda pat1 pat2 .. patn -> body@ to
+  expression, so we transform a @Hsx.Abs pat1 pat2 .. patn -> body@ to
   
   @
-  Isa.Lambda g1 .
+  Isa.Abs g1 .
      Isa.Case g1 of pat1' =>
-       Isa.Lambda g2 .
-         Isa.Case g2 of pat2' => ... => Isa.Lambda gn .
+       Isa.Abs g2 .
+         Isa.Case g2 of pat2' => ... => Isa.Abs gn .
                                           Isa.Case gn of patn' => body'
   @
   where @g1@, ..., @gn@ are fresh identifiers.
 -}
-makePatternMatchingLambda :: [Isa.Pat] -> Isa.Term -> ContextM Isa.Term
-makePatternMatchingLambda patterns theBody
-    = foldM mkMatchingLambda theBody (reverse patterns) -- foldM is a left fold.
-      where mkMatchingLambda body pat
+makePatternMatchingAbs :: [Isa.Pat] -> Isa.Term -> ContextM Isa.Term
+makePatternMatchingAbs patterns theBody
+    = foldM mkMatchingAbs theBody (reverse patterns) -- foldM is a left fold.
+      where mkMatchingAbs body pat
                 = do g <- liftGensym (genIsaName (Isa.Name "arg"))
-                     return $ Isa.Lambda g (Isa.Case (Isa.Var g) [(pat, body)])
+                     return $ Isa.Abs g (Isa.Case (Isa.Const g) [(pat, body)])
 
 
 makeRecordCmd :: Hsx.Name  -- ^type constructor

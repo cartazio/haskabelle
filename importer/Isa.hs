@@ -2,53 +2,59 @@
 
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 
-Abstract syntactic representation of Isar/HOL theory.
+Abstract representation of Isar/HOL theory.
 -}
 
-module Importer.IsaSyntax where
+module Importer.Isa where
 
 import Data.Generics.Basics
 import Data.Generics.Instances
 
 import Data.Graph as Graph
 
-{-|
-  This type represents the name of a theory.
--}
-newtype Theory = Theory String
+newtype ThyName = ThyName String
   deriving (Show, Eq, Ord, Data, Typeable)
 
-{-|
-  This type represents names (being either qualified or unqualified).
--}
-data Name      = QName Theory String | Name String
+data Name = QName ThyName String | Name String
   deriving (Show, Eq, Ord, Data, Typeable)
-
-{-|
-  This type represents names of variables.
--}
-type VarName   = Name
-{-|
-  This type represents names of constructors.
--}
-type ConName   = Name
-{-|
-  This type represents names of operators.
--}
-type OpName    = Name
-{-|
-  This type represents names of classes.
--}
-type ClassName = Name
 
 data DatatypeDef = DatatypeDef TypeSpec [ConSpec]
                    deriving (Eq,Show, Data, Typeable)
+
+data Type =
+    Type Name [Type]
+  | TyFun Type Type
+  | TyTuple [Type] -- FIXME: unused
+  | TyVar Name
+  | TyNone
+  | TyScheme [(Name, [Name])] Type -- FIXME: remove from this type
+  deriving (Show, Eq, Data, Typeable)
+
+data Literal = Int Integer | Char Char | String String
+  deriving (Show, Eq, Data, Typeable)
+
+type Pat = Term
+
+data Term =
+    Literal Literal
+  | Const Name
+  | Abs Name Term
+  | App Term Term
+  | If Term Term Term
+  | Let [(Pat, Term)] Term
+  | Case Term [(Pat, Term)]
+  | ListComp Term [ListCompStmt]
+  | RecConstr Name [(Name, Term)]
+  | RecUpdate Term [(Name, Term)]
+  | DoBlock String [Stmt] String -- syntactic sugar for translating Haskell do expressions
+  | Parenthesized Term
+  deriving (Show, Data, Typeable)
 
 {-|
   This type represents Isabelle commands.
 -}
 data Cmd = Block [Cmd]  -- ^a block of commands
-         | TheoryCmd Theory [Theory] [Cmd]  -- ^the command introducing a theory
+         | TheoryCmd ThyName [ThyName] [Cmd]  -- ^the command introducing a theory
          
          {-|
            A data type command: @datatype ('a, 'b) "typeconstr" = Constr1 | Constr2 "'a list" 'b@
@@ -64,7 +70,7 @@ data Cmd = Block [Cmd]  -- ^a block of commands
            Ycoord :: int
            @
           -}
-         | RecordCmd TypeSpec [(VarName, Type)]
+         | RecordCmd TypeSpec [(Name, Type)]
          
          {-|
            Type synonym declaration:
@@ -86,7 +92,7 @@ data Cmd = Block [Cmd]  -- ^a block of commands
               | "add (Suc x) y = Suc (add x y)"
            @
           -}
-         | PrimrecCmd [VarName] [TypeSig] [(VarName, [Pat], Term)]
+         | PrimrecCmd [Name] [TypeSig] [(Name, [Pat], Term)]
          
          {-|
            Function definition:
@@ -99,7 +105,7 @@ data Cmd = Block [Cmd]  -- ^a block of commands
               | "fib (Suc (Suc n)) = fib n + fib (Suc n)"
            @
           -}
-         | FunCmd [VarName] [TypeSig] [(VarName, [Pat], Term)]
+         | FunCmd [Name] [TypeSig] [(Name, [Pat], Term)]
          
          {-|
            Constant definition.
@@ -108,22 +114,22 @@ data Cmd = Block [Cmd]  -- ^a block of commands
            where
            "id a = a"
           -}
-         | DefinitionCmd VarName TypeSig (Pat, Term)
+         | DefinitionCmd Name TypeSig (Pat, Term)
          
          {-|
            A class declaration
           -}
-         | ClassCmd ClassName [ClassName] [TypeSig]
+         | ClassCmd Name [Name] [TypeSig]
          
          {-|
            An instance declaration.
           -}
-         | InstanceCmd ClassName Type [Cmd]
+         | InstanceCmd Name Type [Cmd]
          
          {-|
            An operator infix annotation.
           -}
-         | InfixDeclCmd OpName Assoc Prio
+         | InfixDeclCmd Name Assoc Prio
            
          {-|
            A comment.
@@ -145,12 +151,12 @@ data Assoc = AssocNone | AssocLeft | AssocRight
 {-|
   This type represents patterns.
 -}
-type Pat = Term
+
 
 {-|
   This type represents constructors applied to variables.
 -}
-data TypeSpec = TypeSpec [VarName] ConName
+data TypeSpec = TypeSpec [Name] Name
   deriving (Show, Eq, Data, Typeable)
 
 {-|
@@ -162,45 +168,17 @@ data TypeSig = TypeSig Name Type
 {-|
   This type represents types.
 -}
-data Type = TyVar VarName
-          | TyScheme [(VarName, [ClassName])] Type
-          | TyCon ConName [Type]
-          | TyFun Type Type
-          | TyTuple [Type] -- FIXME: unused
-          | TyNone
-  deriving (Show, Eq, Data, Typeable)
 
 {-|
   This type represents constructor declaration (as part of a data type
   declaration).
 -}
-data ConSpec = Constructor ConName [Type]
+data ConSpec = Constructor Name [Type]
   deriving (Show, Eq, Data, Typeable)
 
 {-|
   This type represents literals.
 -}
-data Literal = Int Integer | Char Char | String String
-  deriving (Show, Eq, Data, Typeable)
-
-{-|
-  This type represents terms.
--}
-data Term = Literal Literal
-          | Var VarName
-          | Lambda VarName Term -- FIXME: Lambda [t1, t2] t == Lambda t1 (Lambda t2) t
-          | App Term Term
-          | If Term Term Term
-          | Let [(Pat, Term)] Term
-          | Case Term [(Pat, Term)]
-          | Parenthesized Term
-          | ListComp Term [ListCompStmt]
-          | RecConstr VarName [(Name, Term)]
-          | RecUpdate Term [(Name, Term)]
-          | DoBlock String [Stmt] String -- syntactic sugar for
-                                         -- translating Haskell do
-                                         -- expressions
-  deriving (Show, Data, Typeable)
 
 data Stmt = DoGenerator Pat Term
           | DoQualifier Term
