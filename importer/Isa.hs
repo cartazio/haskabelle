@@ -24,7 +24,7 @@ data Name = QName ThyName String | Name String
 data Type =
     Type Name [Type]
   | Func Type Type
-  | Prod [Type] -- FIXME: unused
+  | Prod [Type]
   | TVar Name
   | NoType
   | TyScheme [(Name, [Name])] Type -- FIXME: remove from this type
