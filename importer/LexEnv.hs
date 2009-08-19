@@ -82,8 +82,6 @@ import Importer.Utilities.Misc
 import Importer.Configuration hiding (getCustomTheory)
 import qualified Importer.Configuration as Conf (getCustomTheory)
 
-import Importer.Adapt.Common (primitive_tycon_table, primitive_datacon_table)
-
 
 newtype LexM a = LexM (Reader Customisations a)
     deriving (Functor, Monad, MonadReader Customisations)
@@ -670,6 +668,20 @@ retranslateSpecialCon DataCon qname
 retranslateSpecialCon TypeCon qname 
     = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_tycon_table ]
 
+primitive_tycon_table, primitive_datacon_table :: [(Hsx.SpecialCon, Hsx.QName)]
+
+primitive_tycon_table 
+    = [(Hsx.ListCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "ListTyCon")),
+       (Hsx.UnitCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "UnitTyCon")),
+       (Hsx.TupleCon 2, Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "PairTyCon"))
+      ]
+
+primitive_datacon_table 
+    = [(Hsx.Cons,       Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident ":")),
+       (Hsx.ListCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "[]")),
+       (Hsx.UnitCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "()")),
+       (Hsx.TupleCon 2, Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "PairDataCon"))
+      ]
 
 
 ---

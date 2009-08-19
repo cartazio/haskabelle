@@ -11,7 +11,7 @@ import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 
 import Importer.FilePrinter (importProject, importFiles)
-import Importer.Adapt.Read (readAdapt, Adaption (..))
+import Importer.Adapt (readAdapt, Adaption (..))
 import Importer.Configuration (readConfig)
 import Importer.Version
 

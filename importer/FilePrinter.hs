@@ -12,8 +12,7 @@ import Text.PrettyPrint (render)
 
 import Importer.ConversionUnit
 import Importer.Convert
-import Importer.Adapt.Read (Adaption (..), readAdapt)
-import Importer.Adapt.Mapping (AdaptionTable)
+import Importer.Adapt (Adaption (..), AdaptionTable, readAdapt)
 import Importer.Configuration
 import Importer.Printer (pprint)
 import Importer.LexEnv
@@ -44,7 +43,7 @@ importProject' adapt = do
 importProject :: Config -> FilePath -> IO ()
 importProject config adaptDir = do
   adapt <- readAdapt (combine adaptDir "Raw.hs")
-  runConversion config adapt (importProject' adapt)
+  runConversion config (importProject' adapt)
 
 importFiles :: FilePath -> [FilePath] -> FilePath -> IO ()
 importFiles adaptDir files out

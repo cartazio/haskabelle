@@ -29,9 +29,8 @@ import Importer.Preprocess
 import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
 import Importer.DeclDependencyGraph
 
-import Importer.Adapt.Mapping (makeAdaptionTable_FromHsModule, extractHskEntries, AdaptionTable)
-import Importer.Adapt.Adaption (adaptGlobalEnv, adaptIsaUnit)
-import Importer.Adapt.Read (Adaption (..))
+import Importer.Adapt (makeAdaptionTable_FromHsModule, extractHskEntries,
+  AdaptionTable, adaptGlobalEnv, adaptIsaUnit, Adaption(..))
 
 import qualified Language.Haskell.Exts as Hsx
 

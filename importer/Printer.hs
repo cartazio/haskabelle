@@ -21,7 +21,7 @@ import Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
 import qualified Importer.Isa as Isa
 import qualified Importer.LexEnv as Env
 
-import Importer.Adapt.Mapping (AdaptionTable(..))
+import Importer.Adapt (AdaptionTable(AdaptionTable))
 
 
 data PPState = PPState { globalEnv        :: Env.GlobalE,
