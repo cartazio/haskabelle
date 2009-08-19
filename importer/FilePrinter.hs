@@ -17,7 +17,7 @@ import Importer.Adapt.Mapping (AdaptionTable)
 import Importer.Configuration
 import Importer.Printer (pprint)
 import Importer.LexEnv
-import qualified Importer.Isa as Isa  (Cmd(..), ThyName(..))
+import qualified Importer.Isa as Isa  (Stmt(..), ThyName(..))
 import Importer.Utilities.Hsk
 
 {-|
@@ -73,8 +73,8 @@ writeCustomTheory cust =
   This function writes the given Isabelle theory in the given environment to a file
   @/\<theory name\>/.thy@ in the current directory.
 -}
-writeTheory :: AdaptionTable -> [String] -> GlobalE -> Isa.Cmd -> Conversion ()
-writeTheory adapt reserved env thy @ (Isa.TheoryCmd (Isa.ThyName thyname) _ _) = do
+writeTheory :: AdaptionTable -> [String] -> GlobalE -> Isa.Stmt -> Conversion ()
+writeTheory adapt reserved env thy @ (Isa.TheoryOpening (Isa.ThyName thyname) _ _) = do
   let content = render (pprint adapt reserved env thy)
   let dstName = content `seq` map (\c -> if c == '.' then '_' else c) thyname ++ ".thy"
   outLoc <- getOutputDir

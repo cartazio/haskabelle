@@ -248,6 +248,8 @@ data Constructor = SimpleConstr {constrTypeName :: EnvName, constrLexInfo :: Lex
 data RecordField = RecordField IdentifierID EnvType
   deriving (Eq, Ord, Show)
 
+data Assoc = AssocNone | AssocLeft | AssocRight
+
 {-|
   This data structure represents identifier information for 
   different kinds of type declaration.
@@ -611,28 +613,28 @@ instance Isa2Env Isa.Name EnvName where
     toIsa (EnvQualName moduleId id) = Isa.QName (toIsa moduleId) id
     toIsa (EnvUnqualName id)        = Isa.Name id
 
-instance Isa2Env Isa.Assoc EnvAssoc where
-    fromIsa Isa.AssocRight = EnvAssocRight
-    fromIsa Isa.AssocLeft  = EnvAssocLeft
-    fromIsa Isa.AssocNone  = EnvAssocNone
+instance Isa2Env Assoc EnvAssoc where
+    fromIsa AssocRight = EnvAssocRight
+    fromIsa AssocLeft  = EnvAssocLeft
+    fromIsa AssocNone  = EnvAssocNone
 
-    toIsa EnvAssocRight    = Isa.AssocRight
-    toIsa EnvAssocLeft     = Isa.AssocLeft
-    toIsa EnvAssocNone     = Isa.AssocNone
+    toIsa EnvAssocRight    = AssocRight
+    toIsa EnvAssocLeft     = AssocLeft
+    toIsa EnvAssocNone     = AssocNone
 
 instance Isa2Env Isa.Type EnvType where
-    fromIsa (Isa.TyNone)          = EnvTyNone
-    fromIsa (Isa.TyVar n)         = EnvTyVar (fromIsa n)
-    fromIsa (Isa.TyTuple types)   = EnvTyTuple (map fromIsa types)
-    fromIsa (Isa.TyFun t1 t2)     = EnvTyFun (fromIsa t1) (fromIsa t2)
+    fromIsa (Isa.NoType)          = EnvTyNone
+    fromIsa (Isa.TVar n)         = EnvTyVar (fromIsa n)
+    fromIsa (Isa.Prod types)   = EnvTyTuple (map fromIsa types)
+    fromIsa (Isa.Func t1 t2)     = EnvTyFun (fromIsa t1) (fromIsa t2)
     fromIsa (Isa.Type qn tyvars) = EnvTyCon (fromIsa qn) (map fromIsa tyvars)
     fromIsa (Isa.TyScheme ctx t)  = EnvTyScheme ctx' (fromIsa t)
         where ctx' = [ (fromIsa vN, map fromIsa cNs) | (vN, cNs) <- ctx ]
     
-    toIsa (EnvTyNone)             = Isa.TyNone
-    toIsa (EnvTyVar n)            = Isa.TyVar (toIsa n)
-    toIsa (EnvTyTuple types)      = Isa.TyTuple (map toIsa types)
-    toIsa (EnvTyFun t1 t2)        = Isa.TyFun (toIsa t1) (toIsa t2)
+    toIsa (EnvTyNone)             = Isa.NoType
+    toIsa (EnvTyVar n)            = Isa.TVar (toIsa n)
+    toIsa (EnvTyTuple types)      = Isa.Prod (map toIsa types)
+    toIsa (EnvTyFun t1 t2)        = Isa.Func (toIsa t1) (toIsa t2)
     toIsa (EnvTyCon qn tyvars)    = Isa.Type (toIsa qn) (map toIsa tyvars)
     toIsa (EnvTyScheme ctx t)     = Isa.TyScheme ctx' (toIsa t)
         where ctx' = [ (toIsa vN, map toIsa cNs) | (vN, cNs) <- ctx ]

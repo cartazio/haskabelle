@@ -60,7 +60,7 @@ data HskUnit = HskUnit [Hsx.Module] CustomTranslations Env.GlobalE
   This data structure combines several Isabelle theories and the corresponding environment
   into one coherent unit.
 -}
-data IsaUnit = IsaUnit [Isa.Cmd] [CustomTheory] Env.GlobalE
+data IsaUnit = IsaUnit [Isa.Stmt] [CustomTheory] Env.GlobalE
   deriving (Show)
 
 newtype Conversion a = Conversion (ReaderT Config IO a)

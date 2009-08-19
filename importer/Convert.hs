@@ -288,13 +288,13 @@ pattern_match_exhausted str obj
   This function generates the auxiliary functions for the given Haskell
   data type declaration. This includes accessor functions and update functions
 -}
-generateRecordAux :: Hsx.Decl -> ContextM [Isa.Cmd]
+generateRecordAux :: Hsx.Decl -> ContextM [Isa.Stmt]
 generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
         = let strip (Hsx.QualConDecl _loc _FIXME _context decl) = decl
               decls = map strip condecls
           in do tyvars <- mapM convert tyvarNs
                 tycon  <- convert tyconN
-                let dataTy = Isa.Type tycon (map Isa.TyVar tyvars)
+                let dataTy = Isa.Type tycon (map Isa.TVar tyvars)
                 let fieldNames = concatMap extrFieldNames decls
                 fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . Hsx.UnQual) (nub fieldNames)
                 let funBinds = map (mkAFunBinds (length decls) dataTy) fields
@@ -305,8 +305,8 @@ generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _der
                     mkAFunBinds numCon dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
                         let binds = map (mkAFunBind fname) constrs
                             fname' = Isa.Name fname
-                            funTy = Isa.TyFun dty (Env.toIsa fty)
-                        in Isa.PrimrecCmd [fname'] [Isa.TypeSig fname' funTy] binds
+                            funTy = Isa.Func dty (Env.toIsa fty)
+                        in Isa.Primrec [fname'] [Isa.TypeSig fname' funTy] binds
                     mkAFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
                             con = Isa.Const $ Isa.Name cname
@@ -321,8 +321,8 @@ generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _der
                         let uname = "update_" ++ fname
                             binds = map (mkUFunBind fname uname) constrs
                             uname' = Isa.Name uname
-                            funTy = Isa.TyFun (Env.toIsa fty) (Isa.TyFun dty dty)
-                        in Isa.PrimrecCmd [uname'] [Isa.TypeSig uname' funTy] binds
+                            funTy = Isa.Func (Env.toIsa fty) (Isa.Func dty dty)
+                        in Isa.Primrec [uname'] [Isa.TypeSig uname' funTy] binds
                     mkUFunBind fname uname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let uname' = Isa.Name uname
                             con = Isa.Const $ Isa.Name cname
@@ -380,7 +380,7 @@ class Show a => Convert a b | a -> b where
 foo :: forall a. FieldSurrogate a -> ContextM a
 foo = queryContext
 
-instance Convert HskModule Isa.Cmd where
+instance Convert HskModule Isa.Stmt where
     convert' (HskModule _loc modul dependentDecls)
         = do thy <- convert modul
              env <- queryContext globalEnv
@@ -389,7 +389,7 @@ instance Convert HskModule Isa.Cmd where
              let imps = filter (not . isStandardTheory (usedThyNames adaption)) (lookupImports thy env custs)
              withUpdatedContext theory (\t -> assert (t == Isa.ThyName "Scratch") thy) 
                $ do cmds <- mapM convert dependentDecls
-                    return (Isa.TheoryCmd thy imps cmds)
+                    return (Isa.TheoryOpening thy imps cmds)
         where isStandardTheory usedThyNames (Isa.ThyName n) = n `elem` usedThyNames
 
 
@@ -401,7 +401,7 @@ lookupImports thy globalEnv custs
                                    Nothing -> orig
                                    Just ct -> getCustomTheoryName ct
 
-instance Convert HskDependentDecls Isa.Cmd where
+instance Convert HskDependentDecls Isa.Stmt where
     -- Mutual recursive function definitions must be specified specially
     -- in Isabelle/HOL (via an explicit "and" statement between the
     -- definitions that are dependent on each other.)
@@ -412,20 +412,20 @@ instance Convert HskDependentDecls Isa.Cmd where
             = assert (all isFunBind decls)
               $ do funcmds <- mapM convert decls
                    let (names, sigs, eqs) = unzip3 (map splitFunCmd funcmds)
-                   return (Isa.FunCmd names sigs (concat eqs))
+                   return (Isa.Fun names sigs (concat eqs))
         | isDataDecl decl
             = assert (all isDataDecl decls)
               $ do dataDefs <- mapM convertDataDecl decls
                    auxCmds <- mapM generateRecordAux decls
-                   return $ Isa.Block (Isa.DatatypeCmd dataDefs : concat auxCmds)
+                   return $ Isa.Block (Isa.Datatype dataDefs : concat auxCmds)
 
         where isFunBind (Hsx.FunBind _) = True
               isFunBind _             = False
               isDataDecl (Hsx.DataDecl _ _ _ _ _ _ _) = True
               isDataDecl _ = False
-              splitFunCmd (Isa.FunCmd [n] [s] eqs) = (n, s, eqs)
+              splitFunCmd (Isa.Fun [n] [s] eqs) = (n, s, eqs)
 
-instance Convert Hsx.Module Isa.Cmd where
+instance Convert Hsx.Module Isa.Stmt where
     convert' (Hsx.Module loc modul _ _ _exports _imports decls)
         = dieWithLoc loc "Internal Error: Each Hsx.Module should have been pre-converted to HskModule."
 
@@ -440,9 +440,6 @@ instance Convert Hsx.Name Isa.Name where
 
 instance Convert Hsx.QName Isa.Name where
     convert' qn = return (Env.toIsa (Env.fromHsk qn :: Env.EnvName))
-
-instance Convert Hsx.Assoc Isa.Assoc where
-    convert' a = return (Env.toIsa (Env.fromHsk a :: Env.EnvAssoc))
 
 instance Convert Hsx.Type Isa.Type where
     convert' t = return (Env.toIsa (Env.fromHsk t :: Env.EnvType))
@@ -470,17 +467,17 @@ instance Convert Hsx.Literal Isa.Literal where
 
 --- Not so trivially convertable stuff.
 
-instance Convert Hsx.Decl Isa.Cmd where
+instance Convert Hsx.Decl Isa.Stmt where
     convert' (Hsx.TypeDecl _loc tyconN tyvarNs typ)
         = do tyvars <- mapM convert tyvarNs
              tycon  <- convert tyconN
              typ'   <- convert typ
-             return (Isa.TypesCmd [(Isa.TypeSpec tyvars tycon, typ')])
+             return (Isa.TypeSynonym [(Isa.TypeSpec tyvars tycon, typ')])
                                 
     convert' decl@(Hsx.DataDecl _ _ _ _ _ _ _) = 
         do dataDef <- convertDataDecl decl
            accCmds <- generateRecordAux decl
-           return $ Isa.Block (Isa.DatatypeCmd [dataDef] : accCmds)
+           return $ Isa.Block (Isa.Datatype [dataDef] : accCmds)
     convert' (Hsx.InfixDecl _loc assoc prio ops)
         = do (assocs, prios) <- mapAndUnzipM (lookupInfixOp . toQOp) ops 
              assert (all (== assoc) assocs && all (== prio) prios) 
@@ -516,7 +513,7 @@ instance Convert Hsx.Decl Isa.Cmd where
                                                         -- equal, pick
                                                         -- first one.
              name'      <- convert' (names!!0)
-             fsig'      <- (case ftype of Nothing -> return Isa.TyNone
+             fsig'      <- (case ftype of Nothing -> return Isa.NoType
                                           Just t -> convert' t) >>= (return . Isa.TypeSig name')
              fname'     <- convert (names!!0)          
              -- each pattern is itself a list of Hsx.Pat. 
@@ -528,7 +525,7 @@ instance Convert Hsx.Decl Isa.Cmd where
                                 mapM convert bodies
              let bodies'' = zipWith mkSimpleLet aliases bodies'
              thy        <- queryContext theory
-             return $ Isa.FunCmd [fname'] [fsig'] (zip3 (repeat fname') patterns' bodies'')
+             return $ Isa.Fun [fname'] [fsig'] (zip3 (repeat fname') patterns' bodies'')
        where splitMatch (Hsx.Match _loc name patterns (Hsx.UnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of Hsx.BDecls [] -> True; _ -> False
@@ -543,9 +540,9 @@ instance Convert Hsx.Decl Isa.Cmd where
                       ftype <- lookupType (Hsx.UnQual name)
                       sig'  <- -- trace (prettyShow' "ftype" ftype)$
                                (case ftype of 
-                                  Nothing -> return Isa.TyNone
+                                  Nothing -> return Isa.NoType
                                   Just t  -> convert' t) >>= (return . Isa.TypeSig name') 
-                      return $ Isa.DefinitionCmd name' sig' (pat', rhs'')
+                      return $ Isa.Definition name' sig' (pat', rhs'')
             _   -> dieWithLoc loc (Msg.complex_toplevel_patbinding)
     
     convert' decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
@@ -554,7 +551,7 @@ instance Convert Hsx.Decl Isa.Cmd where
                  superclassNs' <- mapM convert superclassNs
                  classN'       <- convert classN
                  typesigs'     <- concatMapM convertToTypeSig class_decls
-                 return (Isa.ClassCmd classN' superclassNs' typesigs')
+                 return (Isa.Class classN' superclassNs' typesigs')
         where
           check_class_decl (Hsx.ClassDecl loc ctx classN varNs fundeps decls) cont
               | length varNs /= 1          = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
@@ -586,7 +583,7 @@ instance Convert Hsx.Decl Isa.Cmd where
                  let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
                  withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
                    do decls' <- mapM convert (map toHsDecl inst_decls)
-                      return (Isa.InstanceCmd classqN' type' decls')
+                      return (Isa.Instance classqN' type' decls')
         where 
           isType t = case t of { Hsx.TyCon _ -> True; _ -> False }
           toHsDecl (Hsx.InsDecl decl) = decl
@@ -599,12 +596,12 @@ instance Convert Hsx.Decl Isa.Cmd where
                         typ'    = Env.substituteTyVars [(Env.EnvTyVar tyvarN, tycon)] typ
                     in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typeOf = typ' }))
 
-    convert' junk = pattern_match_exhausted "Hsx.Decl -> Isa.Cmd" junk
+    convert' junk = pattern_match_exhausted "Hsx.Decl -> Isa.Stmt" junk
 
 
-instance Convert Hsx.Binds [Isa.Cmd] where
+instance Convert Hsx.Binds [Isa.Stmt] where
     convert' (Hsx.BDecls decls) = mapM convert decls
-    convert' junk = pattern_match_exhausted "Hsx.Binds -> Isa.Cmd" junk
+    convert' junk = pattern_match_exhausted "Hsx.Binds -> Isa.Stmt" junk
 
 mkList :: [Isa.Term] -> Isa.Term
 mkList = foldr
@@ -850,7 +847,7 @@ instance Convert Hsx.Exp Isa.Term where
     convert' (Hsx.ListComp e stmts) 
         = do e'     <- convert e
              stmts' <- liftM concat $ mapM convertListCompStmt stmts
-             return (Isa.ListComp e' stmts')
+             return (Isa.ListCompr e' stmts')
         where convertListCompStmt (Hsx.Qualifier b)     = convert b >>= (return . (:[]) . Isa.Guard)
               convertListCompStmt (Hsx.Generator _ p e) = do
                 (p',as) <- convert p
@@ -870,7 +867,7 @@ instance Convert Hsx.Exp Isa.Term where
 
     convert' junk = pattern_match_exhausted "Hsx.Exp -> Isa.Term" junk
 
-instance Convert Hsx.Stmt [Isa.Stmt] where
+instance Convert Hsx.Stmt [Isa.DoBlockFragment] where
 
     convert' (Hsx.Generator _ pat exp) = 
         do exp' <- convert exp
@@ -887,12 +884,12 @@ instance Convert Hsx.Stmt [Isa.Stmt] where
                  ret <- mkReturn
                  return (Isa.DoGenerator pat' (Isa.App ret exp') : aliases')
              -- liftM2 Isa.DoGenerator (convert pat) (convert (Hsx.App (Hsx.Var (Hsx.UnQual (Hsx.Ident "return"))) exp))
-          def -> pattern_match_exhausted "Hsx.Stmt -> Isa.Stmt" def
+          def -> pattern_match_exhausted "Hsx.Stmt -> Isa.DoBlockFragment" def
 
 mkReturn :: ContextM Isa.Term
 mkReturn = convert . Hsx.Var . Hsx.UnQual .Hsx.Ident $ "return"
 
-mkDoLet :: [(Isa.Name, Isa.Term)] -> ContextM [Isa.Stmt]
+mkDoLet :: [(Isa.Name, Isa.Term)] -> ContextM [Isa.DoBlockFragment]
 mkDoLet aliases = 
     do ret <- mkReturn
        let mkSingle (name, term) = Isa.DoGenerator (Isa.Const name) (Isa.App ret term)
@@ -947,12 +944,12 @@ makePatternMatchingAbs patterns theBody
 makeRecordCmd :: Hsx.Name  -- ^type constructor
               -> [Hsx.Name] -- ^type variable arguments to the constructor
               -> [Hsx.ConDecl] -- ^a singleton list containing a record declaration
-              -> ContextM Isa.Cmd   -- ^the resulting record declaration
+              -> ContextM Isa.Stmt   -- ^the resulting record declaration
 makeRecordCmd tyconN tyvarNs [Hsx.RecDecl name slots] -- cf. `isRecDecls'
     = do tycon  <- convert tyconN
          tyvars <- mapM convert tyvarNs
          slots' <- concatMapM cnvSlot slots
-         return $ Isa.RecordCmd (Isa.TypeSpec tyvars tycon) slots'
+         return $ Isa.Record (Isa.TypeSpec tyvars tycon) slots'
     where cnvSlot (names, typ)
               = do names' <- mapM convert names
                    typ'   <- convert typ

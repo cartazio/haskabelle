@@ -215,7 +215,7 @@ adaptType t = do t' <- adaptEnvType (Env.fromIsa t); return (Env.toIsa t')
 
 adaptClass :: Isa.Name -> AdaptM Isa.Name
 adaptClass classN = do let ignore = Isa.Name "_"
-                       t <- adaptType (Isa.TyScheme [(ignore, [classN])] Isa.TyNone)
+                       t <- adaptType (Isa.TyScheme [(ignore, [classN])] Isa.NoType)
                        let (Isa.TyScheme [(_, [classN'])] _) = t
                        return classN'
 
@@ -240,29 +240,28 @@ instance Adapt Isa.DatatypeDef where
                   = do types' <- mapM adaptType types
                        return (Isa.Constructor name types')
 
-instance Adapt Isa.Cmd where
+instance Adapt Isa.Stmt where
     adapt (Isa.Block cmds)       
         = mapM adapt cmds >>= (return . Isa.Block)
 
-    adapt (Isa.TheoryCmd thy imps cmds)   
+    adapt (Isa.TheoryOpening thy imps cmds)   
         = do old_mID <- query currentModuleID
              set (setModuleID $ Just (Env.fromIsa thy))
              cmds'   <- mapM adapt cmds
              set (setModuleID old_mID)
-             return (Isa.TheoryCmd thy imps cmds')
+             return (Isa.TheoryOpening thy imps cmds')
         where setModuleID v state
                   = state { currentModuleID = v }
 
-    adapt (Isa.TypesCmd aliases) = liftM Isa.TypesCmd (mapM adpt aliases)
+    adapt (Isa.TypeSynonym aliases) = liftM Isa.TypeSynonym (mapM adpt aliases)
         where adpt (spec,typ) = liftM2 (,) (return spec) (adaptType typ)
-    adapt c@(Isa.RecordCmd _ _)      = not_implemented c
-    adapt c@(Isa.InfixDeclCmd _ _ _) = not_implemented c
+    adapt c@(Isa.Record _ _)      = not_implemented c
     adapt c@(Isa.Comment _)          = return c
 
-    adapt (Isa.DatatypeCmd defs)    
-        = liftM Isa.DatatypeCmd $ mapM adapt defs
+    adapt (Isa.Datatype defs)    
+        = liftM Isa.Datatype $ mapM adapt defs
                            
-    adapt (Isa.FunCmd funNs typesigs defs)
+    adapt (Isa.Fun funNs typesigs defs)
         = do funNs' <- mapM adaptName funNs
              typesigs' <- mapM adapt typesigs
              shadowing funNs $
@@ -273,9 +272,9 @@ instance Adapt Isa.Cmd where
                                            shadowing (concatMap extractNames pats') $
                                              do body' <- adapt body ; return (funN', pats', body'))
                                 defs
-                  return (Isa.FunCmd funNs' typesigs' defs')
+                  return (Isa.Fun funNs' typesigs' defs')
          
-    adapt (Isa.PrimrecCmd funNs typesigs defs)
+    adapt (Isa.Primrec funNs typesigs defs)
         = do funNs' <- mapM adaptName funNs
              typesigs' <- mapM adapt typesigs
              shadowing funNs $
@@ -286,29 +285,29 @@ instance Adapt Isa.Cmd where
                                            shadowing (concatMap extractNames pats') $
                                              do body' <- adapt body ; return (funN', pats', body'))
                                 defs
-                  return (Isa.PrimrecCmd funNs' typesigs' defs')
+                  return (Isa.Primrec funNs' typesigs' defs')
 
-    adapt (Isa.DefinitionCmd name typesig (pat, term))
+    adapt (Isa.Definition name typesig (pat, term))
         = do typesig' <- adapt typesig
              shadowing (extractNames pat) $
-               do term' <- adapt term ; return (Isa.DefinitionCmd name typesig' (pat, term'))
+               do term' <- adapt term ; return (Isa.Definition name typesig' (pat, term'))
 
-    adapt (Isa.ClassCmd classN supclassNs typesigs)
+    adapt (Isa.Class classN supclassNs typesigs)
         = do classN'     <- adaptClass classN
              supclassNs' <- mapM adaptClass supclassNs
              typesigs'   <- mapM adapt typesigs
-             return (Isa.ClassCmd classN' supclassNs' typesigs')
+             return (Isa.Class classN' supclassNs' typesigs')
 
-    adapt (Isa.InstanceCmd classN typ cmds)
+    adapt (Isa.Instance classN typ cmds)
         = do classN' <- adaptClass classN
              shadowing [classN'] $ do typ'  <- adaptType typ
                                       cmds' <- mapM adapt cmds
-                                      return (Isa.InstanceCmd classN' typ' cmds')
+                                      return (Isa.Instance classN' typ' cmds')
 
 instance Adapt Isa.TypeSpec where
     adapt (Isa.TypeSpec tyvarNs tycoN)
-        = do (Isa.Type tycoN' tyvars') <- adaptType (Isa.Type tycoN (map Isa.TyVar tyvarNs))
-             return $ Isa.TypeSpec (map (\(Isa.TyVar n) -> n) tyvars') tycoN'
+        = do (Isa.Type tycoN' tyvars') <- adaptType (Isa.Type tycoN (map Isa.TVar tyvarNs))
+             return $ Isa.TypeSpec (map (\(Isa.TVar n) -> n) tyvars') tycoN'
 
 instance Adapt Isa.TypeSig where
     adapt (Isa.TypeSig n t)
@@ -379,9 +378,9 @@ instance Adapt Isa.Term where
                                patterns
              return (Isa.Case term' patterns')
 
-    adapt (Isa.ListComp body stmts) = adpt body stmts []
+    adapt (Isa.ListCompr body stmts) = adpt body stmts []
       where 
-        adpt e [] stmts' = do e' <- adapt e; return (Isa.ListComp e' (reverse stmts'))
+        adpt e [] stmts' = do e' <- adapt e; return (Isa.ListCompr e' (reverse stmts'))
         adpt e (Isa.Guard b : rest) stmts'
             = adapt b >>= (\b' -> adpt e rest (Isa.Guard b':stmts'))
         adpt e (Isa.Generator (pat, exp) : rest) stmts'
@@ -393,7 +392,7 @@ instance Adapt Isa.Term where
         do stmts' <- mapM adapt stmts
            return $ Isa.DoBlock pre stmts' post
 
-instance Adapt Isa.Stmt where
+instance Adapt Isa.DoBlockFragment where
     adapt (Isa.DoGenerator pat exp) = liftM2 Isa.DoGenerator (adapt pat) (adapt exp)
     adapt (Isa.DoQualifier exp) = liftM Isa.DoQualifier $ adapt exp
 

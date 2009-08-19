@@ -234,10 +234,10 @@ instance Printer Isa.DatatypeDef where
                     = hsep $ pprint' adapt reserved con : map (pprint' adapt reserved) types
 
 
-instance Printer Isa.Cmd where
+instance Printer Isa.Stmt where
     pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
     pprint' adapt reserved (Isa.Block cmds)     = blankline $ vcat $ map (pprint' adapt reserved) cmds
-    pprint' adapt reserved (Isa.TheoryCmd thy imps cmds)
+    pprint' adapt reserved (Isa.TheoryOpening thy imps cmds)
         = do env <- queryPP globalEnv
              let imps' = map (pprint' adapt reserved) (imps ++ [Isa.ThyName Env.prelude])
              withCurrentTheory thy $
@@ -247,19 +247,19 @@ instance Printer Isa.Cmd where
                (vcat $ map (pprint' adapt reserved) cmds)                         $+$
                text "\nend"
 
-    pprint' adapt reserved (Isa.DatatypeCmd (def:defs)) = 
+    pprint' adapt reserved (Isa.Datatype (def:defs)) = 
         let fstDef = text "datatype" <+> pprint' adapt reserved def
             restDefs = map ((text "and     " <+>) . pprint' adapt reserved) defs
         in vcat (fstDef : restDefs)
           
 
-    pprint' adapt reserved (Isa.RecordCmd tyspec conspecs)
+    pprint' adapt reserved (Isa.Record tyspec conspecs)
         = blankline $
           text "record" <+> pprint' adapt reserved tyspec <+> equals $$
           space <+> vcat (map pp conspecs)
           where pp (slotName, slotType) = pprint' adapt reserved slotName <+> text "::" <+> pprint' adapt reserved slotType
 
-    pprint' adapt reserved (Isa.DefinitionCmd vname tysig matching)
+    pprint' adapt reserved (Isa.Definition vname tysig matching)
         = case matching of
             (pat, term)
                 -> blankline $
@@ -276,13 +276,13 @@ instance Printer Isa.Cmd where
                    let lookup = (\n -> lookupIdentifier thy n env)
                    pprint' adapt reserved pat <+> equals <+> parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
 
-    pprint' adapt reserved (Isa.PrimrecCmd fnames tysigs equations)
+    pprint' adapt reserved (Isa.Primrec fnames tysigs equations)
         = printFunDef adapt reserved "primrec" fnames tysigs equations
 
-    pprint' adapt reserved (Isa.FunCmd fnames tysigs equations)
+    pprint' adapt reserved (Isa.Fun fnames tysigs equations)
         = printFunDef adapt reserved "fun" fnames tysigs equations
 
-    pprint' adapt reserved (Isa.ClassCmd classN superclassNs typesigs)
+    pprint' adapt reserved (Isa.Class classN superclassNs typesigs)
         = blankline $
           text "class"
           <+> pprint' adapt reserved classN 
@@ -294,7 +294,7 @@ instance Printer Isa.Cmd where
         where ppSig (Isa.TypeSig n t)
                   = pprint' adapt reserved n <+> text "::" <+> pprint' adapt reserved t
           
-    pprint' adapt reserved (Isa.InstanceCmd classN typ cmds)
+    pprint' adapt reserved (Isa.Instance classN typ cmds)
         = do thy <- queryPP currentTheory
              let cmds' = map (renameInstanceCmd thy typ) cmds
              blankline $
@@ -309,13 +309,7 @@ instance Printer Isa.Cmd where
               = let renams = [ (n, mk_InstanceCmd_name n t) | n <- namesFromIsaCmd c ]
                 in renameIsaCmd thy renams c
  
-    pprint' adapt reserved (Isa.InfixDeclCmd op assoc prio)
-        = comment $ text "infix" <> pp assoc <+> int prio <+> pprint' adapt reserved op
-          where pp Isa.AssocNone  = text ""
-                pp Isa.AssocLeft  = text "l"
-                pp Isa.AssocRight = text "r"
-    
-    pprint' adapt reserved (Isa.TypesCmd aliases) = text "types" <+> vcat (map pp aliases)
+    pprint' adapt reserved (Isa.TypeSynonym aliases) = text "types" <+> vcat (map pp aliases)
         where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
 
 printFunDef adapt reserved cmd fnames tysigs equations
@@ -371,8 +365,8 @@ pprintName reserved str = withinHOL_if (isReservedKeyword str)
         isReservedKeyword str = str `elem` reserved
 
 instance Printer Isa.Type where
-    pprint' adapt reserved (Isa.TyNone)      = text ""
-    pprint' adapt reserved (Isa.TyVar vname) 
+    pprint' adapt reserved (Isa.NoType)      = text ""
+    pprint' adapt reserved (Isa.TVar vname) 
         = do alist <- queryPP currentTyScheme
              let tyvar_doc = apostroph <> pprint' adapt reserved vname
              case lookup vname alist of
@@ -395,12 +389,12 @@ instance Printer Isa.Type where
     pprint' adapt reserved (Isa.TyScheme [] t)  = pprint' adapt reserved t
     pprint' adapt reserved (Isa.TyScheme ctx t) = withTyScheme ctx (pprint' adapt reserved t)
 
-    pprint' adapt reserved (Isa.TyFun t1 t2)
+    pprint' adapt reserved (Isa.Func t1 t2)
         = maybeWithinHOL $
-            case t1 of Isa.TyFun _ _ -> parens (pprint' adapt reserved t1) <+> text "=>" <+> pprint' adapt reserved t2
+            case t1 of Isa.Func _ _ -> parens (pprint' adapt reserved t1) <+> text "=>" <+> pprint' adapt reserved t2
                        _             -> pprint' adapt reserved t1          <+> text "=>" <+> pprint' adapt reserved t2
 
-    pprint' adapt reserved (Isa.TyTuple types)
+    pprint' adapt reserved (Isa.Prod types)
         = maybeWithinHOL $
             hsep (punctuate (space<>asterisk) (map (pprint' adapt reserved) types))
 
@@ -476,7 +470,7 @@ instance Printer Isa.Term where
           where ppBinding (pat, term)
                     = pprint' adapt reserved pat <+> equals <+> pprint' adapt reserved term
 
-    pprint' adapt reserved (Isa.ListComp body stmts)
+    pprint' adapt reserved (Isa.ListCompr body stmts)
         = brackets $ pprint' adapt reserved body <+> text "." <+>
                        (vcat (punctuate comma (map ppStmt stmts)))
         where
@@ -490,7 +484,7 @@ instance Printer Isa.Term where
         where printStmts [stmt] = [pprint' adapt reserved stmt]
               printStmts (stmt:stmts) = (pprint' adapt reserved stmt <> semi) : (printStmts stmts)
 
-instance Printer Isa.Stmt where
+instance Printer Isa.DoBlockFragment where
     pprint' adapt reserved (Isa.DoGenerator pat exp) = pprint' adapt reserved pat <+> text "<-" <+> pprint' adapt reserved exp
     pprint' adapt reserved (Isa.DoQualifier exp) = pprint' adapt reserved exp
 
@@ -514,7 +508,7 @@ isNil adapt = mk_isFoo adapt Hsx.ListCon
 isCons adapt = mk_isFoo adapt Hsx.Cons
 isPairCon adapt = mk_isFoo adapt (Hsx.TupleCon 2)
 
-isEmptySig (Isa.TypeSig _ Isa.TyNone) = True
+isEmptySig (Isa.TypeSig _ Isa.NoType) = True
 isEmptySig _ = False
 
 pprintAsList :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
@@ -607,7 +601,7 @@ isCompound adapt t lookupFn
 
 isCompoundType :: Isa.Type -> Bool
 isCompoundType t = case t of
-                     Isa.TyVar _    -> False
+                     Isa.TVar _    -> False
                      Isa.Type _ [] -> False
                      _              -> True
                      

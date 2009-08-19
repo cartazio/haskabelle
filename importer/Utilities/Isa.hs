@@ -18,24 +18,24 @@ renameTyVarInType thy (from, to) typ
     = let from' = canonicalize thy from
           to'   = canonicalize thy to
       in case typ of
-           Isa.TyVar vN    -> Isa.TyVar (translate thy [(from', to')] vN)
+           Isa.TVar vN    -> Isa.TVar (translate thy [(from', to')] vN)
            Isa.Type cN ts -> Isa.Type cN $ map (renameTyVarInType thy (from, to)) ts
-           Isa.TyFun t1 t2 -> Isa.TyFun (renameTyVarInType thy (from,to) t1) 
+           Isa.Func t1 t2 -> Isa.Func (renameTyVarInType thy (from,to) t1) 
                                 (renameTyVarInType thy (from,to) t2)
-           Isa.TyTuple ts  -> Isa.TyTuple $ map (renameTyVarInType thy (from, to)) ts
-           Isa.TyNone      -> Isa.TyNone
+           Isa.Prod ts  -> Isa.Prod $ map (renameTyVarInType thy (from, to)) ts
+           Isa.NoType      -> Isa.NoType
 
-renameIsaCmd :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.Cmd -> Isa.Cmd
+renameIsaCmd :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.Stmt -> Isa.Stmt
 renameIsaCmd thy renamings cmd
     = let rs = canonicalizeRenamings thy renamings
       in case cmd of
-           Isa.FunCmd ns tysigs clauses -> Isa.FunCmd ns' tysigs clauses'
+           Isa.Fun ns tysigs clauses -> Isa.Fun ns' tysigs clauses'
                where ns'      = map (translate thy rs) ns
                      clauses' = map (renameClause rs) clauses
                      renameClause rs (n, pats, body) 
                          = (translate thy rs n, pats, alphaConvertTerm thy rs body)
 
-           Isa.DefinitionCmd n sig (p, t) -> Isa.DefinitionCmd n' sig (p', t')
+           Isa.Definition n sig (p, t) -> Isa.Definition n' sig (p', t')
                where n' = translate thy rs n
                      p' = alphaConvertTerm thy rs p
                      t' = alphaConvertTerm thy rs t
@@ -118,9 +118,9 @@ apply2 f [a,b]     = f a b
 apply3 f [a,b,c]   = f a b c
 
 
-namesFromIsaCmd :: Isa.Cmd -> [Isa.Name]
-namesFromIsaCmd (Isa.FunCmd ns _ _)       = ns
-namesFromIsaCmd (Isa.DefinitionCmd n _ _) = [n]
+namesFromIsaCmd :: Isa.Stmt -> [Isa.Name]
+namesFromIsaCmd (Isa.Fun ns _ _)       = ns
+namesFromIsaCmd (Isa.Definition n _ _) = [n]
 namesFromIsaCmd junk 
     = error ("namesFromIsaCmd: Fall through: " ++ show junk)
 

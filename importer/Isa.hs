@@ -12,28 +12,29 @@ import Data.Generics.Instances
 
 import Data.Graph as Graph
 
+
+{- Names -}
+
 newtype ThyName = ThyName String
   deriving (Show, Eq, Ord, Data, Typeable)
 
 data Name = QName ThyName String | Name String
   deriving (Show, Eq, Ord, Data, Typeable)
 
-data DatatypeDef = DatatypeDef TypeSpec [ConSpec]
-                   deriving (Eq,Show, Data, Typeable)
-
 data Type =
     Type Name [Type]
-  | TyFun Type Type
-  | TyTuple [Type] -- FIXME: unused
-  | TyVar Name
-  | TyNone
+  | Func Type Type
+  | Prod [Type] -- FIXME: unused
+  | TVar Name
+  | NoType
   | TyScheme [(Name, [Name])] Type -- FIXME: remove from this type
   deriving (Show, Eq, Data, Typeable)
 
+
+{- Expressions -}
+
 data Literal = Int Integer | Char Char | String String
   deriving (Show, Eq, Data, Typeable)
-
-type Pat = Term
 
 data Term =
     Literal Literal
@@ -43,154 +44,50 @@ data Term =
   | If Term Term Term
   | Let [(Pat, Term)] Term
   | Case Term [(Pat, Term)]
-  | ListComp Term [ListCompStmt]
+  | ListCompr Term [ListComprFragment]
   | RecConstr Name [(Name, Term)]
   | RecUpdate Term [(Name, Term)]
-  | DoBlock String [Stmt] String -- syntactic sugar for translating Haskell do expressions
+  | DoBlock String [DoBlockFragment] String -- syntactic sugar for translating Haskell do expressions
   | Parenthesized Term
   deriving (Show, Data, Typeable)
 
-{-|
-  This type represents Isabelle commands.
--}
-data Cmd = Block [Cmd]  -- ^a block of commands
-         | TheoryCmd ThyName [ThyName] [Cmd]  -- ^the command introducing a theory
-         
-         {-|
-           A data type command: @datatype ('a, 'b) "typeconstr" = Constr1 | Constr2 "'a list" 'b@
-          -}
-         | DatatypeCmd [DatatypeDef]
-         
-         {-|
-           Record type declaration:
-           
-           @
-           record point = 
-           Xcoord :: int
-           Ycoord :: int
-           @
-          -}
-         | RecordCmd TypeSpec [(Name, Type)]
-         
-         {-|
-           Type synonym declaration:
-           
-           @
-           types 'a synonym1       = type1
-                 ('a, 'b) synonym2 = type2
-           @
-          -}
-         | TypesCmd [(TypeSpec, Type)]
-         
-         {-|
-           Primitive recursive function definition:
-           
-           @
-           primrec add :: "nat => nat => nat"
-           where
-                "add 0 y = y"
-              | "add (Suc x) y = Suc (add x y)"
-           @
-          -}
-         | PrimrecCmd [Name] [TypeSig] [(Name, [Pat], Term)]
-         
-         {-|
-           Function definition:
-           
-           @
-           fun fib :: "nat => nat"
-           where
-                "fib 0 = 1"
-              | "fib (Suc 0) = 1"
-              | "fib (Suc (Suc n)) = fib n + fib (Suc n)"
-           @
-          -}
-         | FunCmd [Name] [TypeSig] [(Name, [Pat], Term)]
-         
-         {-|
-           Constant definition.
+type Pat = Term
 
-           definition id :: "int"
-           where
-           "id a = a"
-          -}
-         | DefinitionCmd Name TypeSig (Pat, Term)
-         
-         {-|
-           A class declaration
-          -}
-         | ClassCmd Name [Name] [TypeSig]
-         
-         {-|
-           An instance declaration.
-          -}
-         | InstanceCmd Name Type [Cmd]
-         
-         {-|
-           An operator infix annotation.
-          -}
-         | InfixDeclCmd Name Assoc Prio
-           
-         {-|
-           A comment.
-          -}
-         | Comment String
+data ListComprFragment = Generator (Pat, Term) | Guard Term
   deriving (Show, Data, Typeable)
 
-{-|
-  This type represents precedence values of an infix annotation.
--}
-type Prio = Int
-
-{-|
-  This type represents associativity modes of an infix annotation.
--}
-data Assoc = AssocNone | AssocLeft | AssocRight
-  deriving (Show, Eq, Ord, Data, Typeable)
-
-{-|
-  This type represents patterns.
--}
+data DoBlockFragment = DoGenerator Pat Term
+  | DoQualifier Term
+  | DoLetStmt [(Pat, Term)]
+  deriving (Show, Data, Typeable)
 
 
-{-|
-  This type represents constructors applied to variables.
--}
-data TypeSpec = TypeSpec [Name] Name
-  deriving (Show, Eq, Data, Typeable)
+{- Statements -}
 
-{-|
-  This type represents type signatures (i.e. a typed name).
--}
-data TypeSig = TypeSig Name Type
-  deriving (Show, Eq, Data, Typeable)
+data Stmt = Block [Stmt] -- FIXM get rid of
+  | TheoryOpening ThyName [ThyName] [Stmt] -- FIXM get rid of
+  | Datatype [DatatypeDef]
+  | Record TypeSpec [(Name, Type)]
+  | TypeSynonym [(TypeSpec, Type)]
+  | Definition Name TypeSig (Pat, Term)
+  | Primrec [Name] [TypeSig] [(Name, [Pat], Term)]
+  | Fun [Name] [TypeSig] [(Name, [Pat], Term)]
+  | Class Name [Name] [TypeSig]
+  | Instance Name Type [Stmt]
+  | Comment String
+  deriving (Show, Data, Typeable)
 
-{-|
-  This type represents types.
--}
+data DatatypeDef = DatatypeDef TypeSpec [ConSpec]
+                   deriving (Eq,Show, Data, Typeable)
 
-{-|
-  This type represents constructor declaration (as part of a data type
-  declaration).
--}
 data ConSpec = Constructor Name [Type]
   deriving (Show, Eq, Data, Typeable)
 
-{-|
-  This type represents literals.
--}
+data TypeSpec = TypeSpec [Name] Name
+  deriving (Show, Eq, Data, Typeable)
 
-data Stmt = DoGenerator Pat Term
-          | DoQualifier Term
---          | DoLetStmt [(Pat, Term)]
-            deriving (Show, Data, Typeable)
-
-{-|
-  This type represents statements of list comprehensions.
--}
-data ListCompStmt = Generator (Pat, Term)
-                  | Guard Term
-  deriving (Show, Data, Typeable)
+data TypeSig = TypeSig Name Type
+  deriving (Show, Eq, Data, Typeable)
 
 
 topologize :: Ord b => (a -> (b, [b])) -> [a] -> [[a]]
