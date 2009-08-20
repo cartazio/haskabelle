@@ -343,23 +343,23 @@ generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _der
   This function converts a Haskell data type declaration into a
   Isabelle data type definition .
 -}
-convertDataDecl :: Hsx.Decl -> ContextM Isa.DatatypeDef
+convertDataDecl :: Hsx.Decl -> ContextM (Isa.TypeSpec, [(Isa.Name, [Isa.Type])])
 convertDataDecl (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _deriving)
     = let strip (Hsx.QualConDecl _loc _FIXME _context decl) = decl
           decls = map strip condecls
       in do tyvars <- mapM convert tyvarNs
             tycon  <- convert tyconN
             decls' <- mapM cnvt decls
-            return $ Isa.DatatypeDef (Isa.TypeSpec tyvars tycon) decls'
+            return $ (Isa.TypeSpec tyvars tycon, decls')
               where cnvt (Hsx.ConDecl name types)
                         = do name'  <- convert name
                              tyvars <- mapM convert types
-                             return $ Isa.Constructor name' tyvars
+                             return $ (name', tyvars)
                     cnvt (Hsx.RecDecl name fields) = 
                         let types = map snd (flattenRecFields fields)
                         in do name'  <- convert name
                               tyvars <- mapM convert types
-                              return $ Isa.Constructor name' tyvars
+                              return $ (name', tyvars)
 
 {-|
   Instances of this class constitute pairs of types s.t. the first one

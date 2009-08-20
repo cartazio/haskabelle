@@ -5,7 +5,9 @@
 Abstract representation of Isar/HOL theory.
 -}
 
-module Importer.Isa where
+module Importer.Isa (ThyName(..), Name(..), Type(..), Literal(..), Term(..), Pat,
+  ListComprFragment(..), DoBlockFragment(..),
+  Stmt(..), TypeSpec(..), TypeSig(..)) where
 
 import Data.Generics.Basics
 import Data.Generics.Instances
@@ -64,9 +66,15 @@ data DoBlockFragment = DoGenerator Pat Term
 
 {- Statements -}
 
+data TypeSpec = TypeSpec [Name] Name
+  deriving Show
+
+data TypeSig = TypeSig Name Type
+  deriving Show
+
 data Stmt = Block [Stmt] -- FIXM get rid of
   | TheoryOpening ThyName [ThyName] [Stmt] -- FIXM get rid of
-  | Datatype [DatatypeDef]
+  | Datatype [(TypeSpec, [(Name, [Type])])]
   | Record TypeSpec [(Name, Type)]
   | TypeSynonym [(TypeSpec, Type)]
   | Definition Name TypeSig (Pat, Term)
@@ -75,18 +83,6 @@ data Stmt = Block [Stmt] -- FIXM get rid of
   | Class Name [Name] [TypeSig]
   | Instance Name Type [Stmt]
   | Comment String
-  deriving Show
-
-data DatatypeDef = DatatypeDef TypeSpec [ConSpec]
-  deriving Show
-
-data ConSpec = Constructor Name [Type]
-  deriving Show
-
-data TypeSpec = TypeSpec [Name] Name
-  deriving Show
-
-data TypeSig = TypeSig Name Type
   deriving Show
 
 

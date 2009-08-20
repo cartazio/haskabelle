@@ -225,15 +225,6 @@ class Printer a where
       (doc, _state) = sf (emptyPPState { globalEnv = env })
       in doc
 
-instance Printer Isa.DatatypeDef where
-    pprint' adapt reserved (Isa.DatatypeDef tyspec dataspecs)
-        = pprint' adapt reserved tyspec 
-          <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
-                                  (map ppconstr dataspecs))
-          where ppconstr (Isa.Constructor con types) 
-                    = hsep $ pprint' adapt reserved con : map (pprint' adapt reserved) types
-
-
 instance Printer Isa.Stmt where
     pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
     pprint' adapt reserved (Isa.Block cmds)     = blankline $ vcat $ map (pprint' adapt reserved) cmds
@@ -247,11 +238,14 @@ instance Printer Isa.Stmt where
                (vcat $ map (pprint' adapt reserved) cmds)                         $+$
                text "\nend"
 
-    pprint' adapt reserved (Isa.Datatype (def:defs)) = 
-        let fstDef = text "datatype" <+> pprint' adapt reserved def
-            restDefs = map ((text "and     " <+>) . pprint' adapt reserved) defs
-        in vcat (fstDef : restDefs)
-          
+    pprint' adapt reserved (Isa.Datatype (decl : decls)) =
+      vcat (text "datatype" <+> pprintDecl decl :
+        map ((text "and     " <+>) . pprintDecl) decls) where
+        pprintDecl (tyspec, dataspecs) =
+          pprint' adapt reserved tyspec  <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
+            (map pprintConstr dataspecs))
+        pprintConstr (con, types)  =
+          hsep $ pprint' adapt reserved con : map (pprint' adapt reserved) types
 
     pprint' adapt reserved (Isa.Record tyspec conspecs)
         = blankline $
