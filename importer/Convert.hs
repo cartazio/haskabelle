@@ -260,7 +260,7 @@ die msg
     = do backtrace <- queryContext backtrace
          error $ msg ++ "\n\n"
                    ++ "Backtrace:\n"
-                   ++ foldr1 (++) (map (++"\n\n") (reverse backtrace))
+                   ++ concat (map (++ "\n\n") (reverse backtrace))
 
 {-|
   This function quits the conversion with an error providing the given error
@@ -271,7 +271,7 @@ dieWithLoc loc msg
     = do backtrace <- queryContext backtrace
          error $ srcloc2string loc ++ ": " ++ msg ++ "\n\n"
                    ++ "Backtrace:\n"
-                   ++ foldr1 (++) (map (++"\n\n") (reverse backtrace))
+                   ++ concat (map (++ "\n\n") (reverse backtrace))
 {-|
   This function quits the conversion with an error that is due to a
   pattern matching case that was observed but not anticipated. The object
@@ -466,7 +466,7 @@ instance Convert Hsx.Literal Isa.Literal where
 --- Not so trivially convertable stuff.
 
 convertDecl :: Hsx.Decl -> ContextM [Isa.Stmt]
-convertDecl' (Hsx.TypeDecl _loc tyconN tyvarNs typ)
+convertDecl (Hsx.TypeDecl _loc tyconN tyvarNs typ)
         = do tyvars <- mapM convert tyvarNs
              tycon  <- convert tyconN
              typ'   <- convert typ
