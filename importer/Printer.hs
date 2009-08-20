@@ -225,9 +225,9 @@ class Printer a where
       (doc, _state) = sf (emptyPPState { globalEnv = env })
       in doc
 
-instance Printer Isa.Stmt where
-    pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
-    pprint' adapt reserved (Isa.TheoryOpening thy imps cmds)
+instance Printer Isa.Module where
+
+    pprint' adapt reserved (Isa.Module thy imps cmds)
         = do env <- queryPP globalEnv
              let imps' = map (pprint' adapt reserved) (imps ++ [Isa.ThyName Env.prelude])
              withCurrentTheory thy $
@@ -236,6 +236,9 @@ instance Printer Isa.Stmt where
                text "begin"                                      $+$
                (vcat $ map (pprint' adapt reserved) cmds)                         $+$
                text "\nend"
+
+instance Printer Isa.Stmt where
+    pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
 
     pprint' adapt reserved (Isa.Datatype (decl : decls)) =
       vcat (text "datatype" <+> pprintDecl decl :

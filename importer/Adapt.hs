@@ -500,13 +500,13 @@ adaptClass classN = do let ignore = Isa.Name "_"
                        let (Isa.TyScheme [(_, [classN'])] _) = t
                        return classN'
 
-adaptStmts ::  AdaptionTable  -> Env.GlobalE -> Env.GlobalE -> [Isa.Stmt] -> [Isa.Stmt]
-adaptStmts adaptionTable adaptedGlobalEnv globalEnv stmts =
-  runAdaption globalEnv adaptedGlobalEnv adaptionTable (mapM adapt stmts)
+adaptModules ::  AdaptionTable  -> Env.GlobalE -> Env.GlobalE -> [Isa.Module] -> [Isa.Module]
+adaptModules adaptionTable adaptedGlobalEnv globalEnv modules =
+  runAdaption globalEnv adaptedGlobalEnv adaptionTable (mapM adapt modules)
 
 adaptIsaUnit :: AdaptionTable -> Env.GlobalE -> IsaUnit -> IsaUnit
-adaptIsaUnit adaptionTable globalEnv (IsaUnit stmts custThys adaptedGlobalEnv) =
-  IsaUnit (adaptStmts adaptionTable adaptedGlobalEnv globalEnv stmts) custThys adaptedGlobalEnv
+adaptIsaUnit adaptionTable globalEnv (IsaUnit modules custThys adaptedGlobalEnv) =
+  IsaUnit (adaptModules adaptionTable adaptedGlobalEnv globalEnv modules) custThys adaptedGlobalEnv
 
 
 not_implemented x = error ("Adaption not implemented yet for\n  " ++ prettyShow' "thing" x) 
@@ -514,16 +514,18 @@ not_implemented x = error ("Adaption not implemented yet for\n  " ++ prettyShow'
 class Adapt a where
     adapt  :: a -> AdaptM a
 
-instance Adapt Isa.Stmt where
+instance Adapt Isa.Module where
 
-    adapt (Isa.TheoryOpening thy imps cmds)   
+    adapt (Isa.Module thy imps cmds)
         = do old_mID <- query currentModuleID
              set (setModuleID $ Just (Env.fromIsa thy))
-             cmds'   <- mapM adapt cmds
+             cmds' <- mapM adapt cmds
              set (setModuleID old_mID)
-             return (Isa.TheoryOpening thy imps cmds')
+             return (Isa.Module thy imps cmds')
         where setModuleID v state
                   = state { currentModuleID = v }
+
+instance Adapt Isa.Stmt where
 
     adapt (Isa.TypeSynonym aliases) = liftM Isa.TypeSynonym (mapM adpt aliases)
         where adpt (spec,typ) = liftM2 (,) (return spec) (adaptType typ)

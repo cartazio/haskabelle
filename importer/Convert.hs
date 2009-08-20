@@ -379,7 +379,7 @@ class Show a => Convert a b | a -> b where
 foo :: forall a. FieldSurrogate a -> ContextM a
 foo = queryContext
 
-convertModule :: HskModule -> ContextM Isa.Stmt
+convertModule :: HskModule -> ContextM Isa.Module
 convertModule (HskModule _loc modul dependentDecls) =
   do
     thy <- convert modul
@@ -390,7 +390,7 @@ convertModule (HskModule _loc modul dependentDecls) =
     withUpdatedContext theory (\t -> assert (t == Isa.ThyName "Scratch") thy)
       $ do
           cmds <- concatMapM convertDependentDecls dependentDecls
-          return (Isa.TheoryOpening thy imps cmds)
+          return (Isa.Module thy imps cmds)
   where isStandardTheory usedThyNames (Isa.ThyName n) = n `elem` usedThyNames
 
 lookupImports :: Isa.ThyName -> Env.GlobalE -> Customisations -> [Isa.ThyName]
