@@ -35,6 +35,8 @@ import Importer.Adapt (makeAdaptionTable_FromHsModule, extractHskEntries,
 import qualified Language.Haskell.Exts as Hsx
 
 import qualified Importer.Isa as Isa
+import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign)
+
 import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
 
@@ -305,7 +307,7 @@ generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _der
                         let binds = map (mkAFunBind fname) constrs
                             fname' = Isa.Name fname
                             funTy = Isa.Func dty (Env.toIsa fty)
-                        in Isa.Primrec [fname'] [Isa.TypeSig fname' funTy] binds
+                        in Isa.Primrec [Isa.TypeSign fname' funTy] binds
                     mkAFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
                             con = Isa.Const $ Isa.Name cname
@@ -321,7 +323,7 @@ generateRecordAux (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecls _der
                             binds = map (mkUFunBind fname uname) constrs
                             uname' = Isa.Name uname
                             funTy = Isa.Func (Env.toIsa fty) (Isa.Func dty dty)
-                        in Isa.Primrec [uname'] [Isa.TypeSig uname' funTy] binds
+                        in Isa.Primrec [Isa.TypeSign uname' funTy] binds
                     mkUFunBind fname uname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let uname' = Isa.Name uname
                             con = Isa.Const $ Isa.Name cname
@@ -410,8 +412,8 @@ convertDependentDecls (HskDependentDecls [d]) = do
 convertDependentDecls (HskDependentDecls decls@(decl:_))
   | isFunBind decl = assert (all isFunBind decls)
       $ do funcmds <- concatMapM convertDecl decls
-           let (names, sigs, eqs) = unzip3 (map splitFunCmd funcmds)
-           return [Isa.Fun names sigs (concat eqs)]
+           let (sigs, eqs) = unzip (map splitFunCmd funcmds)
+           return [Isa.Fun sigs (concat eqs)]
   | isDataDecl decl = assert (all isDataDecl decls)
       $ do dataDefs <- mapM convertDataDecl decls
            auxCmds <- mapM generateRecordAux decls
@@ -421,7 +423,7 @@ convertDependentDecls (HskDependentDecls decls@(decl:_))
     isFunBind _ = False
     isDataDecl (Hsx.DataDecl _ _ _ _ _ _ _) = True
     isDataDecl _ = False
-    splitFunCmd (Isa.Fun [n] [s] eqs) = (n, s, eqs)
+    splitFunCmd (Isa.Fun [s] eqs) = (s, eqs)
 
 instance Convert Hsx.Module Isa.Stmt where
     convert' (Hsx.Module loc modul _ _ _exports _imports decls)
@@ -513,9 +515,7 @@ convertDecl (Hsx.FunBind matchs)
                                                         -- first one.
              name'      <- convert' (names!!0)
              fsig'      <- (case ftype of Nothing -> return Isa.NoType
-                                          Just t -> convert' t) >>= (return . Isa.TypeSig name')
-             fname'     <- convert (names!!0)          
-             -- each pattern is itself a list of Hsx.Pat. 
+                                          Just t -> convert' t) >>= (return . Isa.TypeSign name')
              patsNames  <- mapM (mapM convert) patterns
              let patsNames' = map unzip patsNames
                  patterns'  = map fst patsNames'
@@ -524,7 +524,7 @@ convertDecl (Hsx.FunBind matchs)
                                 mapM convert bodies
              let bodies'' = zipWith mkSimpleLet aliases bodies'
              thy        <- queryContext theory
-             return [Isa.Fun [fname'] [fsig'] (zip3 (repeat fname') patterns' bodies'')]
+             return [Isa.Fun [fsig'] (zip3 (repeat (Isa.nameOfTypeSign fsig')) patterns' bodies'')]
        where splitMatch (Hsx.Match _loc name patterns (Hsx.UnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of Hsx.BDecls [] -> True; _ -> False
@@ -540,8 +540,8 @@ convertDecl (Hsx.PatBind loc pattern rhs _wherebinds)
                       sig'  <- -- trace (prettyShow' "ftype" ftype)$
                                (case ftype of 
                                   Nothing -> return Isa.NoType
-                                  Just t  -> convert' t) >>= (return . Isa.TypeSig name') 
-                      return [Isa.Definition name' sig' (pat', rhs'')]
+                                  Just t  -> convert' t) >>= (return . Isa.TypeSign name') 
+                      return [Isa.Definition sig' (pat', rhs'')]
             _   -> dieWithLoc loc (Msg.complex_toplevel_patbinding)
     
 convertDecl decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
@@ -563,7 +563,7 @@ convertDecl decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
           convertToTypeSig (Hsx.ClsDecl (Hsx.TypeSig _ names typ))
                   = do names' <- mapM convert names
                        typ'   <- convert typ
-                       return (map (flip Isa.TypeSig typ') names')
+                       return (map (flip Isa.TypeSign typ') names')
 
 convertDecl (Hsx.InstDecl loc ctx classqN tys inst_decls)
         | length tys /= 1          = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)

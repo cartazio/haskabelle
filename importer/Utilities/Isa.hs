@@ -4,7 +4,7 @@ Auxiliary.
 -}
 
 module Importer.Utilities.Isa 
-    (renameIsaCmd, namesFromIsaCmd, renameTyVarInType,
+    (renameIsaCmd, namesFromIsaCmd, renameTyVarInType, nameOfTypeSign,
      mk_InstanceCmd_name) where
 
 import Control.Monad.State
@@ -25,18 +25,21 @@ renameTyVarInType thy (from, to) typ
            Isa.Prod ts  -> Isa.Prod $ map (renameTyVarInType thy (from, to)) ts
            Isa.NoType      -> Isa.NoType
 
+renameTypeSign :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.TypeSign -> Isa.TypeSign
+renameTypeSign thy rs (Isa.TypeSign name ty) = Isa.TypeSign (translate thy rs name) ty
+
 renameIsaCmd :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.Stmt -> Isa.Stmt
 renameIsaCmd thy renamings cmd
     = let rs = canonicalizeRenamings thy renamings
       in case cmd of
-           Isa.Fun ns tysigs clauses -> Isa.Fun ns' tysigs clauses'
-               where ns'      = map (translate thy rs) ns
+           Isa.Fun tysigs clauses -> Isa.Fun tysigs' clauses'
+               where tysigs' = map (renameTypeSign thy rs) tysigs
                      clauses' = map (renameClause rs) clauses
                      renameClause rs (n, pats, body) 
                          = (translate thy rs n, pats, alphaConvertTerm thy rs body)
 
-           Isa.Definition n sig (p, t) -> Isa.Definition n' sig (p', t')
-               where n' = translate thy rs n
+           Isa.Definition sig (p, t) -> Isa.Definition sig' (p', t')
+               where sig' = renameTypeSign thy rs sig
                      p' = alphaConvertTerm thy rs p
                      t' = alphaConvertTerm thy rs t
 
@@ -117,10 +120,11 @@ translate thy alist name
 apply2 f [a,b]     = f a b
 apply3 f [a,b,c]   = f a b c
 
+nameOfTypeSign (Isa.TypeSign name _) = name
 
 namesFromIsaCmd :: Isa.Stmt -> [Isa.Name]
-namesFromIsaCmd (Isa.Fun ns _ _)       = ns
-namesFromIsaCmd (Isa.Definition n _ _) = [n]
+namesFromIsaCmd (Isa.Fun sigs _)       = map nameOfTypeSign sigs
+namesFromIsaCmd (Isa.Definition sig _) = [nameOfTypeSign sig]
 namesFromIsaCmd junk 
     = error ("namesFromIsaCmd: Fall through: " ++ show junk)
 

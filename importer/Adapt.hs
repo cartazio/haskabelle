@@ -17,6 +17,7 @@ import qualified Importer.Msg as Msg
 import qualified Language.Haskell.Exts as Hsx
 import Importer.Utilities.Hsk (extractBindingNs)
 import qualified Importer.Isa as Isa
+import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign)
 import qualified Importer.LexEnv as Env
 import Importer.ConversionUnit (IsaUnit(IsaUnit))
 
@@ -540,36 +541,36 @@ instance Adapt Isa.Stmt where
         do types' <- mapM adaptType types
            return (name, types')
 
-    adapt (Isa.Fun funNs typesigs defs)
-        = do funNs' <- mapM adaptName funNs
-             typesigs' <- mapM adapt typesigs
-             shadowing funNs $
+    adapt (Isa.Fun typesigs defs)
+        = do typesigs' <- mapM adapt typesigs
+             let funNs = map Isa.nameOfTypeSign (typesigs ++ typesigs')
+             shadowing (map Isa.nameOfTypeSign typesigs) $
                do defs' <- mapM (\(funN, pats, body)
                                      -> do funN' <- adaptName funN
-                                           assert (funN `elem` funNs && funN' `elem` funNs') $ return ()
+                                           assert (funN `elem` funNs) $ return ()
                                            pats' <- mapM adapt pats
                                            shadowing (concatMap extractNames pats') $
                                              do body' <- adapt body ; return (funN', pats', body'))
                                 defs
-                  return (Isa.Fun funNs' typesigs' defs')
+                  return (Isa.Fun typesigs' defs')
          
-    adapt (Isa.Primrec funNs typesigs defs)
-        = do funNs' <- mapM adaptName funNs
-             typesigs' <- mapM adapt typesigs
-             shadowing funNs $
+    adapt (Isa.Primrec typesigs defs)
+        = do typesigs' <- mapM adapt typesigs
+             let funNs = map Isa.nameOfTypeSign (typesigs ++ typesigs')
+             shadowing (map Isa.nameOfTypeSign typesigs) $
                do defs' <- mapM (\(funN, pats, body)
                                      -> do funN' <- adaptName funN
-                                           assert (funN `elem` funNs && funN' `elem` funNs') $ return ()
+                                           assert (funN `elem` funNs) $ return ()
                                            pats' <- mapM adapt pats
                                            shadowing (concatMap extractNames pats') $
                                              do body' <- adapt body ; return (funN', pats', body'))
                                 defs
-                  return (Isa.Primrec funNs' typesigs' defs')
+                  return (Isa.Primrec typesigs' defs')
 
-    adapt (Isa.Definition name typesig (pat, term))
+    adapt (Isa.Definition typesig (pat, term))
         = do typesig' <- adapt typesig
              shadowing (extractNames pat) $
-               do term' <- adapt term ; return (Isa.Definition name typesig' (pat, term'))
+               do term' <- adapt term ; return (Isa.Definition typesig' (pat, term'))
 
     adapt (Isa.Class classN supclassNs typesigs)
         = do classN'     <- adaptClass classN
@@ -588,9 +589,11 @@ instance Adapt Isa.TypeSpec where
         = do (Isa.Type tycoN' tyvars') <- adaptType (Isa.Type tycoN (map Isa.TVar tyvarNs))
              return $ Isa.TypeSpec (map (\(Isa.TVar n) -> n) tyvars') tycoN'
 
-instance Adapt Isa.TypeSig where
-    adapt (Isa.TypeSig n t)
-        = do t' <- adaptType t ; return (Isa.TypeSig n t')
+instance Adapt Isa.TypeSign where
+    adapt (Isa.TypeSign n t) = do
+      n' <- adaptName n
+      t' <- adaptType t
+      return (Isa.TypeSign n' t')
 
 instance Adapt Isa.Term where
     adapt (Isa.Literal lit)     = return (Isa.Literal lit)

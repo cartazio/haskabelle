@@ -255,28 +255,25 @@ instance Printer Isa.Stmt where
           space <+> vcat (map pp conspecs)
           where pp (slotName, slotType) = pprint' adapt reserved slotName <+> text "::" <+> pprint' adapt reserved slotType
 
-    pprint' adapt reserved (Isa.Definition vname tysig matching)
+    pprint' adapt reserved (Isa.Definition tysig matching)
         = case matching of
             (pat, term)
                 -> blankline $
-                   text "definition" <+> ppHeader vname tysig $$
+                   text "definition" <+> pprint' adapt reserved tysig $$
                    text "where" $$
                    space <+> (maybeWithinHOL $ ppEquation pat term)
         where 
-          ppHeader n sig
-              | isEmptySig sig = pprint' adapt reserved n
-              | otherwise      = pprint' adapt reserved n <+> text "::" <+> maybeWithinHOL (pprint' adapt reserved sig)
           ppEquation pat term
               = do thy <- queryPP currentTheory 
                    env <- queryPP globalEnv
                    let lookup = (\n -> lookupIdentifier thy n env)
                    pprint' adapt reserved pat <+> equals <+> parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
 
-    pprint' adapt reserved (Isa.Primrec fnames tysigs equations)
-        = printFunDef adapt reserved "primrec" fnames tysigs equations
+    pprint' adapt reserved (Isa.Primrec tysigs equations)
+        = printFunDef adapt reserved "primrec" tysigs equations
 
-    pprint' adapt reserved (Isa.Fun fnames tysigs equations)
-        = printFunDef adapt reserved "fun" fnames tysigs equations
+    pprint' adapt reserved (Isa.Fun tysigs equations)
+        = printFunDef adapt reserved "fun" tysigs equations
 
     pprint' adapt reserved (Isa.Class classN superclassNs typesigs)
         = blankline $
@@ -287,7 +284,7 @@ instance Printer Isa.Stmt where
           <+> (if null superclassNs || null typesigs then empty else plus) $$
             space <> space <>
               vcat (zipWith (<+>) (repeat (text "fixes")) (map ppSig typesigs))
-        where ppSig (Isa.TypeSig n t)
+        where ppSig (Isa.TypeSign n t)
                   = pprint' adapt reserved n <+> text "::" <+> pprint' adapt reserved t
           
     pprint' adapt reserved (Isa.Instance classN typ cmds)
@@ -308,16 +305,13 @@ instance Printer Isa.Stmt where
     pprint' adapt reserved (Isa.TypeSynonym aliases) = text "types" <+> vcat (map pp aliases)
         where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
 
-printFunDef adapt reserved cmd fnames tysigs equations
+printFunDef adapt reserved cmd tysigs equations
     = blankline $
-      text cmd <+> vcat (punctuate (text " and ") (map ppHeader (zip fnames tysigs))) $$
+      text cmd <+> vcat (punctuate (text " and ") (map (pprint' adapt reserved) tysigs)) $$
       text "where" $$
       vcat (zipWith (<+>) (space : repeat (char '|'))
             (map ppEquation equations))
     where 
-      ppHeader (fn, sig)
-          | isEmptySig sig = pprint' adapt reserved fn
-          | otherwise      = pprint' adapt reserved fn <+> text "::" <+> maybeWithinHOL (pprint' adapt reserved sig)
       ppEquation (fname, pattern, term) 
           = do thy <- queryPP currentTheory 
                env <- queryPP globalEnv
@@ -395,9 +389,10 @@ instance Printer Isa.Type where
             hsep (punctuate (space<>asterisk) (map (pprint' adapt reserved) types))
 
 
-instance Printer Isa.TypeSig where
-    pprint' adapt reserved (Isa.TypeSig _name typ) = pprint' adapt reserved typ
-
+instance Printer Isa.TypeSign where
+  pprint' adapt reserved (Isa.TypeSign name Isa.NoType) = pprint' adapt reserved name
+  pprint' adapt reserved (Isa.TypeSign name typ) = pprint' adapt reserved name <+> text "::" <+> maybeWithinHOL (pprint' adapt reserved typ)
+    
 instance Printer Isa.Literal where
     -- We annotate Integer literals explicitly to be of our sort "num"
     -- (cf. Prelude.thy), because otherwise Isabelle's type inference
@@ -504,7 +499,7 @@ isNil adapt = mk_isFoo adapt Hsx.ListCon
 isCons adapt = mk_isFoo adapt Hsx.Cons
 isPairCon adapt = mk_isFoo adapt (Hsx.TupleCon 2)
 
-isEmptySig (Isa.TypeSig _ Isa.NoType) = True
+isEmptySig (Isa.TypeSign _ Isa.NoType) = True
 isEmptySig _ = False
 
 pprintAsList :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
