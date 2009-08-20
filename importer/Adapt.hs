@@ -515,8 +515,6 @@ class Adapt a where
     adapt  :: a -> AdaptM a
 
 instance Adapt Isa.Stmt where
-    adapt (Isa.Block cmds)       
-        = mapM adapt cmds >>= (return . Isa.Block)
 
     adapt (Isa.TheoryOpening thy imps cmds)   
         = do old_mID <- query currentModuleID

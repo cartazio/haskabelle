@@ -72,8 +72,7 @@ data TypeSpec = TypeSpec [Name] Name
 data TypeSig = TypeSig Name Type
   deriving Show
 
-data Stmt = Block [Stmt] -- FIXM get rid of
-  | TheoryOpening ThyName [ThyName] [Stmt] -- FIXM get rid of
+data Stmt = TheoryOpening ThyName [ThyName] [Stmt] -- FIXM get rid of
   | Datatype [(TypeSpec, [(Name, [Type])])]
   | Record TypeSpec [(Name, Type)]
   | TypeSynonym [(TypeSpec, Type)]

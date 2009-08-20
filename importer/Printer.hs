@@ -227,7 +227,6 @@ class Printer a where
 
 instance Printer Isa.Stmt where
     pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
-    pprint' adapt reserved (Isa.Block cmds)     = blankline $ vcat $ map (pprint' adapt reserved) cmds
     pprint' adapt reserved (Isa.TheoryOpening thy imps cmds)
         = do env <- queryPP globalEnv
              let imps' = map (pprint' adapt reserved) (imps ++ [Isa.ThyName Env.prelude])
