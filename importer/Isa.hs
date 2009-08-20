@@ -19,7 +19,7 @@ newtype ThyName = ThyName String
   deriving (Show, Eq, Ord, Data, Typeable)
 
 data Name = QName ThyName String | Name String
-  deriving (Show, Eq, Ord, Data, Typeable)
+  deriving (Show, Eq)
 
 data Type =
     Type Name [Type]
@@ -28,13 +28,13 @@ data Type =
   | TVar Name
   | NoType
   | TyScheme [(Name, [Name])] Type -- FIXME: remove from this type
-  deriving (Show, Eq, Data, Typeable)
+  deriving Show
 
 
 {- Expressions -}
 
 data Literal = Int Integer | Char Char | String String
-  deriving (Show, Eq, Data, Typeable)
+  deriving Show
 
 data Term =
     Literal Literal
@@ -49,17 +49,17 @@ data Term =
   | RecUpdate Term [(Name, Term)]
   | DoBlock String [DoBlockFragment] String -- syntactic sugar for translating Haskell do expressions
   | Parenthesized Term
-  deriving (Show, Data, Typeable)
+  deriving Show
 
 type Pat = Term
 
 data ListComprFragment = Generator (Pat, Term) | Guard Term
-  deriving (Show, Data, Typeable)
+  deriving Show
 
 data DoBlockFragment = DoGenerator Pat Term
   | DoQualifier Term
   | DoLetStmt [(Pat, Term)]
-  deriving (Show, Data, Typeable)
+  deriving Show
 
 
 {- Statements -}
@@ -75,19 +75,19 @@ data Stmt = Block [Stmt] -- FIXM get rid of
   | Class Name [Name] [TypeSig]
   | Instance Name Type [Stmt]
   | Comment String
-  deriving (Show, Data, Typeable)
+  deriving Show
 
 data DatatypeDef = DatatypeDef TypeSpec [ConSpec]
-                   deriving (Eq,Show, Data, Typeable)
+  deriving Show
 
 data ConSpec = Constructor Name [Type]
-  deriving (Show, Eq, Data, Typeable)
+  deriving Show
 
 data TypeSpec = TypeSpec [Name] Name
-  deriving (Show, Eq, Data, Typeable)
+  deriving Show
 
 data TypeSig = TypeSig Name Type
-  deriving (Show, Eq, Data, Typeable)
+  deriving Show
 
 
 topologize :: Ord b => (a -> (b, [b])) -> [a] -> [[a]]
