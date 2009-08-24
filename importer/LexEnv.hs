@@ -79,6 +79,7 @@ import qualified Importer.Isa as Isa
 
 import Importer.Utilities.Hsk
 import Importer.Utilities.Misc
+import Importer.Utilities.Isa as Isa (prettyShow')
 import Importer.Configuration hiding (getCustomTheory)
 import qualified Importer.Configuration as Conf (getCustomTheory)
 
@@ -556,7 +557,7 @@ instance Hsk2Env Hsx.Type EnvType where
                 split junk                                --  the head of the returned list.
                     = error ("Hsx.Type -> EnvType (split Hsx.TyApp): " ++ (show junk))
 
-    fromHsk junk = error ("Hsx.Type -> EnvType: Fall Through: " ++ prettyShow' "thing" junk)
+    fromHsk junk = error ("Hsx.Type -> EnvType: Fall Through: " ++ Isa.prettyShow' "thing" junk)
 
     toHsk (EnvTyVar n)          = Hsx.TyVar (toHsk n)
     toHsk (EnvTyTuple types)    = Hsx.TyTuple Hsx.Boxed (map toHsk types)
@@ -573,7 +574,7 @@ instance Hsk2Env Hsx.Type EnvType where
           ctx      = [ Hsx.ClassA (toHsk classN) (map (Hsx.TyVar . toHsk) tyvarNs) 
                            | (classN, tyvarNs) <- revalist ]
 
-    toHsk junk = error ("EnvType -> Hsx.Type: Fall Through: " ++ prettyShow' "thing" junk)
+    toHsk junk = error ("EnvType -> Hsx.Type: Fall Through: " ++ Isa.prettyShow' "thing" junk)
 
 instance Hsk2Env Hsx.ExportSpec EnvExport where
     fromHsk (Hsx.EVar qname)        = EnvExportVar   (fromHsk qname)

@@ -73,7 +73,7 @@ import Control.Monad.Reader
 
 import Language.Haskell.Exts as Hsx
 
-import Importer.Utilities.Misc (concatMapM, assert, hasDuplicates, wordsBy, trace, prettyShow')
+import Importer.Utilities.Misc
 import Importer.Utilities.Gensym
 import Importer.Utilities.Env
 
@@ -326,7 +326,7 @@ bindingsFromPats pattern  = [ Hsx.UnQual n | Hsx.PVar n <- universeBi pattern ]
   This function extracts the variables bound by the given declaration.
 -}
 bindingsFromDecls       :: [Hsx.Decl] -> [Hsx.QName]
-bindingsFromDecls decls = assert (not (hasDuplicates bindings)) bindings
+bindingsFromDecls decls = assert (not (has_duplicates bindings)) bindings
     -- Type signatures do not create new bindings, but simply annotate them.
     where bindings = concatMap namesFromDecl (filter (not . isTypeSig) decls)
           isTypeSig (Hsx.TypeSig _ _ _) = True

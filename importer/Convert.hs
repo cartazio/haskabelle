@@ -35,7 +35,7 @@ import Importer.Adapt (makeAdaptionTable_FromHsModule, extractHskEntries,
 import qualified Language.Haskell.Exts as Hsx
 
 import qualified Importer.Isa as Isa
-import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign)
+import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign, prettyShow, prettyShow')
 
 import qualified Importer.Msg as Msg
 import qualified Importer.LexEnv as Env
@@ -281,7 +281,7 @@ dieWithLoc loc msg
 -}
 pattern_match_exhausted :: (Show a) => String -> a -> ContextM t
 pattern_match_exhausted str obj 
-    = die (str ++ ": Pattern match exhausted for\n" ++ prettyShow obj)
+    = die (str ++ ": Pattern match exhausted for\n" ++ Isa.prettyShow obj)
 
 
           
@@ -375,7 +375,7 @@ class Show a => Convert a b | a -> b where
     convert  :: Convert a b => a -> ContextM b
     convert hsexpr = withUpdatedContext backtrace 
                        (\bt -> let frameName = "frame" ++ show (length bt)
-                               in prettyShow' frameName hsexpr : bt)
+                               in Isa.prettyShow' frameName hsexpr : bt)
                      $ convert' hsexpr
 
 foo :: forall a. FieldSurrogate a -> ContextM a
@@ -391,7 +391,7 @@ convertModule (HskModule _loc modul dependentDecls) =
     let imps = filter (not . isStandardTheory (usedThyNames adaption)) (lookupImports thy env custs)
     withUpdatedContext theory (\t -> assert (t == Isa.ThyName "Scratch") thy)
       $ do
-          cmds <- concatMapM convertDependentDecls dependentDecls
+          cmds <- mapsM convertDependentDecls dependentDecls
           return (Isa.Module thy imps cmds)
   where isStandardTheory usedThyNames (Isa.ThyName n) = n `elem` usedThyNames
 
@@ -411,7 +411,7 @@ convertDependentDecls (HskDependentDecls [d]) = do
   return d
 convertDependentDecls (HskDependentDecls decls@(decl:_))
   | isFunBind decl = assert (all isFunBind decls)
-      $ do funcmds <- concatMapM convertDecl decls
+      $ do funcmds <- mapsM convertDecl decls
            let (sigs, eqs) = unzip (map splitFunCmd funcmds)
            return [Isa.Fun sigs (concat eqs)]
   | isDataDecl decl = assert (all isDataDecl decls)
@@ -549,7 +549,7 @@ convertDecl decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
             $ do let superclassNs   = extractSuperclassNs ctx
                  superclassNs' <- mapM convert superclassNs
                  classN'       <- convert classN
-                 typesigs'     <- concatMapM convertToTypeSig class_decls
+                 typesigs'     <- mapsM convertToTypeSig class_decls
                  return [Isa.Class classN' superclassNs' typesigs']
         where
           check_class_decl (Hsx.ClassDecl loc ctx classN varNs fundeps decls) cont
@@ -581,7 +581,7 @@ convertDecl (Hsx.InstDecl loc ctx classqN tys inst_decls)
                  let inst_envtype  = Env.fromHsk (head tys)
                  let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
                  withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
-                   do decls' <- concatMapM convertDecl (map toHsDecl inst_decls)
+                   do decls' <- mapsM convertDecl (map toHsDecl inst_decls)
                       return [Isa.Instance classqN' type' decls']
         where 
           isType t = case t of { Hsx.TyCon _ -> True; _ -> False }
@@ -599,7 +599,7 @@ convertDecl junk = pattern_match_exhausted "Hsx.Decl -> Isa.Stmt" junk
 
 
 instance Convert Hsx.Binds [Isa.Stmt] where
-    convert' (Hsx.BDecls decls) = concatMapM convertDecl decls
+    convert' (Hsx.BDecls decls) = mapsM convertDecl decls
     convert' junk = pattern_match_exhausted "Hsx.Binds -> Isa.Stmt" junk
 
 mkList :: [Isa.Term] -> Isa.Term
@@ -947,7 +947,7 @@ makeRecordCmd :: Hsx.Name  -- ^type constructor
 makeRecordCmd tyconN tyvarNs [Hsx.RecDecl name slots] -- cf. `isRecDecls'
     = do tycon  <- convert tyconN
          tyvars <- mapM convert tyvarNs
-         slots' <- concatMapM cnvSlot slots
+         slots' <- mapsM cnvSlot slots
          return $ Isa.Record (Isa.TypeSpec tyvars tycon) slots'
     where cnvSlot (names, typ)
               = do names' <- mapM convert names

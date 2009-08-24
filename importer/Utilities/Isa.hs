@@ -3,14 +3,15 @@
 Auxiliary.
 -}
 
-module Importer.Utilities.Isa 
+module Importer.Utilities.Isa
     (renameIsaCmd, namesFromIsaCmd, renameTyVarInType, nameOfTypeSign,
-     mk_InstanceCmd_name) where
+     mk_InstanceCmd_name, prettyShow, prettyShow') where
 
 import Control.Monad.State
 import Maybe
 import Data.Generics.Biplate (universeBi)
 
+import qualified Language.Haskell.Exts as Hsx
 import qualified Importer.Isa as Isa
 
 renameTyVarInType :: Isa.ThyName -> (Isa.Name, Isa.Name) -> Isa.Type -> Isa.Type
@@ -137,4 +138,9 @@ mk_InstanceCmd_name (Isa.QName t n) (Isa.Type conN [])
 mk_InstanceCmd_name (Isa.Name n) (Isa.Type conN [])
     = Isa.Name (concat [n, "_", name2str conN])
 
-                    
+prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
+                             (Hsx.ParseOk (Hsx.Module _ _ _ _ _ _ decls)) 
+                                 = Hsx.parseModule str
+                         in concatMap Hsx.prettyPrint decls
+
+prettyShow obj = prettyShow' "foo" obj

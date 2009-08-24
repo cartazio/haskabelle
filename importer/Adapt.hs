@@ -17,7 +17,7 @@ import qualified Importer.Msg as Msg
 import qualified Language.Haskell.Exts as Hsx
 import Importer.Utilities.Hsk (extractBindingNs)
 import qualified Importer.Isa as Isa
-import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign)
+import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign, prettyShow')
 import qualified Importer.LexEnv as Env
 import Importer.ConversionUnit (IsaUnit(IsaUnit))
 
@@ -213,7 +213,7 @@ check_raw_adaption_table tbl
           functions          = extract_functionoid_names hsk_entries
           missing_fn_entries = filter (`notElem` functions) methods
       in 
-        if (hasDuplicates names)
+        if (has_duplicates names)
         then error ("Duplicates in Raw Adaption Table found: "
                     ++ show (filter (flip (>) 1 . length) (group (sort names))))
         else if not (null missing_fn_entries)
@@ -404,8 +404,14 @@ adaptGlobalEnv tbl env
         env
 
 translateName :: AdaptionTable -> Env.EnvName -> Maybe Env.Identifier
-translateName (AdaptionTable mappings) name
-    = lookupBy (\n1 id2 -> n1 == Env.identifier2name id2) name mappings
+translateName (AdaptionTable mappings) name =
+  lookupBy (\n1 id2 -> n1 == Env.identifier2name id2) name mappings where
+    lookupBy                :: (a -> b -> Bool) -> a -> [(b, c)] -> Maybe c
+    lookupBy eq key []      =  Nothing
+    lookupBy eq key ((x,y):xys)
+        | key `eq` x        =  Just y
+        | otherwise         =  lookupBy eq key xys
+
 
 translateIdentifier :: AdaptionTable -> Env.Identifier -> Env.Identifier
 translateIdentifier tbl id
@@ -510,7 +516,7 @@ adaptIsaUnit adaptionTable globalEnv (IsaUnit modules custThys adaptedGlobalEnv)
   IsaUnit (adaptModules adaptionTable adaptedGlobalEnv globalEnv modules) custThys adaptedGlobalEnv
 
 
-not_implemented x = error ("Adaption not implemented yet for\n  " ++ prettyShow' "thing" x) 
+not_implemented x = error ("Adaption not implemented yet for\n  " ++ Isa.prettyShow' "thing" x) 
 
 class Adapt a where
     adapt  :: a -> AdaptM a

@@ -9,7 +9,7 @@ import List (intersperse)
 import Maybe (fromMaybe)
 
 import Importer.Utilities.Hsk (srcloc2string, module2FilePath)
-import Importer.Utilities.Misc (prettyShow')
+import Importer.Utilities.Isa (prettyShow')
 
 import qualified Language.Haskell.Exts as Hsx
 
