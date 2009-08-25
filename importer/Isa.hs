@@ -7,7 +7,8 @@ Abstract representation of Isar/HOL theory.
 
 module Importer.Isa (ThyName(..), Name(..), Type(..), Literal(..), Term(..), Pat,
   ListComprFragment(..), DoBlockFragment(..),
-  Stmt(..), TypeSpec(..), TypeSign(..), Module(..)) where
+  Stmt(..), TypeSpec(..), TypeSign(..), Module(..),
+  topologize) where
 
 import Importer.Utilities.Misc
 
@@ -214,7 +215,8 @@ topologize (Module thyname imports stmts) =
     raw_deps = map derefl (flat proto_deps)
     strong_conns = (map_filter only_strong_conns . stronglyConnComp . dummy_nodes) raw_deps
     acyclic_deps = fold (\ys -> map (complete_strong_conn ys)) strong_conns raw_deps
-  in Module thyname imports stmts where
+    (stmts', _) = ultimately select (representants, acyclic_deps)
+  in Module thyname imports stmts' where
     mk_raw_deps stmt =
       let
         ((xs1, xs2), xs3) = idents_of_stmt stmt
@@ -236,12 +238,14 @@ topologize (Module thyname imports stmts) =
       else if any (\y -> y `elem` xs) ys
         then (x, fold insert ys xs)
         else (x, xs)
-    select ((Nothing, stmt) : xs) deps = ()
-
-
-{-topologize :: Ord b => (a -> (b, [b])) -> [a] -> [[a]]
-topologize f xs = (map list_of_SCC . stronglyConnComp . map add_edges) xs
-  where
-    add_edges x = let (node, nodes) = f x in (x, node, nodes)
-    list_of_SCC (Graph.AcyclicSCC x) = [x]
-    list_of_SCC (Graph.CyclicSCC xs) = xs-}
+    select ([], []) = Nothing
+    select ((Nothing, stmt) : xs, deps) = Just (stmt, (xs, deps))
+    select ((Just x, stmt) : xs, deps) = if null (these (lookup x deps))
+      then let
+          deps' = map_filter (\(y, ys) -> if x == y then Nothing
+            else Just (y, filter_out ((==) x) ys)) deps
+        in Just (stmt, (xs, deps'))
+      else let
+          Just (stmt', (xs', deps')) = select (xs, deps)
+        in Just (stmt', ((Just x, stmt) : xs', deps'))
+    select _ = error "Something went utterly wrong"
