@@ -30,10 +30,6 @@ is_qualified :: Name -> Bool
 is_qualified (QName _ _) = True
 is_qualified (Name _) = False
 
-has_thyname :: ThyName -> Name -> Bool
-has_thyname thyname (QName thyname' _) = thyname == thyname'
-has_thyname _ (Name _) = True
-
 
 {- Expressions -}
 
@@ -130,7 +126,7 @@ add_idents_term :: Term -> [Ident] -> [Ident]
 add_idents_term (Literal _) =
   id
 add_idents_term (Const n) =
-  if is_qualified n then insert (ConstI n) else id
+  if is_qualified n || True then insert (ConstI n) else id
 add_idents_term (Abs n t) =
   add_idents_term t
 add_idents_term (App t1 t2) =
@@ -225,17 +221,16 @@ idents_of_stmt (Comment _) =
 topologize (Module thyname imports stmts) =
   let
     (representants, proto_deps) = map_split mk_raw_deps stmts
-    raw_deps = clear_junk (flat proto_deps)
+    raw_deps = clear_junk (tracing show (flat proto_deps))
+      |> tracing show
     strong_conns = (map_filter only_strong_conns . stronglyConnComp . dummy_nodes) raw_deps
     acyclic_deps = fold (\ys -> map (complete_strong_conn ys)) strong_conns raw_deps
+      |> tracing show
     (stmts', _) = ultimately select (representants, acyclic_deps)
   in Module thyname imports stmts' where
     mk_raw_deps stmt =
       let
-        ((raw_xs1, raw_xs2), raw_xs3) = idents_of_stmt stmt
-        xs1 = {-filter (has_thyname thyname . plain_name)-} raw_xs1
-        xs2 = {-filter (has_thyname thyname . plain_name)-} raw_xs2
-        xs3 = {-filter (has_thyname thyname . plain_name)-} raw_xs3
+        ((xs1, xs2), xs3) = idents_of_stmt stmt
         xs12 = xs1 ++ xs2
         x = split_list xs12
         xs3' = xs3 |> fold insert xs1 |> fold insert xs2
