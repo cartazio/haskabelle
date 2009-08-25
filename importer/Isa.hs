@@ -32,7 +32,7 @@ is_qualified (Name _) = False
 
 has_thyname :: ThyName -> Name -> Bool
 has_thyname thyname (QName thyname' _) = thyname == thyname'
-has_thyname _ (Name _) = False
+has_thyname _ (Name _) = True
 
 
 {- Expressions -}
@@ -225,7 +225,7 @@ idents_of_stmt (Comment _) =
 topologize (Module thyname imports stmts) =
   let
     (representants, proto_deps) = map_split mk_raw_deps stmts
-    raw_deps = map derefl (flat proto_deps)
+    raw_deps = clear_junk (flat proto_deps)
     strong_conns = (map_filter only_strong_conns . stronglyConnComp . dummy_nodes) raw_deps
     acyclic_deps = fold (\ys -> map (complete_strong_conn ys)) strong_conns raw_deps
     (stmts', _) = ultimately select (representants, acyclic_deps)
@@ -233,17 +233,19 @@ topologize (Module thyname imports stmts) =
     mk_raw_deps stmt =
       let
         ((raw_xs1, raw_xs2), raw_xs3) = idents_of_stmt stmt
-        xs1 = filter (has_thyname thyname . plain_name) raw_xs1
-        xs2 = filter (has_thyname thyname . plain_name) raw_xs2
-        xs3 = filter (has_thyname thyname . plain_name) raw_xs3
-        x = if null xs1 then Nothing else Just (head xs1)
+        xs1 = {-filter (has_thyname thyname . plain_name)-} raw_xs1
+        xs2 = {-filter (has_thyname thyname . plain_name)-} raw_xs2
+        xs3 = {-filter (has_thyname thyname . plain_name)-} raw_xs3
+        xs12 = xs1 ++ xs2
+        x = split_list xs12
         xs3' = xs3 |> fold insert xs1 |> fold insert xs2
-      in ((x, stmt), map (rpair xs3') (xs1 ++ xs2))
+      in ((x, stmt), map (rpair xs3') xs12)
     weave_deps ((xs1, xs2), xs3) =
       let
         xs3' = xs3 |> fold insert xs1 |> fold insert xs2
       in map (rpair xs3') (xs1 ++ xs2)
-    derefl (x, xs) = (x, remove x xs)
+    clear_junk deps = let ys = map fst deps
+      in map (\(x, xs) -> (x, filter (flip elem (remove x ys)) xs)) deps
     dummy_nodes = map (\(x, xs) -> (x, x, xs))
     no_dummy_nodes = map (\(_, x, xs) -> (x, xs))
     with_dummy_nodes f = no_dummy_nodes . f . dummy_nodes
@@ -254,14 +256,15 @@ topologize (Module thyname imports stmts) =
       else if any (\y -> y `elem` xs) ys
         then (x, fold insert ys xs)
         else (x, xs)
-    select ([], []) = Nothing
+    select ([], _) = Nothing
     select ((Nothing, stmt) : xs, deps) = Just (stmt, (xs, deps))
-    select ((Just x, stmt) : xs, deps) = if null (these (lookup (tracing show x) deps))
+    select ((Just (x, ws), stmt) : xs, deps) = if null (these (lookup (tracing show x) deps))
       then let
-          deps' = map_filter (\(y, ys) -> if x == y then Nothing
-            else Just (y, filter_out ((==) x) ys)) deps
+          zs = x : ws
+          deps' = map_filter (\(y, ys) -> if y `elem` zs then Nothing
+            else Just (y, filter_out (flip elem zs) ys)) deps
         in Just (stmt, (xs, deps'))
-      else let
-          Just (stmt', (xs', deps')) = select (xs, deps)
-        in Just (stmt', ((Just x, stmt) : xs', deps'))
-    select x = error ("Something went utterly wrong: " ++ show x)
+      else case select (xs, deps) of
+        Just (stmt', (xs', deps')) -> Just (stmt', ((Just (x, ws), stmt) : xs', deps'))
+        Nothing -> error ("Something went utterly wrong: " ++ show x ++ "\n" ++ show stmt
+          ++ "\n" ++ show xs ++ "\n" ++ show deps ++ "\n" ++ show (these (lookup (tracing show x) deps)))
