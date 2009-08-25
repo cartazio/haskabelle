@@ -15,15 +15,15 @@ maps :: (a -> [b]) -> [a] -> [b]
 maps f [] = []
 maps f (x : xs) = f x ++ maps f xs
 
-{-map_index :: ((Int, a) -> b) -> [a] -> [b]
+map_index :: ((Int, a) -> b) -> [a] -> [b]
 map_index f = mapp 0 where
   mapp _ [] = []
-  mapp i (x : xs) = f (i, x) : mapp (i + 1) xs-}
+  mapp i (x : xs) = f (i, x) : mapp (i + 1) xs
 
 map2 :: (a -> b -> c) -> [a] -> [b] -> [c]
 map2 _ [] [] = []
 map2 f (x : xs) (y : ys) = f x y : map2 f xs ys
-map2 _ _ _ = error "unequals length"
+map2 _ _ _ = error "unequal lengths"
 
 map_split :: (a -> (b, c)) -> [a] -> ([b], [c])
 map_split f [] = ([], [])
@@ -37,3 +37,11 @@ map_product :: (a -> b -> c) -> [a] -> [b] -> [c]
 map_product f _ [] = []
 map_product f [] _ = []
 map_product f (x : xs) ys = map (f x) ys ++ map_product f xs ys
+
+member :: Eq a => [a] -> a -> Bool
+member [] y = False
+member (x : xs) y = x == y || member xs y
+
+distincts :: Eq a => [a] -> [a]
+distincts [] = []
+distincts (x : xs) = if member xs x then distincts xs else x : distincts xs
