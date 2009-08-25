@@ -6,8 +6,8 @@ Generic functions.
 module Importer.Utilities.Misc (
   assert, tracing,
   (|>), (*>),
-  pair, map_both,
-  fold, flat, maps, nth_map, map_index, fold_index, map2, fold2, map_split, insert,
+  pair, rpair, map_both,
+  fold, map_filter, flat, maps, nth_map, map_index, fold_index, map2, fold2, map_split, insert, remove,
   accumulate, has_duplicates, burrow_indices,
   unfoldr, unfoldr1, unfoldl, unfoldl1,
   liftM, mapsM,
@@ -15,6 +15,7 @@ module Importer.Utilities.Misc (
 ) where
 
 import qualified List
+import qualified Maybe
 import Monad (liftM)
 import Control.Exception (assert)
 import Debug.Trace (trace)
@@ -37,6 +38,9 @@ f *> g = g . f
 
 {- pairs -}
 
+rpair :: b -> a -> (a, b)
+rpair y x = (x, y)
+
 pair :: a -> b -> (a, b)
 pair x y = (x, y)
 
@@ -49,6 +53,9 @@ map_both f (x, y) = (f x, f y)
 fold :: (a -> b -> b) -> [a] -> b -> b
 fold f [] y = y
 fold f (x:xs) y = fold f xs (f x y)
+
+map_filter :: (a -> Maybe b) -> [a] -> [b]
+map_filter = Maybe.mapMaybe
 
 flat :: [[a]] -> [a]
 flat = List.concat
@@ -97,6 +104,9 @@ map_split f (x : xs) =
 
 insert :: Eq a => a -> [a] -> [a]
 insert x xs = if x `elem` xs then xs else x : xs
+
+remove :: Eq a => a -> [a] -> [a]
+remove = List.delete
 
 accumulate :: (a -> [b] -> [b]) -> a -> [b]
 accumulate f x = f x []
