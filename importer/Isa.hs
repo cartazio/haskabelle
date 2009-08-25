@@ -23,7 +23,7 @@ newtype ThyName = ThyName String
   deriving (Show, Eq, Ord, Data, Typeable)
 
 data Name = QName ThyName String | Name String
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 
 {- Expressions -}
@@ -77,7 +77,7 @@ data TypeSpec = TypeSpec [Name] Name
 data TypeSign = TypeSign Name Type
   deriving Show
 
-data Stmt =
+data Stmt = -- beware: not all statements are modelled wholly appropriately
     Datatype [(TypeSpec, [(Name, [Type])])]
   | Record TypeSpec [(Name, Type)]
   | TypeSynonym [(TypeSpec, Type)]
@@ -96,7 +96,7 @@ data Module = Module ThyName [ThyName] [Stmt]
 {- Identifier categories -}
 
 data Ident = ClassI Name | TycoI Name | ConstI Name
-  deriving Eq
+  deriving (Eq, Ord)
 
 add_idents_type :: Type -> [Ident] -> [Ident]
 add_idents_type (Type n tys) =
@@ -208,13 +208,40 @@ idents_of_stmt (Instance n ty stmts) = -- this is only an approximation
 idents_of_stmt (Comment _) =
   (([], []), [])
 
-{-data Module = Module ThyName [ThyName] [Stmt]
-  deriving Show-}
+topologize (Module thyname imports stmts) =
+  let
+    (representants, proto_deps) = map_split  mk_raw_deps stmts
+    raw_deps = map derefl (flat proto_deps)
+    strong_conns = (map_filter only_strong_conns . stronglyConnComp . dummy_nodes) raw_deps
+    acyclic_deps = fold (\ys -> map (complete_strong_conn ys)) strong_conns raw_deps
+  in Module thyname imports stmts where
+    mk_raw_deps stmt =
+      let
+        ((xs1, xs2), xs3) = idents_of_stmt stmt
+        x = if null xs1 then Nothing else Just (head xs1)
+        xs3' = xs3 |> fold insert xs1 |> fold insert xs2
+      in ((x, stmt), map (rpair xs3') (xs1 ++ xs2))
+    weave_deps ((xs1, xs2), xs3) =
+      let
+        xs3' = xs3 |> fold insert xs1 |> fold insert xs2
+      in map (rpair xs3') (xs1 ++ xs2)
+    derefl (x, xs) = (x, remove x xs)
+    dummy_nodes = map (\(x, xs) -> (x, x, xs))
+    no_dummy_nodes = map (\(_, x, xs) -> (x, xs))
+    with_dummy_nodes f = no_dummy_nodes . f . dummy_nodes
+    only_strong_conns (Graph.AcyclicSCC _) = Nothing
+    only_strong_conns (Graph.CyclicSCC xs) = Just xs
+    complete_strong_conn ys (x, xs) = if x `elem` ys
+      then (x, fold remove ys xs)
+      else if any (\y -> y `elem` xs) ys
+        then (x, fold insert ys xs)
+        else (x, xs)
+    select ((Nothing, stmt) : xs) deps = ()
 
 
-topologize :: Ord b => (a -> (b, [b])) -> [a] -> [[a]]
+{-topologize :: Ord b => (a -> (b, [b])) -> [a] -> [[a]]
 topologize f xs = (map list_of_SCC . stronglyConnComp . map add_edges) xs
   where
     add_edges x = let (node, nodes) = f x in (x, node, nodes)
     list_of_SCC (Graph.AcyclicSCC x) = [x]
-    list_of_SCC (Graph.CyclicSCC xs) = xs
+    list_of_SCC (Graph.CyclicSCC xs) = xs-}
