@@ -23,8 +23,16 @@ import Data.Graph as Graph
 newtype ThyName = ThyName String
   deriving (Show, Eq, Ord, Data, Typeable)
 
-data Name = QName ThyName String | Name String
+data Name = QName ThyName String | Name String -- FIXME: unqualified names should be classified as variables
   deriving (Show, Eq, Ord)
+
+is_qualified :: Name -> Bool
+is_qualified (QName _ _) = True
+is_qualified (Name _) = False
+
+has_thyname :: ThyName -> Name -> Bool
+has_thyname thyname (QName thyname' _) = thyname == thyname'
+has_thyname _ (Name _) = False
 
 
 {- Expressions -}
@@ -97,7 +105,12 @@ data Module = Module ThyName [ThyName] [Stmt]
 {- Identifier categories -}
 
 data Ident = ClassI Name | TycoI Name | ConstI Name
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
+
+plain_name :: Ident -> Name
+plain_name (ClassI n) = n
+plain_name (TycoI n) = n
+plain_name (ConstI n) = n
 
 add_idents_type :: Type -> [Ident] -> [Ident]
 add_idents_type (Type n tys) =
@@ -117,7 +130,7 @@ add_idents_term :: Term -> [Ident] -> [Ident]
 add_idents_term (Literal _) =
   id
 add_idents_term (Const n) =
-  insert (ConstI n)
+  if is_qualified n then insert (ConstI n) else id
 add_idents_term (Abs n t) =
   add_idents_term t
 add_idents_term (App t1 t2) =
@@ -211,7 +224,7 @@ idents_of_stmt (Comment _) =
 
 topologize (Module thyname imports stmts) =
   let
-    (representants, proto_deps) = map_split  mk_raw_deps stmts
+    (representants, proto_deps) = map_split mk_raw_deps stmts
     raw_deps = map derefl (flat proto_deps)
     strong_conns = (map_filter only_strong_conns . stronglyConnComp . dummy_nodes) raw_deps
     acyclic_deps = fold (\ys -> map (complete_strong_conn ys)) strong_conns raw_deps
@@ -219,7 +232,10 @@ topologize (Module thyname imports stmts) =
   in Module thyname imports stmts' where
     mk_raw_deps stmt =
       let
-        ((xs1, xs2), xs3) = idents_of_stmt stmt
+        ((raw_xs1, raw_xs2), raw_xs3) = idents_of_stmt stmt
+        xs1 = filter (has_thyname thyname . plain_name) raw_xs1
+        xs2 = filter (has_thyname thyname . plain_name) raw_xs2
+        xs3 = filter (has_thyname thyname . plain_name) raw_xs3
         x = if null xs1 then Nothing else Just (head xs1)
         xs3' = xs3 |> fold insert xs1 |> fold insert xs2
       in ((x, stmt), map (rpair xs3') (xs1 ++ xs2))
@@ -240,7 +256,7 @@ topologize (Module thyname imports stmts) =
         else (x, xs)
     select ([], []) = Nothing
     select ((Nothing, stmt) : xs, deps) = Just (stmt, (xs, deps))
-    select ((Just x, stmt) : xs, deps) = if null (these (lookup x deps))
+    select ((Just x, stmt) : xs, deps) = if null (these (lookup (tracing show x) deps))
       then let
           deps' = map_filter (\(y, ys) -> if x == y then Nothing
             else Just (y, filter_out ((==) x) ys)) deps
@@ -248,4 +264,4 @@ topologize (Module thyname imports stmts) =
       else let
           Just (stmt', (xs', deps')) = select (xs, deps)
         in Just (stmt', ((Just x, stmt) : xs', deps'))
-    select _ = error "Something went utterly wrong"
+    select x = error ("Something went utterly wrong: " ++ show x)
