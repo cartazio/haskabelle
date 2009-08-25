@@ -7,8 +7,11 @@ module Importer.Utilities.Misc (
   assert, tracing,
   (|>), (*>),
   pair, rpair, map_both,
-  fold, map_filter, flat, maps, nth_map, map_index, fold_index, map2, fold2, map_split, insert, remove,
+  filter_out, fold, map_filter, flat, maps, nth_map, map_index, fold_index,
+  map2, fold2, map_split, ultimately,
+  insert, remove,
   accumulate, has_duplicates, burrow_indices,
+  these,
   unfoldr, unfoldr1, unfoldl, unfoldl1,
   liftM, mapsM,
   groupAlist, wordsBy
@@ -49,6 +52,9 @@ map_both f (x, y) = (f x, f y)
 
 
 {- lists -}
+
+filter_out :: (a -> Bool) -> [a] -> [a]
+filter_out f = filter (not . f)
 
 fold :: (a -> b -> b) -> [a] -> b -> b
 fold f [] y = y
@@ -102,6 +108,11 @@ map_split f (x : xs) =
     (ys, ws) = map_split f xs
   in (y : ys, w : ws)
 
+ultimately :: (a -> Maybe (b, a)) -> a -> ([b], a)
+ultimately f x = case f x of
+  Nothing -> ([], x)
+  Just (r, y) -> let (rs, z) = ultimately f y in (r : rs, z)
+
 insert :: Eq a => a -> [a] -> [a]
 insert x xs = if x `elem` xs then xs else x : xs
 
@@ -122,6 +133,13 @@ burrow_indices is f xs =
     ys = f (map ((!!) xs) is)
   in if length xs /= length ys then unequal_lengths
   else fold (\i -> nth_map i (\_ -> ys !! i)) is xs
+
+
+{- optional values -}
+
+these :: Maybe [a] -> [a]
+these Nothing = []
+these (Just xs) = xs
 
 
 {- structural operations -}
