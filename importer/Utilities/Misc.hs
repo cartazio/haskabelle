@@ -38,11 +38,11 @@ f *> g = g . f
 
 {- pairs -}
 
-rpair :: b -> a -> (a, b)
-rpair y x = (x, y)
-
 pair :: a -> b -> (a, b)
 pair x y = (x, y)
+
+rpair :: b -> a -> (a, b)
+rpair y x = (x, y)
 
 map_both :: (a -> b) -> (a, a) -> (b, b)
 map_both f (x, y) = (f x, f y)
