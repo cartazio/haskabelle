@@ -32,9 +32,10 @@ import IO
 import System.FilePath
 import System.Directory
 
+import Importer.Library
+
 import qualified Language.Haskell.Exts as Hsx
 
-import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
 
 import qualified Importer.Isa as Isa

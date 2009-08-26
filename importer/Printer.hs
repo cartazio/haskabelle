@@ -12,7 +12,8 @@ import Control.Monad
 
 import qualified Text.PrettyPrint as P
 
-import Importer.Utilities.Misc
+import Importer.Library
+
 import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, 
                                mk_InstanceCmd_name)
 

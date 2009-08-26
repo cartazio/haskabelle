@@ -70,7 +70,7 @@ import qualified Data.Map as Map
 
 import Control.Monad.Reader
 
-import Debug.Trace
+import Importer.Library
 
 import qualified Language.Haskell.Exts as Hsx
 
@@ -78,7 +78,6 @@ import qualified Importer.Msg as Msg
 import qualified Importer.Isa as Isa
 
 import Importer.Utilities.Hsk
-import Importer.Utilities.Misc
 import Importer.Utilities.Isa as Isa (prettyShow')
 import Importer.Configuration hiding (getCustomTheory)
 import qualified Importer.Configuration as Conf (getCustomTheory)

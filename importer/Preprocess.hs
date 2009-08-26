@@ -22,10 +22,11 @@ import Data.Generics.Str
 import Control.Monad.Writer
 import Control.Monad.Reader
 
+import Importer.Library
+
 import Language.Haskell.Exts as Hsx
 
 import Importer.Utilities.Env
-import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
 

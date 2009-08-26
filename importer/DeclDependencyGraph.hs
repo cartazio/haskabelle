@@ -13,9 +13,10 @@ import Data.Tree
 
 import Monad
 
+import Importer.Library
+
 import qualified Language.Haskell.Exts as Hsx
 
-import Importer.Utilities.Misc
 import Importer.Utilities.Hsk
 
 import qualified Importer.LexEnv as Env

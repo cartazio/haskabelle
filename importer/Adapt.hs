@@ -8,7 +8,7 @@ module Importer.Adapt(Adaption(..), AdaptionTable(AdaptionTable),
   adaptGlobalEnv, adaptIsaUnit
 ) where
 
-import Importer.Utilities.Misc
+import Importer.Library
 import Data.Maybe (mapMaybe, fromMaybe, catMaybes, isJust)
 import List (partition, sort, group, intersperse)
 import Control.Monad.State

@@ -22,7 +22,8 @@ import Control.Monad.Writer
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Importer.Utilities.Misc
+import Importer.Library
+
 import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
 import Importer.Preprocess

@@ -1,9 +1,9 @@
 {-| Author: Tobias C. Rittweiler and Florian Haftmann, TU Muenchen
 
-Generic functions.
+A collection of generic functions.
 -}
 
-module Importer.Utilities.Misc (
+module Importer.Library (
   assert, tracing,
   (|>), (*>),
   pair, rpair, map_both,

@@ -71,9 +71,10 @@ import Data.Generics.PlateData
 
 import Control.Monad.Reader
 
+import Importer.Library
+
 import Language.Haskell.Exts as Hsx
 
-import Importer.Utilities.Misc
 import Importer.Utilities.Gensym
 import Importer.Utilities.Env
 

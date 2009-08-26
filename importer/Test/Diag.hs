@@ -9,6 +9,8 @@ import System.FilePath
 import Data.Tree
 import Text.PrettyPrint (render, vcat, text, (<>), Doc)
 
+import Importer.Library
+
 import Language.Haskell.Exts.Pretty 
 import Language.Haskell.Exts.Syntax 
 
@@ -16,7 +18,6 @@ import Importer.ConversionUnit
 import Importer.Configuration
 import Importer.Printer (pprint)
 import Importer.Preprocess
-import Importer.Utilities.Misc
 
 
 {-|
