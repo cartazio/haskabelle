@@ -275,6 +275,7 @@ namesFromDecl (Hsx.InfixDecl _ _ _ ops)        = [Hsx.UnQual n | n <- (universeB
 namesFromDecl (Hsx.PatBind _ pat _ _)          = bindingsFromPats [pat]
 namesFromDecl (Hsx.FunBind (Hsx.Match _ fname _ _ _ : ms ))
                                                = [Hsx.UnQual fname]
+namesFromDecl (Hsx.UnknownDeclPragma _ _ _) = []
 namesFromDecl decl                           = error $ "Internal error: The given declaration " ++ show decl ++ " is not supported!"
 
 {-|

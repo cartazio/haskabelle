@@ -68,7 +68,7 @@ convertHskUnit custs adapt (HskUnit hsmodules custMods initialGlobalEnv)
       toHskModule :: Env.GlobalE -> Hsx.Module -> HskModule
       toHskModule globalEnv (Hsx.Module loc modul _ _ _exports _imports decls) =
           HskModule loc modul
-            $ map HskDependentDecls (arrangeDecls globalEnv modul decls)
+            $ map HskDependentDecls (tracing show (arrangeDecls globalEnv modul (tracing show decls)))
 
 
 -- The naming scheme "HsFoo" is treated as being owned by the parser
@@ -594,6 +594,8 @@ convertDecl (Hsx.InstDecl loc ctx classqN tys inst_decls)
                         typ     = Env.typeOf lexinfo
                         typ'    = Env.substituteTyVars [(Env.EnvTyVar tyvarN, tycon)] typ
                     in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typeOf = typ' }))
+
+convertDecl (Hsx.UnknownDeclPragma src directive pragma) = error (directive ++ ": " ++ pragma)
 
 convertDecl junk = pattern_match_exhausted "Hsx.Decl -> Isa.Stmt" junk
 
