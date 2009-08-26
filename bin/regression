@@ -30,12 +30,12 @@ fi
 
 if [ "$1" == "no_reimport" ]
 then
-  REIMPORT=0
+  REIMPORT=""
 else
   REIMPORT=1
   if [ "$1" == "no_abort" ]
   then
-    ABORT=0
+    ABORT=""
   else
     ABORT=1
   fi
