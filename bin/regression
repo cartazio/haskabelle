@@ -26,6 +26,30 @@ then
   exit 0
 fi
 
+## operating mode
+
+if [ "$1" == "no_reimport" ]
+then
+  REIMPORT=0
+else
+  REIMPORT=1
+  if [ "$1" == "no_abort" ]
+  then
+    ABORT=0
+  else
+    ABORT=1
+  fi
+fi
+
+function fail_or_warn()
+{
+  if [ $ABORT ]
+  then fail "$1"
+  else
+    echo "$1" >&2
+  fi
+}
+
 ## building
 
 cd "$HASKABELLE_HOME"
@@ -42,7 +66,7 @@ done
 
 ## re-importing
 
-if [ "$1" != "no_reimport" ]
+if [ $REIMPORT ]
 then
   cp -vu default/Prelude.thy ex/dst_thy/
   cd ex/dst_thy/
@@ -52,7 +76,7 @@ then
   do
     THY_NAME="$(basename $THY .thy)"
     echo "re-importing $THY_NAME..."
-    "$HASKABELLE_HOME/bin/isabelle" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail "Could not re-import $THY"
+    "$HASKABELLE_HOME/bin/isabelle" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail_or_warn "Could not re-import $THY"
     HS_FILE="$DST$THY_NAME.hs"
     if [ ! -e "$HS_FILE" ]
     then
