@@ -232,16 +232,16 @@ instance Printer Isa.Module where
              let imps' = map (pprint' adapt reserved) (imps ++ [Isa.ThyName Env.prelude])
              withCurrentTheory thy $
                text "theory" <+> pprint' adapt reserved thy $+$
-               text "imports " <> fsep  imps'    $+$
-               text "begin"                                      $+$
-               (vcat $ map (pprint' adapt reserved) cmds)                         $+$
+               text "imports " <> fsep  imps' $+$
+               text "begin" $+$
+               (vcat $ map (pprint' adapt reserved) cmds) $+$
                text "\nend"
 
 instance Printer Isa.Stmt where
     pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
 
     pprint' adapt reserved (Isa.Datatype (decl : decls)) =
-      vcat (text "datatype" <+> pprintDecl decl :
+      blankline $ vcat (text "datatype" <+> pprintDecl decl :
         map ((text "and     " <+>) . pprintDecl) decls) where
         pprintDecl (tyspec, dataspecs) =
           pprint' adapt reserved tyspec  <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
@@ -302,7 +302,7 @@ instance Printer Isa.Stmt where
               = let renams = [ (n, mk_InstanceCmd_name n t) | n <- namesFromIsaCmd c ]
                 in renameIsaCmd thy renams c
  
-    pprint' adapt reserved (Isa.TypeSynonym aliases) = text "types" <+> vcat (map pp aliases)
+    pprint' adapt reserved (Isa.TypeSynonym aliases) = blankline $ text "types" <+> vcat (map pp aliases)
         where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
 
 printFunDef adapt reserved cmd tysigs equations
