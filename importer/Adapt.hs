@@ -547,7 +547,7 @@ instance Adapt Isa.Stmt where
         do types' <- mapM adaptType types
            return (name, types')
 
-    adapt (Isa.Fun typesigs defs)
+    adapt (Isa.Fun typesigs permissive defs)
         = do typesigs' <- mapM adapt typesigs
              let funNs = map Isa.nameOfTypeSign (typesigs ++ typesigs')
              shadowing (map Isa.nameOfTypeSign typesigs) $
@@ -558,7 +558,7 @@ instance Adapt Isa.Stmt where
                                            shadowing (concatMap extractNames pats') $
                                              do body' <- adapt body ; return (funN', pats', body'))
                                 defs
-                  return (Isa.Fun typesigs' defs')
+                  return (Isa.Fun typesigs' permissive defs')
          
     adapt (Isa.Primrec typesigs defs)
         = do typesigs' <- mapM adapt typesigs

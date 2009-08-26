@@ -8,7 +8,7 @@ Abstract representation of Isar/HOL theory.
 module Importer.Isa (ThyName(..), Name(..), Type(..), Literal(..), Term(..), Pat,
   ListComprFragment(..), DoBlockFragment(..),
   Stmt(..), TypeSpec(..), TypeSign(..), Module(..),
-  retopologize) where
+  retopologize, base_name_of) where
 
 import Data.Graph as Graph
 
@@ -29,6 +29,10 @@ data Name = QName ThyName String | Name String -- FIXME: unqualified names shoul
 is_qualified :: Name -> Bool
 is_qualified (QName _ _) = True
 is_qualified (Name _) = False
+
+base_name_of :: Name -> String
+base_name_of (QName _ n) = n
+base_name_of (Name n) = n
 
 
 {- Expressions -}
@@ -88,7 +92,7 @@ data Stmt = -- beware: not all statements are modelled wholly appropriately
   | TypeSynonym [(TypeSpec, Type)]
   | Definition TypeSign (Pat, Term)
   | Primrec [TypeSign] [(Name, [Pat], Term)]
-  | Fun [TypeSign] [(Name, [Pat], Term)]
+  | Fun [TypeSign] Bool [(Name, [Pat], Term)]
   | Class Name [Name] [TypeSign]
   | Instance Name Type [Stmt]
   | Comment String
@@ -198,7 +202,7 @@ idents_of_stmt (Primrec sigs eqns) =
     (xs1, xs3a) = map_split idents_of_typesign sigs
     xs3b = flat xs3a |> fold (\(_, ps, t) -> fold add_idents_term ps *> add_idents_term t) eqns
   in ((xs1, []), xs3b)
-idents_of_stmt (Fun sigs eqns) =
+idents_of_stmt (Fun sigs permissive eqns) =
   let
     (xs1, xs3a) = map_split idents_of_typesign sigs
     xs3b = flat xs3a |> fold (\(_, ps, t) -> fold add_idents_term ps *> add_idents_term t) eqns

@@ -7,9 +7,11 @@ module Importer.Utilities.Isa
     (renameIsaCmd, namesFromIsaCmd, renameTyVarInType, nameOfTypeSign,
      mk_InstanceCmd_name, prettyShow, prettyShow') where
 
-import Control.Monad.State
 import Maybe
 import Data.Generics.Biplate (universeBi)
+import Control.Monad.State
+
+import Importer.Library
 
 import qualified Language.Haskell.Exts as Hsx
 import qualified Importer.Isa as Isa
@@ -33,7 +35,7 @@ renameIsaCmd :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.Stmt -> Isa.Stmt
 renameIsaCmd thy renamings cmd
     = let rs = canonicalizeRenamings thy renamings
       in case cmd of
-           Isa.Fun tysigs clauses -> Isa.Fun tysigs' clauses'
+           Isa.Fun tysigs permissive clauses -> Isa.Fun tysigs' permissive clauses'
                where tysigs' = map (renameTypeSign thy rs) tysigs
                      clauses' = map (renameClause rs) clauses
                      renameClause rs (n, pats, body) 
@@ -124,7 +126,7 @@ apply3 f [a,b,c]   = f a b c
 nameOfTypeSign (Isa.TypeSign name _) = name
 
 namesFromIsaCmd :: Isa.Stmt -> [Isa.Name]
-namesFromIsaCmd (Isa.Fun sigs _)       = map nameOfTypeSign sigs
+namesFromIsaCmd (Isa.Fun sigs _ _)       = map nameOfTypeSign sigs
 namesFromIsaCmd (Isa.Definition sig _) = [nameOfTypeSign sig]
 namesFromIsaCmd junk 
     = error ("namesFromIsaCmd: Fall through: " ++ show junk)

@@ -6,7 +6,7 @@ A collection of generic functions.
 module Importer.Library (
   assert, tracing,
   (|>), (*>),
-  pair, rpair, map_both,
+  pair, rpair, map_fst, map_snd, map_both,
   split_list, filter_out, fold, map_filter, flat, maps, nth_map, map_index, fold_index,
   map2, fold2, map_split, ultimately,
   insert, remove,
@@ -46,6 +46,12 @@ pair x y = (x, y)
 
 rpair :: b -> a -> (a, b)
 rpair y x = (x, y)
+
+map_fst :: (a -> b) -> (a, c) -> (b, c)
+map_fst f (x, y) = (f x, y)
+
+map_snd :: (a -> b) -> (c, a) -> (c, b)
+map_snd f (x, y) = (x, f y)
 
 map_both :: (a -> b) -> (a, a) -> (b, b)
 map_both f (x, y) = (f x, f y)

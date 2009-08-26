@@ -270,11 +270,14 @@ instance Printer Isa.Stmt where
                    let lookup = (\n -> lookupIdentifier thy n env)
                    pprint' adapt reserved pat <+> equals <+> parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
 
-    pprint' adapt reserved (Isa.Primrec tysigs equations)
-        = printFunDef adapt reserved "primrec" tysigs equations
+    pprint' adapt reserved (Isa.Primrec tysigs equations) =
+      printFunDef adapt reserved "primrec" "" tysigs equations
 
-    pprint' adapt reserved (Isa.Fun tysigs equations)
-        = printFunDef adapt reserved "fun" tysigs equations
+    pprint' adapt reserved (Isa.Fun tysigs False equations) =
+      printFunDef adapt reserved "fun" "" tysigs equations
+
+    pprint' adapt reserved (Isa.Fun tysigs True equations) =
+      printFunDef adapt reserved "function (sequential)" "sorry termination sorry" tysigs equations
 
     pprint' adapt reserved (Isa.Class classN superclassNs typesigs)
         = blankline $
@@ -306,12 +309,13 @@ instance Printer Isa.Stmt where
     pprint' adapt reserved (Isa.TypeSynonym aliases) = blankline $ text "types" <+> vcat (map pp aliases)
         where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
 
-printFunDef adapt reserved cmd tysigs equations
+printFunDef adapt reserved prologue epilogue tysigs equations
     = blankline $
-      text cmd <+> vcat (punctuate (text " and ") (map (pprint' adapt reserved) tysigs)) $$
+      text prologue <+> vcat (punctuate (text " and ") (map (pprint' adapt reserved) tysigs)) $$
       text "where" $$
       vcat (zipWith (<+>) (space : repeat (char '|'))
-            (map ppEquation equations))
+            (map ppEquation equations)) $$
+      text epilogue
     where 
       ppEquation (fname, pattern, term) 
           = do thy <- queryPP currentTheory 
