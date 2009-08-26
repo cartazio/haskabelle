@@ -8,7 +8,7 @@ Abstract representation of Isar/HOL theory.
 module Importer.Isa (ThyName(..), Name(..), Type(..), Literal(..), Term(..), Pat,
   ListComprFragment(..), DoBlockFragment(..),
   Stmt(..), TypeSpec(..), TypeSign(..), Module(..),
-  topologize) where
+  retopologize) where
 
 import Data.Graph as Graph
 
@@ -218,14 +218,16 @@ idents_of_stmt (Instance n ty stmts) = -- this is only an approximation
 idents_of_stmt (Comment _) =
   (([], []), [])
 
-topologize (Module thyname imports stmts) =
+retopologize (Module thyname imports stmts) =
+  {- This does some additional work to arrange statements
+     in a topological order.  It would be better to unify this
+     with the tasks of Importer.DeclDependencyGraph.arrangeDecls -}
   let
     (representants, proto_deps) = map_split mk_raw_deps stmts
     raw_deps = clear_junk (tracing show (flat proto_deps))
       |> tracing show
     strong_conns = (map_filter only_strong_conns . stronglyConnComp . dummy_nodes) raw_deps
     acyclic_deps = fold (\ys -> map (complete_strong_conn ys)) strong_conns raw_deps
-      |> tracing show
     (stmts', _) = ultimately select (representants, acyclic_deps)
   in Module thyname imports stmts' where
     mk_raw_deps stmt =
@@ -251,9 +253,9 @@ topologize (Module thyname imports stmts) =
       else if any (\y -> y `elem` xs) ys
         then (x, fold insert ys xs)
         else (x, xs)
-    select ([], _) = Nothing
+    select ([], []) = Nothing
     select ((Nothing, stmt) : xs, deps) = Just (stmt, (xs, deps))
-    select ((Just (x, ws), stmt) : xs, deps) = if null (these (lookup (tracing show x) deps))
+    select ((Just (x, ws), stmt) : xs, deps) = if null (these (lookup x deps))
       then let
           zs = x : ws
           deps' = map_filter (\(y, ys) -> if y `elem` zs then Nothing
@@ -262,4 +264,4 @@ topologize (Module thyname imports stmts) =
       else case select (xs, deps) of
         Just (stmt', (xs', deps')) -> Just (stmt', ((Just (x, ws), stmt) : xs', deps'))
         Nothing -> error ("Something went utterly wrong: " ++ show x ++ "\n" ++ show stmt
-          ++ "\n" ++ show xs ++ "\n" ++ show deps ++ "\n" ++ show (these (lookup (tracing show x) deps)))
+          ++ "\n" ++ show xs ++ "\n" ++ show deps ++ "\n" ++ show (these (lookup x deps)))

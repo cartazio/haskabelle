@@ -393,7 +393,7 @@ convertModule (HskModule _loc modul dependentDecls) =
     withUpdatedContext theory (\t -> assert (t == Isa.ThyName "Scratch") thy)
       $ do
           stmts <- mapsM convertDependentDecls dependentDecls
-          return (Isa.topologize (Isa.Module thy imps stmts))
+          return (Isa.retopologize (Isa.Module thy imps stmts))
   where isStandardTheory usedThyNames (Isa.ThyName n) = n `elem` usedThyNames
 
 lookupImports :: Isa.ThyName -> Env.GlobalE -> Customisations -> [Isa.ThyName]
