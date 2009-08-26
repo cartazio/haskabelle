@@ -15,6 +15,23 @@ text {*
   with prior modifications.
 *}
 
+subsection {* Fundamental prelude ingredients *}
+
+axiomatization error :: "string \<Rightarrow> 'a"
+
+definition rapp :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 60) where
+  "f $ x = f x"
+
+definition curry :: "('a \<times> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<Rightarrow> 'b \<Rightarrow> 'c" where
+  "curry f x y = f (x, y)"
+
+definition uncurry :: "('a \<Rightarrow> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<times> 'b \<Rightarrow> 'c" where
+  "uncurry = split"
+
+primrec separate :: "'a \<Rightarrow> 'a list \<Rightarrow> 'a list" where
+    "separate x [] = []"
+  | "separate x (y # ys) = (if ys = [] then [y] else y # x # separate x ys)"
+
 subsection {* Counterparts for fundamental Haskell classes *}
 
 class eq =
@@ -37,22 +54,18 @@ end
 class print =
   fixes print :: "'a \<Rightarrow> string"
 
+instantiation list :: (print) print
+begin
+
+definition
+  "print xs = ''['' @ concat (separate '', '' (map print xs)) @ '']''"
+
+instance ..
+
+end
+
 class num = number_ring + abs + sgn + eq + print
 
 instance int :: num ..
-
-axiomatization error :: "string \<Rightarrow> 'a"
-
-
-subsection {* Fundamental prelude ingredients *}
-
-definition rapp :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 60) where
-  "f $ x = f x"
-
-definition curry :: "('a \<times> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<Rightarrow> 'b \<Rightarrow> 'c" where
-  "curry f x y = f (x, y)"
-
-definition uncurry :: "('a \<Rightarrow> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<times> 'b \<Rightarrow> 'c" where
-  "uncurry = split"
 
 end
