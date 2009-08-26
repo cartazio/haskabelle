@@ -224,8 +224,7 @@ retopologize (Module thyname imports stmts) =
      with the tasks of Importer.DeclDependencyGraph.arrangeDecls -}
   let
     (representants, proto_deps) = map_split mk_raw_deps stmts
-    raw_deps = clear_junk (tracing show (flat proto_deps))
-      |> tracing show
+    raw_deps = clear_junk (flat proto_deps)
     strong_conns = (map_filter only_strong_conns . stronglyConnComp . dummy_nodes) raw_deps
     acyclic_deps = fold (\ys -> map (complete_strong_conn ys)) strong_conns raw_deps
     (stmts', _) = ultimately select (representants, acyclic_deps)
