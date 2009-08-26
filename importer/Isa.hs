@@ -263,5 +263,3 @@ retopologize (Module thyname imports stmts) =
         in Just (stmt, (xs, deps'))
       else case select (xs, deps) of
         Just (stmt', (xs', deps')) -> Just (stmt', ((Just (x, ws), stmt) : xs', deps'))
-        Nothing -> error ("Something went utterly wrong: " ++ show x ++ "\n" ++ show stmt
-          ++ "\n" ++ show xs ++ "\n" ++ show deps ++ "\n" ++ show (these (lookup x deps)))
