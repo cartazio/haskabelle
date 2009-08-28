@@ -1,369 +1,563 @@
+{-# OPTIONS_GHC -fglasgow-exts #-}
+
 module Rat where {
 
 
-data Inta = Number_of_int Rat.Inta | Bit1 Rat.Inta | Bit0 Rat.Inta | Min | Pls;
+data Nat = Zero_nat | Suc Nat;
 
-data Nat = Suc Rat.Nat | Zero_nat;
+leta :: forall b a. b -> (b -> a) -> a;
+leta s f = f s;
 
-minus_nat :: Rat.Nat -> Rat.Nat -> Rat.Nat;
-minus_nat (Rat.Suc m) (Rat.Suc n) = Rat.minus_nat m n;
-minus_nat Rat.Zero_nat n = Rat.Zero_nat;
-minus_nat m Rat.Zero_nat = m;
+class One a where {
+  one :: a;
+};
 
-less_eq_nat :: Rat.Nat -> Rat.Nat -> Bool;
-less_eq_nat (Rat.Suc m) n = Rat.less_nat m n;
-less_eq_nat Rat.Zero_nat n = True;
+class Orda a where {
+  less_eq :: a -> a -> Bool;
+  less :: a -> a -> Bool;
+};
 
-less_nat :: Rat.Nat -> Rat.Nat -> Bool;
-less_nat m (Rat.Suc n) = Rat.less_eq_nat m n;
-less_nat n Rat.Zero_nat = False;
+nat_aux :: Integer -> Nat -> Nat;
+nat_aux i n = (if i <= 0 then n else nat_aux (i - 1) (Suc n));
 
-eq_nat :: Rat.Nat -> Rat.Nat -> Bool;
-eq_nat Rat.Zero_nat Rat.Zero_nat = True;
-eq_nat (Rat.Suc m) (Rat.Suc n) = Rat.eq_nat m n;
-eq_nat Rat.Zero_nat (Rat.Suc a) = False;
-eq_nat (Rat.Suc a) Rat.Zero_nat = False;
+nat :: Integer -> Nat;
+nat i = nat_aux i Zero_nat;
 
-divmod :: Rat.Nat -> Rat.Nat -> (Rat.Nat, Rat.Nat);
+class Plus a where {
+  plus :: a -> a -> a;
+};
+
+class Zero a where {
+  zero :: a;
+};
+
+class Minus a where {
+  minus :: a -> a -> a;
+};
+
+class Times a where {
+  times :: a -> a -> a;
+};
+
+data Itself a = Type;
+
+class Inverse a where {
+  inverse :: a -> a;
+  divide :: a -> a -> a;
+};
+
+class Uminus a where {
+  neg :: a -> a;
+};
+
+instance Times Integer where {
+  times a b = a * b;
+};
+
+class (Times a) => Dvd a where {
+};
+
+instance Dvd Integer where {
+};
+
+class (One a, Zero a) => Zero_neq_one a where {
+};
+
+class (Times a) => Semigroup_mult a where {
+};
+
+class (Plus a) => Semigroup_add a where {
+};
+
+class (Semigroup_add a) => Ab_semigroup_add a where {
+};
+
+class (Ab_semigroup_add a, Semigroup_mult a) => Semiring a where {
+};
+
+class (Times a, Zero a) => Mult_zero a where {
+};
+
+class (Zero a, Semigroup_add a) => Monoid_add a where {
+};
+
+class (Ab_semigroup_add a, Monoid_add a) => Comm_monoid_add a where {
+};
+
+class (Comm_monoid_add a, Mult_zero a, Semiring a) => Semiring_0 a where {
+};
+
+class (Semigroup_add a) => Cancel_semigroup_add a where {
+};
+
+class (Ab_semigroup_add a,
+        Cancel_semigroup_add a) => Cancel_ab_semigroup_add a where {
+};
+
+class (Cancel_ab_semigroup_add a,
+        Comm_monoid_add a) => Cancel_comm_monoid_add a where {
+};
+
+class (Cancel_comm_monoid_add a, Semiring_0 a) => Semiring_0_cancel a where {
+};
+
+class (One a, Times a) => Power a where {
+};
+
+class (Semigroup_mult a, Power a) => Monoid_mult a where {
+};
+
+class (Monoid_mult a, Semiring_0 a, Zero_neq_one a) => Semiring_1 a where {
+};
+
+class (Semiring_0_cancel a, Semiring_1 a) => Semiring_1_cancel a where {
+};
+
+split :: forall b c a. (b -> c -> a) -> (b, c) -> a;
+split f (a, b) = f a b;
+
+abs_int :: Integer -> Integer;
+abs_int i = (if i < 0 then negate i else i);
+
+sgn_int :: Integer -> Integer;
+sgn_int i = (if i == 0 then 0 else (if 0 < i then 1 else negate 1));
+
+apsnd :: forall c b a. (c -> b) -> (a, c) -> (a, b);
+apsnd f (x, y) = (x, f y);
+
+divmod_int :: Integer -> Integer -> (Integer, Integer); {-# HASKABELLE permissive divmod_int divmod'0 #-};
+divmod_int k l =
+  (if k == 0 then (0, 0)
+    else (if l == 0 then (0, k)
+           else apsnd (\ a -> sgn_int l * a)
+                  (if sgn_int k == sgn_int l
+                    then (\k l -> divmod' (abs k) (abs l)) k l
+                    else let {
+                           (r, s) = (\k l -> divmod' (abs k) (abs l)) k l;
+                         } in (if s == 0 then (negate r, 0)
+                                else (negate r - 1, abs_int l - s))))) where  {
+    divmod' k l = if l == 0 || k < l then (0, k)
+      else let (q, r) = divmod' (k - l) l in (q + 1, r);
+  };
+
+class (Minus a, Uminus a, Monoid_add a) => Group_add a where {
+};
+
+class (Cancel_comm_monoid_add a, Group_add a) => Ab_group_add a where {
+};
+
+class (Ab_group_add a, Semiring_0_cancel a) => Ring a where {
+};
+
+class (Ring a, Semiring_1_cancel a) => Ring_1 a where {
+};
+
+of_int :: forall a. (Ring_1 a) => Integer -> a; {-# HASKABELLE permissive of_int #-};
+of_int k =
+  (if k == 0 then zero
+    else (if k < 0 then neg (of_int (negate k))
+           else let {
+                  (l, m) = divmod_int k 2;
+                  l' = of_int l;
+                } in (if m == 0 then plus l' l' else plus (plus l' l') one)));
+
+instance One Integer where {
+  one = 1;
+};
+
+eq_nat :: Nat -> Nat -> Bool;
+eq_nat (Suc nat') Zero_nat = False;
+eq_nat Zero_nat (Suc nat') = False;
+eq_nat (Suc nat) (Suc nat') = eq_nat nat nat';
+eq_nat Zero_nat Zero_nat = True;
+
+of_nat_aux :: forall a. (Semiring_1 a) => (a -> a) -> Nat -> a -> a;
+of_nat_aux inc Zero_nat i = i;
+of_nat_aux inc (Suc n) i = of_nat_aux inc n (inc i);
+
+of_nat :: forall a. (Semiring_1 a) => Nat -> a; {-# HASKABELLE permissive of_nat #-};
+of_nat n = of_nat_aux (\ i -> plus i one) n zero;
+
+data Nibble = Nibble0 | Nibble1 | Nibble2 | Nibble3 | Nibble4 | Nibble5
+  | Nibble6 | Nibble7 | Nibble8 | Nibble9 | NibbleA | NibbleB | NibbleC
+  | NibbleD | NibbleE | NibbleF;
+
+data Chara = Chara Nibble Nibble;
+
+class (Dvd a) => Div a where {
+  diva :: a -> a -> a;
+  moda :: a -> a -> a;
+};
+
+minus_nat :: Nat -> Nat -> Nat;
+minus_nat (Suc m) (Suc n) = minus_nat m n;
+minus_nat Zero_nat n = Zero_nat;
+minus_nat m Zero_nat = m;
+
+less_eq_nat :: Nat -> Nat -> Bool;
+less_eq_nat (Suc m) n = less_nat m n;
+less_eq_nat Zero_nat n = True;
+
+less_nat :: Nat -> Nat -> Bool;
+less_nat m (Suc n) = less_eq_nat m n;
+less_nat n Zero_nat = False;
+
+divmod :: Nat -> Nat -> (Nat, Nat); {-# HASKABELLE permissive divmod #-};
 divmod m n =
-  (if Rat.eq_nat n Rat.Zero_nat || Rat.less_nat m n then (Rat.Zero_nat, m)
+  (if eq_nat n Zero_nat || less_nat m n then (Zero_nat, m)
     else let {
-           a = Rat.divmod (Rat.minus_nat m n) n;
-           (q, aa) = a;
-         } in (Rat.Suc q, aa));
-{-# HASKABELLE permissive divmod #-}
+           (q, a) = divmod (minus_nat m n) n;
+         } in (Suc q, a));
 
-mod_nat :: Rat.Nat -> Rat.Nat -> Rat.Nat;
-mod_nat m n = snd (Rat.divmod m n);
+mod_nat :: Nat -> Nat -> Nat;
+mod_nat m n = snd (divmod m n);
 
-gcda :: (Rat.Nat, Rat.Nat) -> Rat.Nat;
-gcda (m, n) =
-  (if Rat.eq_nat n Rat.Zero_nat then m else Rat.gcda (n, Rat.mod_nat m n));
+gcd_nat :: Nat -> Nat -> Nat; {-# HASKABELLE permissive gcd_nat #-};
+gcd_nat x y = (if eq_nat y Zero_nat then x else gcd_nat y (mod_nat x y));
 
-preda :: Rat.Inta -> Rat.Inta;
-preda (Rat.Bit1 k) = Rat.Bit0 k;
-preda (Rat.Bit0 k) = Rat.Bit1 (Rat.preda k);
-preda Rat.Min = Rat.Bit0 Rat.Min;
-preda Rat.Pls = Rat.Min;
+instance Zero Integer where {
+  zero = 1;
+};
 
-uminus_int :: Rat.Inta -> Rat.Inta;
-uminus_int (Rat.Number_of_int w) = Rat.Number_of_int (Rat.uminus_int w);
-uminus_int (Rat.Bit1 k) = Rat.Bit1 (Rat.preda (Rat.uminus_int k));
-uminus_int (Rat.Bit0 k) = Rat.Bit0 (Rat.uminus_int k);
-uminus_int Rat.Min = Rat.Bit1 Rat.Pls;
-uminus_int Rat.Pls = Rat.Pls;
+instance Zero_neq_one Integer where {
+};
 
-succa :: Rat.Inta -> Rat.Inta;
-succa (Rat.Bit1 k) = Rat.Bit0 (Rat.succa k);
-succa (Rat.Bit0 k) = Rat.Bit1 k;
-succa Rat.Min = Rat.Pls;
-succa Rat.Pls = Rat.Bit1 Rat.Pls;
+instance Semigroup_mult Integer where {
+};
 
-plus_int :: Rat.Inta -> Rat.Inta -> Rat.Inta;
-plus_int (Rat.Number_of_int v) (Rat.Number_of_int w) =
-  Rat.Number_of_int (Rat.plus_int v w);
-plus_int (Rat.Bit1 k) (Rat.Bit1 l) = Rat.Bit0 (Rat.plus_int k (Rat.succa l));
-plus_int (Rat.Bit1 k) (Rat.Bit0 l) = Rat.Bit1 (Rat.plus_int k l);
-plus_int (Rat.Bit0 k) (Rat.Bit1 l) = Rat.Bit1 (Rat.plus_int k l);
-plus_int (Rat.Bit0 k) (Rat.Bit0 l) = Rat.Bit0 (Rat.plus_int k l);
-plus_int k Rat.Min = Rat.preda k;
-plus_int k Rat.Pls = k;
-plus_int Rat.Min k = Rat.preda k;
-plus_int Rat.Pls k = k;
+instance Plus Integer where {
+  plus a b = a + b;
+};
 
-minus_int :: Rat.Inta -> Rat.Inta -> Rat.Inta;
-minus_int (Rat.Number_of_int v) (Rat.Number_of_int w) =
-  Rat.Number_of_int (Rat.plus_int v (Rat.uminus_int w));
+instance Semigroup_add Integer where {
+};
 
-less_int :: Rat.Inta -> Rat.Inta -> Bool;
-less_int (Rat.Bit1 k1) (Rat.Bit1 k2) = Rat.less_int k1 k2;
-less_int (Rat.Bit1 k1) (Rat.Bit0 k2) = Rat.less_int k1 k2;
-less_int (Rat.Bit0 k1) (Rat.Bit1 k2) = Rat.less_eq_int k1 k2;
-less_int (Rat.Bit0 k1) (Rat.Bit0 k2) = Rat.less_int k1 k2;
-less_int (Rat.Bit1 k) Rat.Min = Rat.less_int k Rat.Min;
-less_int (Rat.Bit0 k) Rat.Min = Rat.less_eq_int k Rat.Min;
-less_int (Rat.Bit1 k) Rat.Pls = Rat.less_int k Rat.Pls;
-less_int (Rat.Bit0 k) Rat.Pls = Rat.less_int k Rat.Pls;
-less_int Rat.Min (Rat.Bit1 k) = Rat.less_int Rat.Min k;
-less_int Rat.Min (Rat.Bit0 k) = Rat.less_int Rat.Min k;
-less_int Rat.Min Rat.Min = False;
-less_int Rat.Min Rat.Pls = True;
-less_int Rat.Pls (Rat.Bit1 k) = Rat.less_eq_int Rat.Pls k;
-less_int Rat.Pls (Rat.Bit0 k) = Rat.less_int Rat.Pls k;
-less_int Rat.Pls Rat.Min = False;
-less_int Rat.Pls Rat.Pls = False;
-less_int (Rat.Number_of_int k) (Rat.Number_of_int l) = Rat.less_int k l;
+instance Ab_semigroup_add Integer where {
+};
 
-less_eq_int :: Rat.Inta -> Rat.Inta -> Bool;
-less_eq_int (Rat.Bit1 k1) (Rat.Bit1 k2) = Rat.less_eq_int k1 k2;
-less_eq_int (Rat.Bit1 k1) (Rat.Bit0 k2) = Rat.less_int k1 k2;
-less_eq_int (Rat.Bit0 k1) (Rat.Bit1 k2) = Rat.less_eq_int k1 k2;
-less_eq_int (Rat.Bit0 k1) (Rat.Bit0 k2) = Rat.less_eq_int k1 k2;
-less_eq_int (Rat.Bit1 k) Rat.Min = Rat.less_eq_int k Rat.Min;
-less_eq_int (Rat.Bit0 k) Rat.Min = Rat.less_eq_int k Rat.Min;
-less_eq_int (Rat.Bit1 k) Rat.Pls = Rat.less_int k Rat.Pls;
-less_eq_int (Rat.Bit0 k) Rat.Pls = Rat.less_eq_int k Rat.Pls;
-less_eq_int Rat.Min (Rat.Bit1 k) = Rat.less_eq_int Rat.Min k;
-less_eq_int Rat.Min (Rat.Bit0 k) = Rat.less_int Rat.Min k;
-less_eq_int Rat.Min Rat.Min = True;
-less_eq_int Rat.Min Rat.Pls = True;
-less_eq_int Rat.Pls (Rat.Bit1 k) = Rat.less_eq_int Rat.Pls k;
-less_eq_int Rat.Pls (Rat.Bit0 k) = Rat.less_eq_int Rat.Pls k;
-less_eq_int Rat.Pls Rat.Min = False;
-less_eq_int Rat.Pls Rat.Pls = True;
-less_eq_int (Rat.Number_of_int k) (Rat.Number_of_int l) = Rat.less_eq_int k l;
+instance Semiring Integer where {
+};
 
-nat_aux :: Rat.Inta -> Rat.Nat -> Rat.Nat;
-nat_aux i n =
-  (if Rat.less_eq_int i (Rat.Number_of_int Rat.Pls) then n
-    else Rat.nat_aux (Rat.minus_int i (Rat.Number_of_int (Rat.Bit1 Rat.Pls)))
-           (Rat.Suc n));
+instance Mult_zero Integer where {
+};
 
-nat :: Rat.Inta -> Rat.Nat;
-nat i = Rat.nat_aux i Rat.Zero_nat;
+instance Monoid_add Integer where {
+};
 
-abs_int :: Rat.Inta -> Rat.Inta;
-abs_int i =
-  (if Rat.less_int i (Rat.Number_of_int Rat.Pls) then Rat.uminus_int i else i);
+instance Comm_monoid_add Integer where {
+};
 
-zero_int :: Rat.Inta;
-zero_int = Rat.Number_of_int Rat.Pls;
+instance Semiring_0 Integer where {
+};
 
-one_int :: Rat.Inta;
-one_int = Rat.Number_of_int (Rat.Bit1 Rat.Pls);
+instance Power Integer where {
+};
 
-times_int :: Rat.Inta -> Rat.Inta -> Rat.Inta;
-times_int (Rat.Number_of_int v) (Rat.Number_of_int w) =
-  Rat.Number_of_int (Rat.times_int v w);
-times_int (Rat.Bit1 k) l = Rat.plus_int (Rat.Bit0 (Rat.times_int k l)) l;
-times_int (Rat.Bit0 k) l = Rat.Bit0 (Rat.times_int k l);
-times_int Rat.Min k = Rat.uminus_int k;
-times_int Rat.Pls w = Rat.Pls;
+instance Monoid_mult Integer where {
+};
 
-of_nat_aux :: Rat.Nat -> Inta -> Inta;
-of_nat_aux (Rat.Suc n) i = Rat.of_nat_aux n (Rat.plus_int i Rat.one_int);
-of_nat_aux Rat.Zero_nat i = i;
+instance Semiring_1 Integer where {
+};
 
-of_nat :: Rat.Nat -> Inta;
-of_nat n = Rat.of_nat_aux n Rat.zero_int;
+gcd_int :: Integer -> Integer -> Integer;
+gcd_int x y = of_nat (gcd_nat (nat (abs_int x)) (nat (abs_int y)));
 
-igcd :: Rat.Inta -> Rat.Inta -> Rat.Inta;
-igcd i j =
-  Rat.of_nat (Rat.gcda (Rat.nat (Rat.abs_int i), Rat.nat (Rat.abs_int j)));
+data Rat = Fract Integer Integer;
 
-eq_int :: Rat.Inta -> Rat.Inta -> Bool;
-eq_int (Rat.Bit1 k1) (Rat.Bit1 k2) = Rat.eq_int k1 k2;
-eq_int (Rat.Bit1 k1) (Rat.Bit0 k2) = False;
-eq_int (Rat.Bit0 k1) (Rat.Bit1 k2) = False;
-eq_int (Rat.Bit0 k1) (Rat.Bit0 k2) = Rat.eq_int k1 k2;
-eq_int (Rat.Bit1 k1) Rat.Min = Rat.eq_int Rat.Min k1;
-eq_int (Rat.Bit0 k1) Rat.Min = False;
-eq_int (Rat.Bit1 k1) Rat.Pls = False;
-eq_int (Rat.Bit0 k1) Rat.Pls = Rat.eq_int Rat.Pls k1;
-eq_int Rat.Min (Rat.Bit1 k2) = Rat.eq_int Rat.Min k2;
-eq_int Rat.Min (Rat.Bit0 k2) = False;
-eq_int Rat.Min Rat.Min = True;
-eq_int Rat.Min Rat.Pls = False;
-eq_int Rat.Pls (Rat.Bit1 k2) = False;
-eq_int Rat.Pls (Rat.Bit0 k2) = Rat.eq_int Rat.Pls k2;
-eq_int Rat.Pls Rat.Min = False;
-eq_int Rat.Pls Rat.Pls = True;
-eq_int (Rat.Number_of_int k) (Rat.Number_of_int l) = Rat.eq_int k l;
+collect :: forall a. (a -> Bool) -> a -> Bool;
+collect p = p;
 
-adjust :: Rat.Inta -> (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-adjust b =
-  (\ (a @ (q, r)) ->
-    (if Rat.less_eq_int (Rat.Number_of_int Rat.Pls) (Rat.minus_int r b)
-      then (Rat.plus_int
-              (Rat.times_int (Rat.Number_of_int (Rat.Bit0 (Rat.Bit1 Rat.Pls)))
-                q)
-              (Rat.Number_of_int (Rat.Bit1 Rat.Pls)),
-             Rat.minus_int r b)
-      else (Rat.times_int (Rat.Number_of_int (Rat.Bit0 (Rat.Bit1 Rat.Pls))) q,
-             r)));
+scomp :: forall a c d b. (a -> (c, d)) -> (c -> d -> b) -> a -> b;
+scomp f g = (\ x -> let {
+                      (a, b) = f x;
+                    } in g a b);
 
-negDivAlg :: Rat.Inta -> Rat.Inta -> (Rat.Inta, Rat.Inta);
-negDivAlg a b =
-  (if Rat.less_eq_int (Rat.Number_of_int Rat.Pls) (Rat.plus_int a b) ||
-        Rat.less_eq_int b (Rat.Number_of_int Rat.Pls)
-    then (Rat.Number_of_int Rat.Min, Rat.plus_int a b)
-    else Rat.adjust b
-           (Rat.negDivAlg a
-             (Rat.times_int (Rat.Number_of_int (Rat.Bit0 (Rat.Bit1 Rat.Pls)))
-               b)));
+data Typerep = Typerep String [Typerep];
 
-negateSnd :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-negateSnd = (\ (a @ (q, r)) -> (q, Rat.uminus_int r));
+data Term = Const String Typerep | App Term Term;
 
-posDivAlg :: Rat.Inta -> Rat.Inta -> (Rat.Inta, Rat.Inta);
-posDivAlg a b =
-  (if Rat.less_int a b || Rat.less_eq_int b (Rat.Number_of_int Rat.Pls)
-    then (Rat.Number_of_int Rat.Pls, a)
-    else Rat.adjust b
-           (Rat.posDivAlg a
-             (Rat.times_int (Rat.Number_of_int (Rat.Bit0 (Rat.Bit1 Rat.Pls)))
-               b)));
+mod_int :: Integer -> Integer -> Integer;
+mod_int a b = snd (divmod_int a b);
 
-divAlg :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-divAlg =
-  (\ (a @ (aa, b)) ->
-    (if Rat.less_eq_int (Rat.Number_of_int Rat.Pls) aa
-      then (if Rat.less_eq_int (Rat.Number_of_int Rat.Pls) b
-             then Rat.posDivAlg aa b
-             else (if Rat.eq_int aa (Rat.Number_of_int Rat.Pls)
-                    then (Rat.Number_of_int Rat.Pls, Rat.Number_of_int Rat.Pls)
-                    else Rat.negateSnd
-                           (Rat.negDivAlg (Rat.uminus_int aa)
-                             (Rat.uminus_int b))))
-      else (if Rat.less_int (Rat.Number_of_int Rat.Pls) b
-             then Rat.negDivAlg aa b
-             else Rat.negateSnd
-                    (Rat.posDivAlg (Rat.uminus_int aa) (Rat.uminus_int b)))));
+div_int :: Integer -> Integer -> Integer;
+div_int a b = fst (divmod_int a b);
 
-newtype Rat = Rationala (Rat.Inta, Rat.Inta);
+instance Div Integer where {
+  diva = div_int;
+  moda = mod_int;
+};
 
-div_int :: Rat.Inta -> Rat.Inta -> Rat.Inta;
-div_int a b = fst (Rat.divAlg (a, b));
+maxaa :: forall a. (a -> a -> Bool) -> a -> a -> a;
+maxaa less_eq a b = (if less_eq a b then b else a);
 
-fract' :: Bool -> Rat.Inta -> Rat.Inta -> Rat.Rat;
-fract' True k l =
-  (if not (Rat.eq_int l (Rat.Number_of_int Rat.Pls)) then Rat.Rationala (k, l)
-    else Rat.fract (Rat.Number_of_int (Rat.Bit1 Rat.Pls))
-           (Rat.Number_of_int Rat.Pls));
+maxa :: forall a. (Orda a) => a -> a -> a;
+maxa = maxaa less_eq;
 
-fract :: Rat.Inta -> Rat.Inta -> Rat.Rat;
-fract k l = Rat.fract' (not (Rat.eq_int l (Rat.Number_of_int Rat.Pls))) k l;
+minaa :: forall a. (a -> a -> Bool) -> a -> a -> a;
+minaa less_eq a b = (if less_eq a b then a else b);
 
-normNum :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-normNum =
-  (\ (a @ (aa, b)) ->
-    (if Rat.eq_int aa (Rat.Number_of_int Rat.Pls) ||
-          Rat.eq_int b (Rat.Number_of_int Rat.Pls)
-      then (Rat.Number_of_int Rat.Pls, Rat.Number_of_int Rat.Pls)
-      else let {
-             g = Rat.igcd aa b;
-           } in (if Rat.less_int (Rat.Number_of_int Rat.Pls) b
-                  then (Rat.div_int aa g, Rat.div_int b g)
-                  else (Rat.uminus_int (Rat.div_int aa g),
-                         Rat.uminus_int (Rat.div_int b g)))));
+mina :: forall a. (Orda a) => a -> a -> a;
+mina = minaa less_eq;
 
-eq_rat :: Rat.Rat -> Rat.Rat -> Bool;
-eq_rat (Rat.Rationala x) (Rat.Rationala y) = let
-    (n1, d1) = Rat.normNum x
-    (n2, d2) = Rat.normNum y
-  in eq_int n1 n2 && eq_int d1 d2;
+class (Semiring_1 a) => Semiring_char_0 a where {
+};
 
-nneg :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-nneg = (\ (a @ (aa, b)) -> (Rat.uminus_int aa, b));
+class (Semiring_char_0 a, Ring_1 a) => Ring_char_0 a where {
+};
 
-nadd :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-nadd =
-  (\ (a @ (aa, b)) (c @ (a', b')) ->
-    (if Rat.eq_int aa (Rat.Number_of_int Rat.Pls) ||
-          Rat.eq_int b (Rat.Number_of_int Rat.Pls)
-      then Rat.normNum (a', b')
-      else (if Rat.eq_int a' (Rat.Number_of_int Rat.Pls) ||
-                 Rat.eq_int b' (Rat.Number_of_int Rat.Pls)
-             then Rat.normNum (aa, b)
-             else Rat.normNum
-                    (Rat.plus_int (Rat.times_int aa b') (Rat.times_int b a'),
-                      Rat.times_int b b'))));
+eq_rat :: Rat -> Rat -> Bool;
+eq_rat (Fract a b) (Fract c d) =
+  (if b == 0 then c == 0 || d == 0
+    else (if d == 0 then a == 0 || b == 0 else a * d == b * c));
 
-nsub :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-nsub = (\ a b -> Rat.nadd a (Rat.nneg b));
+class (Times a, Zero a) => No_zero_divisors a where {
+};
 
-nlt0 :: (Rat.Inta, Rat.Inta) -> Bool;
-nlt0 = (\ (a @ (aa, b)) -> Rat.less_int aa (Rat.Number_of_int Rat.Pls));
+class (No_zero_divisors a, Ring a) => Ring_no_zero_divisors a where {
+};
 
-nlt :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta) -> Bool;
-nlt = (\ a b -> Rat.nlt0 (Rat.nsub a b));
+class (Ring_1 a, Ring_no_zero_divisors a) => Ring_1_no_zero_divisors a where {
+};
 
-less_rat :: Rat.Rat -> Rat.Rat -> Bool;
-less_rat (Rat.Rationala x) (Rat.Rationala y) =
-  Rat.nlt (Rat.normNum x) (Rat.normNum y);
+class (Inverse a, Ring_1_no_zero_divisors a) => Division_ring a where {
+};
 
-nle0 :: (Rat.Inta, Rat.Inta) -> Bool;
-nle0 = (\ (a @ (aa, b)) -> Rat.less_eq_int aa (Rat.Number_of_int Rat.Pls));
+class (Semigroup_mult a) => Ab_semigroup_mult a where {
+};
 
-nle :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta) -> Bool;
-nle = (\ a b -> Rat.nle0 (Rat.nsub a b));
+class (Ab_semigroup_mult a, Semiring a) => Comm_semiring a where {
+};
 
-less_eq_rat :: Rat.Rat -> Rat.Rat -> Bool;
-less_eq_rat (Rat.Rationala x) (Rat.Rationala y) =
-  Rat.nle (Rat.normNum x) (Rat.normNum y);
+class (Comm_semiring a, Semiring_0 a) => Comm_semiring_0 a where {
+};
 
-uminus_rat :: Rat.Rat -> Rat.Rat;
-uminus_rat (Rat.Rationala x) = Rat.Rationala (Rat.nneg x);
+class (Ab_semigroup_mult a, Monoid_mult a) => Comm_monoid_mult a where {
+};
 
-abs_rat :: Rat.Rat -> Rat.Rat;
-abs_rat q =
-  (if Rat.less_rat q
-        (Rat.Rationala (Rat.Number_of_int Rat.Pls, Rat.Number_of_int Rat.Pls))
-    then Rat.uminus_rat q else q);
+class (Comm_monoid_mult a, Comm_semiring_0 a, Dvd a,
+        Semiring_1 a) => Comm_semiring_1 a where {
+};
 
-one_rat :: Rat.Rat;
-one_rat =
-  Rat.Rationala
-    (Rat.Number_of_int (Rat.Bit1 Rat.Pls),
-      Rat.Number_of_int (Rat.Bit1 Rat.Pls));
+class (Comm_semiring_0 a,
+        Semiring_0_cancel a) => Comm_semiring_0_cancel a where {
+};
 
-sgn_rat :: Rat.Rat -> Rat.Rat;
-sgn_rat q =
-  (if Rat.eq_rat q
-        (Rat.Rationala (Rat.Number_of_int Rat.Pls, Rat.Number_of_int Rat.Pls))
-    then Rat.Rationala (Rat.Number_of_int Rat.Pls, Rat.Number_of_int Rat.Pls)
-    else (if Rat.less_rat
-               (Rat.Rationala
-                 (Rat.Number_of_int Rat.Pls, Rat.Number_of_int Rat.Pls))
-               q
-           then Rat.Rationala
-                  (Rat.Number_of_int (Rat.Bit1 Rat.Pls),
-                    Rat.Number_of_int (Rat.Bit1 Rat.Pls))
-           else Rat.uminus_rat
-                  (Rat.Rationala
-                    (Rat.Number_of_int (Rat.Bit1 Rat.Pls),
-                      Rat.Number_of_int (Rat.Bit1 Rat.Pls)))));
+class (Comm_semiring_0_cancel a, Comm_semiring_1 a,
+        Semiring_1_cancel a) => Comm_semiring_1_cancel a where {
+};
 
-ninv :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-ninv =
-  (\ (a @ (aa, b)) ->
-    (if Rat.less_int aa (Rat.Number_of_int Rat.Pls)
-      then (Rat.uminus_int b, Rat.abs_int aa) else (b, aa)));
+class (Comm_semiring_0_cancel a, Ring a) => Comm_ring a where {
+};
 
-nmul :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-nmul =
-  (\ (a @ (aa, b)) (c @ (a', b')) ->
-    let {
-      g = Rat.igcd (Rat.times_int aa a') (Rat.times_int b b');
-    } in (Rat.div_int (Rat.times_int aa a') g,
-           Rat.div_int (Rat.times_int b b') g));
+class (Comm_ring a, Comm_semiring_1_cancel a, Ring_1 a) => Comm_ring_1 a where {
+};
 
-ndiv :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
-ndiv = (\ a b -> Rat.nmul a (Rat.ninv b));
+class (Comm_ring_1 a, Ring_1_no_zero_divisors a) => Idom a where {
+};
 
-plus_rat :: Rat.Rat -> Rat.Rat -> Rat.Rat;
-plus_rat (Rat.Rationala x) (Rat.Rationala y) = Rat.Rationala (Rat.nadd x y);
+class (Division_ring a, Idom a) => Field a where {
+};
 
-zero_rat :: Rat.Rat;
-zero_rat = Rat.Rationala (Rat.Number_of_int Rat.Pls, Rat.Number_of_int Rat.Pls);
+class (Ring_char_0 a, Field a) => Field_char_0 a where {
+};
 
-minus_rat :: Rat.Rat -> Rat.Rat -> Rat.Rat;
-minus_rat (Rat.Rationala x) (Rat.Rationala y) = Rat.Rationala (Rat.nsub x y);
+of_rat :: forall a. (Field_char_0 a) => Rat -> a; {-# HASKABELLE permissive of_rat #-};
+of_rat (Fract a b) =
+  (if not (b == 0) then divide (of_int a) (of_int b) else zero);
 
-times_rat :: Rat.Rat -> Rat.Rat -> Rat.Rat;
-times_rat (Rat.Rationala x) (Rat.Rationala y) = Rat.Rationala (Rat.nmul x y);
+one_rat :: Rat;
+one_rat = Fract 1 1;
 
-power_rat :: Rat.Rat -> Rat.Nat -> Rat.Rat;
-power_rat q (Rat.Suc n) = Rat.times_rat q (Rat.power_rat q n);
-power_rat q Rat.Zero_nat =
-  Rat.Rationala
-    (Rat.Number_of_int (Rat.Bit1 Rat.Pls),
-      Rat.Number_of_int (Rat.Bit1 Rat.Pls));
+instance One Rat where {
+  one = one_rat;
+};
 
-divide_rat :: Rat.Rat -> Rat.Rat -> Rat.Rat;
-divide_rat (Rat.Rationala x) (Rat.Rationala y) = Rat.Rationala (Rat.ndiv x y);
+less_rat :: Rat -> Rat -> Bool;
+less_rat (Fract a b) (Fract c d) =
+  (if b == 0 then 0 < sgn_int c * sgn_int d
+    else (if d == 0 then sgn_int a * sgn_int b < 0
+           else (a * abs_int d * sgn_int b) < (c * abs_int b * sgn_int d)));
 
-inverse_rat :: Rat.Rat -> Rat.Rat;
-inverse_rat (Rat.Rationala x) = Rat.Rationala (Rat.ninv x);
+less_eq_rat :: Rat -> Rat -> Bool;
+less_eq_rat (Fract a b) (Fract c d) =
+  (if b == 0 then 0 <= sgn_int c * sgn_int d
+    else (if d == 0 then sgn_int a * sgn_int b <= 0
+           else (a * abs_int d * sgn_int b) <= (c * abs_int b * sgn_int d)));
+
+instance Orda Rat where {
+  less_eq = less_eq_rat;
+  less = less_rat;
+};
+
+abs_rat :: Rat -> Rat;
+abs_rat (Fract a b) = Fract (abs_int a) (abs_int b);
+
+inf_rat :: Rat -> Rat -> Rat;
+inf_rat = mina;
+
+fract_norm :: Integer -> Integer -> Rat;
+fract_norm a b =
+  (if a == 0 || b == 0 then Fract 0 1
+    else let {
+           c = gcd_int a b;
+         } in (if 0 < b then Fract (div_int a c) (div_int b c)
+                else Fract (negate (div_int a c)) (negate (div_int b c))));
+
+plus_rat :: Rat -> Rat -> Rat;
+plus_rat (Fract a b) (Fract c d) =
+  (if b == 0 then Fract c d
+    else (if d == 0 then Fract a b else fract_norm (a * d + c * b) (b * d)));
+
+instance Plus Rat where {
+  plus = plus_rat;
+};
+
+times_rat :: Rat -> Rat -> Rat;
+times_rat (Fract a b) (Fract c d) = fract_norm (a * c) (b * d);
+
+instance Times Rat where {
+  times = times_rat;
+};
+
+instance Semigroup_mult Rat where {
+};
+
+instance Semigroup_add Rat where {
+};
+
+instance Ab_semigroup_add Rat where {
+};
+
+instance Semiring Rat where {
+};
+
+zero_rat :: Rat;
+zero_rat = Fract 0 1;
+
+instance Zero Rat where {
+  zero = zero_rat;
+};
+
+instance Mult_zero Rat where {
+};
+
+instance Monoid_add Rat where {
+};
+
+instance Comm_monoid_add Rat where {
+};
+
+instance Semiring_0 Rat where {
+};
+
+instance Cancel_semigroup_add Rat where {
+};
+
+instance Cancel_ab_semigroup_add Rat where {
+};
+
+instance Cancel_comm_monoid_add Rat where {
+};
+
+instance Semiring_0_cancel Rat where {
+};
+
+neg_rat :: Rat -> Rat;
+neg_rat (Fract a b) = Fract (negate a) b;
+
+instance Uminus Rat where {
+  neg = neg_rat;
+};
+
+minus_rat :: Rat -> Rat -> Rat;
+minus_rat (Fract a b) (Fract c d) =
+  (if b == 0 then Fract (negate c) d
+    else (if d == 0 then Fract a b else fract_norm (a * d - c * b) (b * d)));
+
+instance Minus Rat where {
+  minus = minus_rat;
+};
+
+instance Group_add Rat where {
+};
+
+instance Ab_group_add Rat where {
+};
+
+instance Ring Rat where {
+};
+
+instance Zero_neq_one Rat where {
+};
+
+instance Power Rat where {
+};
+
+instance Monoid_mult Rat where {
+};
+
+instance Semiring_1 Rat where {
+};
+
+instance Semiring_1_cancel Rat where {
+};
+
+instance Ring_1 Rat where {
+};
+
+sgn_rat :: Rat -> Rat;
+sgn_rat (Fract a b) = of_int (sgn_int a * sgn_int b);
+
+sup_rat :: Rat -> Rat -> Rat;
+sup_rat = maxa;
+
+divide_rat :: Rat -> Rat -> Rat;
+divide_rat (Fract a b) (Fract c d) = fract_norm (a * d) (b * c);
+
+instance No_zero_divisors Integer where {
+};
+
+class (Div a, Comm_semiring_1_cancel a,
+        No_zero_divisors a) => Semiring_div a where {
+};
+
+instance Cancel_semigroup_add Integer where {
+};
+
+instance Cancel_ab_semigroup_add Integer where {
+};
+
+instance Cancel_comm_monoid_add Integer where {
+};
+
+instance Semiring_0_cancel Integer where {
+};
+
+instance Semiring_1_cancel Integer where {
+};
+
+instance Ab_semigroup_mult Integer where {
+};
+
+instance Comm_semiring Integer where {
+};
+
+instance Comm_semiring_0 Integer where {
+};
+
+instance Comm_monoid_mult Integer where {
+};
+
+instance Comm_semiring_1 Integer where {
+};
+
+instance Comm_semiring_0_cancel Integer where {
+};
+
+instance Comm_semiring_1_cancel Integer where {
+};
+
+instance Semiring_div Integer where {
+};
 
 }

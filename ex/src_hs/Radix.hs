@@ -2,13 +2,12 @@ module Radix where
 
 import Nats
 
-divmod :: Nat -> Nat -> (Nat, Nat)
+divmod :: Nat -> Nat -> (Nat, Nat) ; {-# HASKABELLE permissive divmod #-}
 divmod m n = if eq_nat n Zero_nat || less_nat m n then (Zero_nat, m)
     else let (q, r) = divmod (minus_nat m n) n
          in (Suc q, r)
-{-# HASKABELLE permissive divmod #-}
 
-radix :: (Nat -> a) -> Nat -> Nat -> [a]
+radix :: (Nat -> a) -> Nat -> Nat -> [a] ; {-# HASKABELLE permissive radix rad0 #-}
 radix ch _ Zero_nat = [ch Zero_nat]
 radix ch r n = reverse (rad ch r n) where
   rad _ _ Zero_nat = []

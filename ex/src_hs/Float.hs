@@ -56,15 +56,14 @@ sgn_int i = (if i == 0 then 0 else (if 0 < i then 1 else negate 1));
 apsnd :: forall c b a. (c -> b) -> (a, c) -> (a, b);
 apsnd f (x, y) = (x, f y);
 
-div_mod :: Integer -> Integer -> (Integer, Integer);
+div_mod :: Integer -> Integer -> (Integer, Integer); {-# HASKABELLE permissive div_mod #-};
 div_mod m n =
   (if n == 0 || m < n then (0, m)
     else let {
            (q, a) = div_mod (m - n) n;
          } in (q + 1, a));
-{-# HASKABELLE permissive div_mod #-}
 
-divmoda :: Integer -> Integer -> (Integer, Integer);
+divmoda :: Integer -> Integer -> (Integer, Integer); {-# HASKABELLE permissive divmoda #-};
 divmoda k l =
   (if k == 0 then (0, 0)
     else (if l == 0 then (0, k)
@@ -75,7 +74,6 @@ divmoda k l =
                            (r, s) = (\k l -> div_mod (abs k) (abs l)) k l;
                          } in (if s == 0 then (negate r, 0)
                                 else (negate r - 1, abs_int l - s)))));
-{-# HASKABELLE permissive divmoda #-}
 
 div_int :: Integer -> Integer -> Integer;
 div_int a b = fst (divmoda a b);
@@ -86,14 +84,14 @@ divmod n m = (if m == 0 then (0, n) else div_mod n m);
 mod_nat :: Integer -> Integer -> Integer;
 mod_nat m n = snd (divmod m n);
 
-gcd_nat :: Integer -> Integer -> Integer;
+gcd_nat :: Integer -> Integer -> Integer; {-# HASKABELLE permissive gcd_nat #-};
 gcd_nat x y = (if y == 0 then x else gcd_nat y (mod_nat x y));
 
 gcd_int :: Integer -> Integer -> Integer;
 gcd_int x y =
   id (gcd_nat (positive (abs_int x)) (positive (abs_int y)));
 
-fract_norm :: Integer -> Integer -> Rat;
+fract_norm :: Integer -> Integer -> Rat;  {-# HASKABELLE permissive fract_norm #-};
 fract_norm a b =
   (if a == 0 || b == 0 then Fract 0 1
     else let {
@@ -127,7 +125,7 @@ instance Power Reala where {
 minus_nat :: Integer -> Integer -> Integer;
 minus_nat n m = positive (id n - id m);
 
-power :: forall a. (Power a) => a -> Integer -> a;
+power :: forall a. (Power a) => a -> Integer -> a;  {-# HASKABELLE permissive power #-};
 power a n =
   (if n == 0 then one else times a (power a (minus_nat n 1)));
 
@@ -212,7 +210,7 @@ class (Ab_group_add a, Semiring_0_cancel a) => Ring a where {
 class (Ring a, Semiring_1_cancel a) => Ring_1 a where {
 };
 
-of_int :: forall a. (Ring_1 a) => Integer -> a;
+of_int :: forall a. (Ring_1 a) => Integer -> a; {-# HASKABELLE permissive of_int #-};
 of_int k =
   (if k == 0 then zero
     else (if k < 0 then neg (of_int (negate k))
@@ -221,11 +219,8 @@ of_int k =
                   l' = of_int l;
                 } in (if m == 0 then plus l' l' else plus (plus l' l') one)));
 
-one_int :: Integer;
-one_int = 1;
-
 instance One Integer where {
-  one = one_int;
+  one = 1;
 };
 
 foldla :: forall a b. (a -> b -> a) -> a -> [b] -> a;
@@ -250,14 +245,11 @@ instance Plus Integer where {
   plus a b = a + b;
 };
 
-zero_int :: Integer;
-zero_int = 0;
-
 instance Zero Integer where {
-  zero = zero_int;
+  zero = 0;
 };
 
-bitlen :: Integer -> Integer;
+bitlen :: Integer -> Integer; {-# HASKABELLE permissive bitlen #-};
 bitlen x =
   (if x == 0 then 0 else (if x == (-1) then 1 else 1 + bitlen (div_int x 2)));
 
@@ -270,7 +262,7 @@ mod_int a b = snd (divmoda a b);
 even_int :: Integer -> Bool;
 even_int x = mod_int x 2 == 0;
 
-normfloat :: Floata -> Floata;
+normfloat :: Floata -> Floata; {-# HASKABELLE permissive normfloat #-};
 normfloat (Floata a b) =
   (if not (a == 0) && even_int a then normfloat (Floata (div_int a 2) (b + 1))
     else (if a == 0 then Floata 0 0 else Floata a b));
@@ -358,22 +350,6 @@ floor_fl (Floata m e) =
 ub_mod :: Integer -> Floata -> Floata -> Floata -> Floata;
 ub_mod prec x ub lb =
   minus_float x (times_float (floor_fl (float_divl prec x ub)) lb);
-
-lb_mult :: Integer -> Floata -> Floata -> Floata;
-lb_mult prec x y =
-  let {
-    (Floata m e) = normfloat (times_float x y);
-    l = bitlen m - id prec;
-  } in (if 0 < l then Floata (div_int m (power 2 (positive l))) (e + l)
-         else Floata m e);
-
-ub_mult :: Integer -> Floata -> Floata -> Floata;
-ub_mult prec x y =
-  let {
-    (Floata m e) = normfloat (times_float x y);
-    l = bitlen m - id prec;
-  } in (if 0 < l then Floata (div_int m (power 2 (positive l)) + 1) (e + l)
-         else Floata m e);
 
 instance Div Integer where {
   diva = div_int;
@@ -491,7 +467,7 @@ instance Ring_1 Reala where {
 of_float :: Floata -> Reala;
 of_float (Floata a b) = times_real (of_int a) (pow2 b);
 
-round_up :: Integer -> Floata -> Floata;
+round_up :: Integer -> Floata -> Floata; {-# HASKABELLE permissive round_up #-};
 round_up prec (Floata m e) =
   let {
     d = bitlen m - id prec;
@@ -537,7 +513,7 @@ less_rat :: Rat -> Rat -> Bool;
 less_rat (Fract a b) (Fract c d) =
   (if b == 0 then 0 < sgn_int c * sgn_int d
     else (if d == 0 then sgn_int a * sgn_int b < 0
-           else a * abs_int d * sgn_int b < c * abs_int b * sgn_int d));
+           else (a * abs_int d * sgn_int b) < c * (abs_int b * sgn_int d)));
 
 less_real :: Reala -> Reala -> Bool;
 less_real (Ratreal x) (Ratreal y) = less_rat x y;
@@ -545,7 +521,7 @@ less_real (Ratreal x) (Ratreal y) = less_rat x y;
 less_float :: Floata -> Floata -> Bool;
 less_float z w = less_real (of_float z) (of_float w);
 
-round_down :: Integer -> Floata -> Floata;
+round_down :: Integer -> Floata -> Floata; {-# HASKABELLE permissive round_down #-};
 round_down prec (Floata m e) =
   let {
     d = bitlen m - id prec;
@@ -654,7 +630,7 @@ less_eq_rat :: Rat -> Rat -> Bool;
 less_eq_rat (Fract a b) (Fract c d) =
   (if b == 0 then 0 <= sgn_int c * sgn_int d
     else (if d == 0 then sgn_int a * sgn_int b <= 0
-           else a * abs_int d * sgn_int b <= c * abs_int b * sgn_int d));
+           else (a * abs_int d * sgn_int b) <= (c * abs_int b * sgn_int d)));
 
 less_eq_real :: Reala -> Reala -> Bool;
 less_eq_real (Ratreal x) (Ratreal y) = less_eq_rat x y;
