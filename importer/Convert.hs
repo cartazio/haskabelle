@@ -13,7 +13,7 @@ Conversion from abstract Haskell code to abstract Isar/HOL theory.
 
 module Importer.Convert (convertHskUnit) where
 
-import Data.List
+import Data.List (nub, unzip4, partition)
 import Maybe
 import qualified Data.Map as Map
 
@@ -88,7 +88,7 @@ add_pragmas (Hsx.UnknownDeclPragma src "HASKABELLE" pragma) =
   else let
     directive : args = words pragma
   in if directive `elem` pragmas
-  then error directive
+  then AList.map_default (directive, []) (fold insert args)
   else error ("unknowm pragma " ++ directive ++ " encountered at " ++ srcloc2string src)
 add_pragmas _ = id
 
