@@ -534,7 +534,7 @@ convertDecl pragmas (Hsx.FunBind matchs)
                                                         -- first one.
              let name = names !! 0
              name'      <- convert' pragmas name
-             let Hsx.Ident n = name
+             let n = name_of name
              let permissive = n `elem` these (lookup permissive_pragma pragmas)
              fsig'      <- (case ftype of Nothing -> return Isa.NoType
                                           Just t -> convert' pragmas t) >>= (return . Isa.TypeSign name')
@@ -550,6 +550,8 @@ convertDecl pragmas (Hsx.FunBind matchs)
        where splitMatch (Hsx.Match _loc name patterns (Hsx.UnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of Hsx.BDecls [] -> True; _ -> False
+             name_of (Hsx.Ident n) = n
+             name_of _ = ""
 
 convertDecl pragmas (Hsx.PatBind loc pattern rhs _wherebinds)
         = case pattern of
