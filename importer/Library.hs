@@ -7,8 +7,6 @@ module Importer.Library (
   assert, tracing,
   (|>), (*>),
   pair, rpair, map_fst, map_snd, map_both,
-  split_list, filter_out, fold, map_filter, flat, maps, nth_map, map_index, fold_index,
-  pair, rpair, map_both,
   split_list, filter_out, fold, fold_rev, map_filter, flat, maps, nth_map, map_index, fold_index,
   map2, fold2, map_split, ultimately,
   insert, remove,
