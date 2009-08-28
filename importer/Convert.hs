@@ -23,6 +23,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 
 import Importer.Library
+import qualified Importer.Alist as Alist
 
 import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
@@ -51,7 +52,11 @@ import qualified Importer.Configuration as Config (getMonadInstance)
 -}
 convertHskUnit :: Customisations -> Adaption -> HskUnit -> (AdaptionTable, IsaUnit)
 convertHskUnit custs adapt (HskUnit hsmodules custMods initialGlobalEnv)
+<<<<<<< local
+    = let pragmass       = map (accumulate (fold add_pragmas) . decls_of) (tracing show hsmodules)
+=======
     = let pragmass       = map (accumulate (fold add_pragmas) . decls_of) hsmodules
+>>>>>>> other
           hsmodules'     = map (preprocessModule (usedConstNames adapt)) hsmodules
           env            = Env.environmentOf custs hsmodules' custMods
           adaptionTable  = makeAdaptionTable_FromHsModule adapt env hsmodules'
@@ -315,7 +320,11 @@ generateRecordAux pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs conde
         = let strip (Hsx.QualConDecl _loc _FIXME _context decl) = decl
               decls = map strip condecls
           in do tyvars <- mapM (convert pragmas) tyvarNs
+<<<<<<< local
+                tycon  <- convert tyconN
+=======
                 tycon  <- convert pragmas tyconN
+>>>>>>> other
                 let dataTy = Isa.Type tycon (map Isa.TVar tyvars)
                 let fieldNames = concatMap extrFieldNames decls
                 fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . Hsx.UnQual) (nub fieldNames)
@@ -371,7 +380,11 @@ convertDataDecl pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecl
     = let strip (Hsx.QualConDecl _loc _FIXME _context decl) = decl
           decls = map strip condecls
       in do tyvars <- mapM (convert pragmas) tyvarNs
+<<<<<<< local
+            tycon  <- convert tyconN
+=======
             tycon  <- convert pragmas tyconN
+>>>>>>> other
             decls' <- mapM cnvt decls
             return $ (Isa.TypeSpec tyvars tycon, decls')
               where cnvt (Hsx.ConDecl name types)
@@ -430,8 +443,13 @@ convertDependentDecls pragmas (HskDependentDecls [d]) = do
 convertDependentDecls pragmas (HskDependentDecls decls@(decl:_))
   | isFunBind decl = assert (all isFunBind decls)
       $ do funcmds <- mapsM (convertDecl pragmas) decls
+<<<<<<< local
+           let (sigs, eqs) = unzip (map splitFunCmd funcmds)
+           return [Isa.Fun sigs (concat eqs)]
+=======
            let (sigs, permissive, eqs) = unzip3 (map splitFunCmd funcmds)
            return [Isa.Fun sigs (or permissive) (flat eqs)]
+>>>>>>> other
   | isDataDecl decl = assert (all isDataDecl decls)
       $ do dataDefs <- mapM (convertDataDecl pragmas) decls
            auxCmds <- mapM (generateRecordAux pragmas) decls
@@ -487,14 +505,25 @@ instance Convert Hsx.Literal Isa.Literal where
 
 convertDecl :: [Pragma] -> Hsx.Decl -> ContextM [Isa.Stmt]
 convertDecl pragmas (Hsx.TypeDecl _loc tyconN tyvarNs typ)
+<<<<<<< local
+        = do tyvars <- mapM convert tyvarNs
+             tycon  <- convert tyconN
+             typ'   <- convert typ
+=======
         = do tyvars <- mapM (convert pragmas) tyvarNs
              tycon  <- convert pragmas tyconN
              typ'   <- convert pragmas typ
+>>>>>>> other
              return [Isa.TypeSynonym [(Isa.TypeSpec tyvars tycon, typ')]]
                                 
 convertDecl pragmas decl@(Hsx.DataDecl _ _ _ _ _ _ _) = 
+<<<<<<< local
+        do dataDef <- convertDataDecl decl
+           accCmds <- generateRecordAux decl
+=======
         do dataDef <- convertDataDecl pragmas decl
            accCmds <- generateRecordAux pragmas decl
+>>>>>>> other
            return (Isa.Datatype [dataDef] : accCmds)
 
 convertDecl pragmas (Hsx.InfixDecl _loc assoc prio ops)
