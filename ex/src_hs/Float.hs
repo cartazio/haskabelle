@@ -62,6 +62,7 @@ div_mod m n =
     else let {
            (q, a) = div_mod (m - n) n;
          } in (q + 1, a));
+{-# HASKABELLE permissive div_mod #-}
 
 divmoda :: Integer -> Integer -> (Integer, Integer);
 divmoda k l =
@@ -74,6 +75,7 @@ divmoda k l =
                            (r, s) = (\k l -> div_mod (abs k) (abs l)) k l;
                          } in (if s == 0 then (negate r, 0)
                                 else (negate r - 1, abs_int l - s)))));
+{-# HASKABELLE permissive divmoda #-}
 
 div_int :: Integer -> Integer -> Integer;
 div_int a b = fst (divmoda a b);

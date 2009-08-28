@@ -31,6 +31,7 @@ divmod m n =
            a = Rat.divmod (Rat.minus_nat m n) n;
            (q, aa) = a;
          } in (Rat.Suc q, aa));
+{-# HASKABELLE permissive divmod #-}
 
 mod_nat :: Rat.Nat -> Rat.Nat -> Rat.Nat;
 mod_nat m n = snd (Rat.divmod m n);
@@ -219,20 +220,6 @@ divAlg =
              else Rat.negateSnd
                     (Rat.posDivAlg (Rat.uminus_int aa) (Rat.uminus_int b)))));
 
-{- of_int :: forall a. (Rat.Ring_1 a) => Rat.Inta -> a;
-of_int k =
-  (if Rat.eq_int k (Rat.Number_of_int Rat.Pls) then Rat.zero
-    else (if Rat.less_int k (Rat.Number_of_int Rat.Pls)
-           then Rat.uminus (Rat.of_int (Rat.uminus_int k))
-           else let {
-                  a = Rat.divAlg
-                        (k, Rat.Number_of_int (Rat.Bit0 (Rat.Bit1 Rat.Pls)));
-                  (l, m) = a;
-                  l' = Rat.of_int l;
-                } in (if Rat.eq_int m (Rat.Number_of_int Rat.Pls)
-                       then Rat.plus l' l'
-                       else Rat.plus (Rat.plus l' l') Rat.one))); -}
-
 newtype Rat = Rationala (Rat.Inta, Rat.Inta);
 
 div_int :: Rat.Inta -> Rat.Inta -> Rat.Inta;
@@ -265,11 +252,6 @@ eq_rat (Rat.Rationala x) (Rat.Rationala y) = let
     (n1, d1) = Rat.normNum x
     (n2, d2) = Rat.normNum y
   in eq_int n1 n2 && eq_int d1 d2;
-
-{-of_rat :: forall a. (Rat.Field_char_0 a) => Rat.Rat -> a;
-of_rat (Rat.Rationala (k, l)) =
-  (if not (Rat.eq_int l (Rat.Number_of_int Rat.Pls))
-    then Rat.divide (Rat.of_int k) (Rat.of_int l) else Rat.zero);-}
 
 nneg :: (Rat.Inta, Rat.Inta) -> (Rat.Inta, Rat.Inta);
 nneg = (\ (a @ (aa, b)) -> (Rat.uminus_int aa, b));
