@@ -8,6 +8,8 @@ module Importer.Library (
   (|>), (*>),
   pair, rpair, map_fst, map_snd, map_both,
   split_list, filter_out, fold, map_filter, flat, maps, nth_map, map_index, fold_index,
+  pair, rpair, map_both,
+  split_list, filter_out, fold, fold_rev, map_filter, flat, maps, nth_map, map_index, fold_index,
   map2, fold2, map_split, ultimately,
   insert, remove,
   accumulate, has_duplicates, burrow_indices,
@@ -69,6 +71,10 @@ filter_out f = filter (not . f)
 fold :: (a -> b -> b) -> [a] -> b -> b
 fold f [] y = y
 fold f (x:xs) y = fold f xs (f x y)
+
+fold_rev :: (a -> b -> b) -> [a] -> b -> b
+fold_rev _ [] y = y
+fold_rev f (x:xs) y = f x (fold_rev f xs y)
 
 map_filter :: (a -> Maybe b) -> [a] -> [b]
 map_filter = Maybe.mapMaybe
