@@ -236,7 +236,7 @@ instance Printer Isa.Module where
                text "imports " <> fsep  imps' $+$
                text "begin" $+$
                (vcat $ map (pprint' adapt reserved) cmds) $+$
-               text "\nend"
+               text "\nend\n"
 
 instance Printer Isa.Stmt where
     pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
