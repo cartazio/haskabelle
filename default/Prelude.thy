@@ -28,6 +28,15 @@ definition curry :: "('a \<times> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<Righta
 definition uncurry :: "('a \<Rightarrow> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<times> 'b \<Rightarrow> 'c" where
   "uncurry = split"
 
+definition nth :: "'a list \<Rightarrow> int \<Rightarrow> 'a" where
+  "nth xs k = (if k < 0 then error ''negative index'' else List.nth xs (nat k))"
+
+definition length :: "'a list \<Rightarrow> int" where
+  "length xs = int (List.length xs)"
+
+definition replicate :: "int \<Rightarrow> 'a \<Rightarrow> 'a list" where
+  "replicate k = List.replicate (nat k)"
+
 primrec separate :: "'a \<Rightarrow> 'a list \<Rightarrow> 'a list" where
     "separate x [] = []"
   | "separate x (y # ys) = (if ys = [] then [y] else y # x # separate x ys)"
