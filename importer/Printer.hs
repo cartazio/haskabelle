@@ -406,7 +406,7 @@ instance Printer Isa.Literal where
     pprint' adapt reserved (Isa.Int i)      = let cc = colon <> colon in
                                integer i
                                -- parens $ integer i  <> cc <> text "_" <> cc <> text "num"
-    pprint' adapt reserved (Isa.Char ch)    = text "CHR " <+> quotes (quotes (char ch))
+    pprint' adapt reserved (Isa.Char ch)    = text "CHR" <+> quotes (quotes (char ch))
     pprint' adapt reserved (Isa.String str) = quotes . quotes . text $ str
 
 instance Printer Isa.Term where
