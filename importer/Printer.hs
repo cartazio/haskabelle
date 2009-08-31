@@ -96,25 +96,31 @@ rational = return . P.rational
 
 -- Constants
 
-semi,comma,colon,space,equals,dot,apostroph,asterisk :: Doc
-semi   = return P.semi
-comma  = return P.comma
-colon  = return P.colon
-space  = return P.space
-equals = return P.equals
+semi, comma, colon, dot, apostroph, space :: Doc
+lparen, rparen, lbrack, rbrack, lbrace, rbrace :: Doc
 
-dot       = char '.'
+semi = return P.semi
+comma = return P.comma
+colon = return P.colon
+dot = char '.'
 apostroph = char '\''
-asterisk  = char '*'
-plus      = char '+'
+space  = return P.space
 
-lparen,rparen,lbrack,rbrack,lbrace,rbrace :: Doc
-lparen = return  P.lparen
-rparen = return  P.rparen
-lbrack = return  P.lbrack
-rbrack = return  P.rbrack
-lbrace = return  P.lbrace
-rbrace = return  P.rbrace
+lparen = return P.lparen
+rparen = return P.rparen
+lbrack = return P.lbrack
+rbrack = return P.rbrack
+lbrace = return P.lbrace
+rbrace = return P.rbrace
+
+equals, prod, plus, rightarrow :: Doc
+
+equals = return P.equals
+prod = text "\\<times>"
+plus = char '+'
+rightarrow = text "\\<Rightarrow>"
+
+
 
 
 -- Simple Combining Forms
@@ -386,12 +392,12 @@ instance Printer Isa.Type where
 
     pprint' adapt reserved (Isa.Func t1 t2)
         = maybeWithinHOL $
-            case t1 of Isa.Func _ _ -> parens (pprint' adapt reserved t1) <+> text "=>" <+> pprint' adapt reserved t2
-                       _             -> pprint' adapt reserved t1          <+> text "=>" <+> pprint' adapt reserved t2
+            case t1 of Isa.Func _ _ -> parens (pprint' adapt reserved t1) <+> rightarrow <+> pprint' adapt reserved t2
+                       _             -> pprint' adapt reserved t1          <+> rightarrow <+> pprint' adapt reserved t2
 
     pprint' adapt reserved (Isa.Prod types)
         = maybeWithinHOL $
-            hsep (punctuate (space<>asterisk) (map (pprint' adapt reserved) types))
+            hsep (punctuate (space<>prod) (map (pprint' adapt reserved) types))
 
 
 instance Printer Isa.TypeSign where
@@ -457,7 +463,7 @@ instance Printer Isa.Term where
                 1
                 (vcat $ zipWith (<+>) (space : repeat (char '|'))
                                       (map pp matchs))
-           where pp (pat, term) = (pprint' adapt reserved pat) <+> text "=>" <+> pprint' adapt reserved term
+           where pp (pat, term) = (pprint' adapt reserved pat) <+> rightarrow <+> pprint' adapt reserved term
 
 
     pprint' adapt reserved (Isa.Let bindings body)
