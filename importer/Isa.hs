@@ -23,7 +23,7 @@ import Importer.Library
 newtype ThyName = ThyName String
   deriving (Show, Eq, Ord, Data, Typeable)
 
-data Name = QName ThyName String | Name String -- FIXME: unqualified names should be classified as variables
+data Name = QName ThyName String | Name String -- FIXME unqualified names should be classified as variables
   deriving (Show, Eq, Ord)
 
 is_qualified :: Name -> Bool
@@ -43,7 +43,7 @@ data Type =
   | Prod [Type]
   | TVar Name
   | NoType
-  | TyScheme [(Name, [Name])] Type -- FIXME: remove from this type
+  | TyScheme [(Name, [Name])] Type -- FIXME remove from this type, occurs only at statements
   deriving Show
 
 data Literal = Int Integer | Char Char | String String
@@ -83,10 +83,10 @@ data DoBlockFragment =
 data TypeSpec = TypeSpec [Name] Name
   deriving Show
 
-data TypeSign = TypeSign Name Type
+data TypeSign = TypeSign Name Type -- FIXME integrate type schemes here
   deriving Show
 
-data Stmt = -- beware: not all statements are modelled wholly appropriately
+data Stmt = -- FIXME not all statements are modelled wholly appropriately
     Datatype [(TypeSpec, [(Name, [Type])])]
   | Record TypeSpec [(Name, Type)]
   | TypeSynonym [(TypeSpec, Type)]
@@ -94,7 +94,7 @@ data Stmt = -- beware: not all statements are modelled wholly appropriately
   | Primrec [TypeSign] [(Name, [Pat], Term)]
   | Fun [TypeSign] Bool [(Name, [Pat], Term)]
   | Class Name [Name] [TypeSign]
-  | Instance Name Type [Stmt]
+  | Instance Name Type [Stmt] -- FIXME own category for equational specfications
   | Comment String
   deriving Show
 
@@ -106,11 +106,6 @@ data Module = Module ThyName [ThyName] [Stmt]
 
 data Ident = ClassI Name | TycoI Name | ConstI Name
   deriving (Eq, Ord, Show)
-
-plain_name :: Ident -> Name
-plain_name (ClassI n) = n
-plain_name (TycoI n) = n
-plain_name (ConstI n) = n
 
 add_idents_type :: Type -> [Ident] -> [Ident]
 add_idents_type (Type n tys) =
