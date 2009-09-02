@@ -305,7 +305,7 @@ instance Printer Isa.Stmt where
                text "begin" $$
                space <> space <> vcat (map (pprint' adapt reserved) cmds') $$
                (blankline $
-                text "instance ..\n" $$
+                text "instance sorry\n" $$
                 text "end")
         where
           renameInstanceCmd thy t c
