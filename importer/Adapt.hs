@@ -12,6 +12,8 @@ import Importer.Library
 import Data.Maybe (mapMaybe, fromMaybe, catMaybes, isJust)
 import List (partition, sort, group, intersperse)
 import Control.Monad.State
+import System.FilePath (combine)
+
 import qualified Importer.Msg as Msg
 
 import qualified Language.Haskell.Exts as Hsx
@@ -47,7 +49,8 @@ data Adaption = Adaption {
   rawAdaptionTable :: [(AdaptionEntry, AdaptionEntry)],
   reservedKeywords :: [String],
   usedConstNames :: [String],
-  usedThyNames :: [String]
+  usedThyNames :: [String],
+  preludeFile :: FilePath
 }
 
 data AdaptionTable = AdaptionTable [(Env.Identifier, Env.Identifier)]
@@ -133,21 +136,22 @@ evaluateEntry (Hsx.App (Hsx.App (Hsx.Con (Hsx.UnQual (Hsx.Ident kind))) (Hsx.Lit
   | (kind == "Haskell") = Haskell name (evaluateEntryKind entry)
   | (kind == "Isabelle") = Isabelle name (evaluateEntryKind entry)
 
-evaluate decls = Adaption {
+evaluate dir decls = Adaption {
   rawAdaptionTable = evaluateList (evaluatePair evaluateEntry evaluateEntry)
     (lookupFunbind "raw_adaption_table"),
   reservedKeywords = lookupStringList "reserved_keywords",
   usedConstNames = lookupStringList "used_const_names",
-  usedThyNames = lookupStringList "used_thy_names" } where
+  usedThyNames = lookupStringList "used_thy_names",
+  preludeFile = combine dir "Prelude.thy" } where
     lookupFunbind name = case lookup name decls of
       Nothing -> error ("No entry for " ++ name ++ " in adaption file")
       Just rhs -> rhs
     lookupStringList name = evaluateList evaluateString (lookupFunbind name)
 
 readAdapt :: FilePath -> IO Adaption
-readAdapt file = do
-  decls <- parseAdapt file
-  return (evaluate (indexify decls))
+readAdapt dir = do
+  decls <- parseAdapt (combine dir "Raw.hs")
+  return (evaluate dir (indexify decls))
 
 
 {- Building adaption table -}

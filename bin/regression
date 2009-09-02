@@ -68,7 +68,6 @@ done
 
 if [ $REIMPORT ]
 then
-  cp -vu default/Prelude.thy ex/dst_thy/
   cd ex/dst_thy/
   DST="../../ex/dst_hs/"
   mkdir -p "$DST"

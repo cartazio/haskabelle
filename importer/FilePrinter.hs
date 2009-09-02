@@ -8,11 +8,12 @@ module Importer.FilePrinter (importFiles, importProject) where
 import Control.Monad.Error
 import System.FilePath
 import System.Directory
+import System.IO
 import Text.PrettyPrint (render)
 
 import Importer.ConversionUnit
 import Importer.Convert
-import Importer.Adapt (Adaption (..), AdaptionTable, readAdapt)
+import Importer.Adapt (Adaption (..), AdaptionTable, readAdapt, preludeFile)
 import Importer.Configuration
 import Importer.Printer (pprint)
 import Importer.LexEnv
@@ -38,11 +39,12 @@ importProject' adapt = do
   exists <- liftIO $ doesDirectoryExist outDir
   when (not exists) $ liftIO $ createDirectory outDir
   (adaptTable, convertedUnits) <- convertFiles adapt (filter isHaskellSourceFile inFiles)
+  liftIO $ copyFile (preludeFile adapt) (combine outDir (takeFileName (preludeFile adapt)))
   sequence_ (map (writeIsaUnit adaptTable (reservedKeywords adapt)) convertedUnits)
 
 importProject :: Config -> FilePath -> IO ()
 importProject config adaptDir = do
-  adapt <- readAdapt (combine adaptDir "Raw.hs")
+  adapt <- readAdapt adaptDir
   runConversion config (importProject' adapt)
 
 importFiles :: FilePath -> [FilePath] -> FilePath -> IO ()
