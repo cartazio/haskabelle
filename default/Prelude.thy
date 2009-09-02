@@ -46,6 +46,8 @@ subsection {* Counterparts for fundamental Haskell classes *}
 class eq =
   fixes equal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
   fixes inequal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+  assumes equal_eq [simp]: "equal x y \<longleftrightarrow> x = y"
+  assumes inequal_eq [simp]: "inequal x y \<longleftrightarrow> x \<noteq> y"
 
 instantiation int :: eq
 begin 
@@ -56,9 +58,16 @@ definition
 definition
   "inequal x y \<longleftrightarrow> x \<noteq> (y::int)"
 
-instance ..
+instance proof
+qed (simp_all add: equal_int_def inequal_int_def)
 
 end
+
+
+class ord = eq + linorder
+
+instance int :: ord ..
+
 
 class print =
   fixes print :: "'a \<Rightarrow> string"
@@ -73,8 +82,10 @@ instance ..
 
 end
 
+
 class num = number_ring + abs + sgn + eq + print
 
 instance int :: num ..
+
 
 end
