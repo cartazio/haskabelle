@@ -65,6 +65,7 @@ cd "$ARCHIVE"
 
 rm README
 rm .hgignore
+rm .hgtags
 rm .hg_archival.txt
 rm -rf doc/*
 rm $(find ex/src_hs -name "*.disabled")
