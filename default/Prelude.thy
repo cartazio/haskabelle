@@ -46,8 +46,7 @@ subsection {* Counterparts for fundamental Haskell classes *}
 class eq =
   fixes equal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
   fixes inequal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
-  assumes equal_eq [simp]: "equal x y \<longleftrightarrow> x = y"
-  assumes inequal_eq [simp]: "inequal x y \<longleftrightarrow> x \<noteq> y"
+  assumes inequal_equal [simp]: "inequal x y \<longleftrightarrow> \<not> equal x y"
 
 instantiation int :: eq
 begin 
