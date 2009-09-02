@@ -5,13 +5,15 @@ An overview how to use it can be found in the manual
     doc/haskabelle.pdf
 
 If this is not present, you have to build it first;  for this you need
-a suitable Isabelle source (!) distribution, as available from
+a source (!) distribution of Isabelle2009, as available from
 
-    http://isabelle.in.tum.de/repos/isabelle
-    
-Currently, Isabelle 2009 is recommended:
+    http://isabelle.in.tum.de/repos/isabelle/archive/5c8618f95d24.tar.gz
+
+See further
 
     http://isabelle.in.tum.de/
+
+for general hints on Isabelle2009.
 
 Then, invoke
 
