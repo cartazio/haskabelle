@@ -15,4 +15,4 @@ REPOSITORY=/home/haftmann/shared/haskabelle
 
 TEST_HOME=/home/isatest
 
-NOTIFY='kleing@cse.unsw.edu.au tcr@freebits.de haftmann@in.tum.de'
+NOTIFY='kleing@cse.unsw.edu.au haftmann@in.tum.de'
