@@ -8,7 +8,7 @@ sig
   val run: theory -> string -> string -> unit;
 end;
 
-structure MkAdapt : MK_ADAPT =
+structure Mk_Adapt : MK_ADAPT =
 struct
 
 (* used constant symbols *)
@@ -22,7 +22,7 @@ fun used_constants thy = []
 
 (* concrete output syntax *)
 
-fun mk_classentry thy (((hs, isa), super), params) =
+fun mk_classentry _ (((hs, isa), super), params) =
   let
     val s_super = enclose "[" "]" (commas_quote super);
     val s_params = enclose "[" "]" (commas (map (fn (n, t) => "(" ^ quote n ^ ", " ^ quote t ^ ")") params));
@@ -49,6 +49,7 @@ fun mk_constentry thy (hs, raw_isa) =
           (s, enclose "(" ")" ("InfixOp LeftAssoc " ^ string_of_int j))
       | string_of_syn (SOME (InfixrName (s, j))) = 
           (s, enclose "(" ")" ("InfixOp RightAssoc " ^ string_of_int j))
+      | string_of_syn _ = raise Match;
     val (sym, syn') = string_of_syn syn;
     val s = "(Haskell " ^ quote hs ^ " Function, Isabelle "
       ^ quote sym ^ " " ^ syn' ^ ")";
