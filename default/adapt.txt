@@ -84,4 +84,4 @@ consts
   "Prelude.abs"         "HOL.abs"
   "Prelude.sgn"         "HOL.sgn"
   "Prelude.fromInteger" "Int.of_int"
-  "Prelude.divMod"      "IntDiv.divmod"
+  "Prelude.divMod"      "Divides.divmod_int"
