@@ -30,7 +30,7 @@ fi
 
 CONV="$HASKABELLE_HOME/lib/mk_adapt.ML"
 SRC="$DIR/adapt.txt"
-DST="$DIR/Raw.hs"
+DST="$DIR/Generated_Adapt.hs"
 PRELUDE_NAME="Prelude"
 PRELUDE="$DIR/$PRELUDE_NAME"
 

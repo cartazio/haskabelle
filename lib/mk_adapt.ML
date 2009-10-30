@@ -108,13 +108,11 @@ fun main thy src_loc dst_loc =
     val dst_path = Path.explode dst_loc;
     val modl_name = (Path.implode o fst o Path.split_ext o Path.base) dst_path;
     val adaptions = convert thy (Position.file src_loc) src;
-    val keywords = Pretty.enum "," "[" "]"
-      (map prep_string (sort string_ord
-        (OuterKeyword.dest_commands () @ OuterKeyword.dest_keywords ())));
-    val const_names = Pretty.enum "," "[" "]"
-      (map prep_string (used_constants thy));
-    val thy_names = Pretty.enum "," "[" "]"
-      (map prep_string (ThyInfo.get_names ()));
+    val enumerate_sorted = sort string_ord #> map prep_string #> map single
+      #> separate [Pretty.str ",", Pretty.fbrk] #> flat #> Pretty.enclose "[" "]";
+    val keywords = enumerate_sorted (OuterKeyword.dest_commands () @ OuterKeyword.dest_keywords ());
+    val const_names = enumerate_sorted (used_constants thy);
+    val thy_names = enumerate_sorted (ThyInfo.get_names ());
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
       "-- Haskell syntax is only superficial.",
       "",

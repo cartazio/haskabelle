@@ -150,7 +150,7 @@ evaluate dir decls = Adaption {
 
 readAdapt :: FilePath -> IO Adaption
 readAdapt dir = do
-  decls <- parseAdapt (combine dir "Raw.hs")
+  decls <- parseAdapt (combine dir "Generated_Adapt.hs")
   return (evaluate dir (indexify decls))
 
 
