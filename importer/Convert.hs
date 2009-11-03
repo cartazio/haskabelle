@@ -590,7 +590,7 @@ convertDecl pragmas decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
                        return (map (flip Isa.TypeSign typ') names')
 
 convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
-        | length tys /= 1          = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
+        | length tys /= 1 = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
         | not (isType (head tys)) = dieWithLoc loc (Msg.only_specializing_on_tycon_allowed)
         | otherwise
             = do classqN'   <- convert pragmas classqN
