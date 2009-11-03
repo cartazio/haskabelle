@@ -9,6 +9,10 @@ eq_nat (Suc m) (Suc n) = eq_nat m n;
 eq_nat Zero_nat (Suc a) = False;
 eq_nat (Suc a) Zero_nat = False;
 
+instance Eq Nat where {
+  (==) = eq_nat
+};
+
 less_eq_nat :: Nat -> Nat -> Bool;
 less_eq_nat (Suc m) n = less_nat m n;
 less_eq_nat Zero_nat n = True;

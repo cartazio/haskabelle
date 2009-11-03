@@ -52,10 +52,10 @@ instantiation int :: eq
 begin 
 
 definition
-  "equal x y \<longleftrightarrow> x = (y::int)"
+  [termination_simp]: "equal x y \<longleftrightarrow> x = (y::int)"
 
 definition
-  "inequal x y \<longleftrightarrow> x \<noteq> (y::int)"
+  [termination_simp]: "inequal x y \<longleftrightarrow> x \<noteq> (y::int)"
 
 instance proof
 qed (simp_all add: equal_int_def inequal_int_def)
