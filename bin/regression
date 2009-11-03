@@ -75,17 +75,7 @@ then
   do
     THY_NAME="$(basename $THY .thy)"
     echo "re-importing $THY_NAME..."
-    if [ "$THY_NAME" != "Prelude" ]
-    then
-      THY_TMP="_TEMP.thy"
-      head -n 3 "$THY" > "$THY_TMP"
-      echo '' >> "$THY_TMP"
-      echo 'ML_val {* Unsynchronized.set quick_and_dirty *}' >> "$THY_TMP"
-      echo '' >> "$THY_TMP"
-      tail -n $(($(wc -l "$THY" | grep -oP '\d+') - 3)) "$THY" >> "$THY_TMP"
-      mv "$THY_TMP" "$THY"
-    fi
-    "$HASKABELLE_HOME/bin/isabelle" codegen HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail_or_warn "Could not re-import $THY"
+    "$HASKABELLE_HOME/bin/isabelle" codegen -q HOL "$THY_NAME" "\"$THY_NAME.*\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail_or_warn "Could not re-import $THY"
     HS_FILE="$DST$THY_NAME.hs"
     if [ ! -e "$HS_FILE" ]
     then
