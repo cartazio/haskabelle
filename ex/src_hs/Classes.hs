@@ -43,7 +43,7 @@ pow_int k x =
 
 {- standard orderings -}
 
-class (Eq a) => Order a where
+class Order a where
   less_eq :: a -> a -> Bool
   less :: a -> a -> Bool
 
