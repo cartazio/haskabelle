@@ -417,7 +417,7 @@ convertModule (pragmas, HskModule _loc modul dependentDecls) =
 
 lookupImports :: Isa.ThyName -> Env.GlobalE -> Customisations -> [Isa.ThyName]
 lookupImports thy globalEnv custs
-    = map (rename .(\(Env.EnvImport name _ _) ->  Env.toIsa name))
+    = map (rename .(\(Env.Import name _ _) ->  Env.toIsa name))
         $ Env.lookupImports_OrLose (Env.fromIsa thy) globalEnv
     where rename orig@(Isa.ThyName name) = case getCustomTheory custs (Hsx.ModuleName name) of
                                    Nothing -> orig
@@ -456,19 +456,19 @@ instance Convert Hsx.ModuleName Isa.ThyName where
     convert' pragmas m = return (Env.toIsa (Env.fromHsk m :: Env.ModuleID))
 
 instance Convert Hsx.Name Isa.Name where
-    convert' pragmas n = return (Env.toIsa (Env.fromHsk n :: Env.EnvName))
+    convert' pragmas n = return (Env.toIsa (Env.fromHsk n :: Env.Name))
 
 instance Convert Hsx.QName Isa.Name where
-    convert' pragmas qn = return (Env.toIsa (Env.fromHsk qn :: Env.EnvName))
+    convert' pragmas qn = return (Env.toIsa (Env.fromHsk qn :: Env.Name))
 
 instance Convert Hsx.Type Isa.Type where
     convert' pragmas t @ (Hsx.TyForall _ _ _) = pattern_match_exhausted "Hsx.Type -> Isa.Type" t
-    convert' pragmas t = return (Env.toIsa (Env.fromHsk t :: Env.EnvType))
+    convert' pragmas t = return (Env.toIsa (Env.fromHsk t :: Env.Type))
 
 convert_type_sign :: Hsx.Name -> Hsx.Type -> Isa.TypeSign
 convert_type_sign n typ =
   let
-    n' = Env.toIsa (Env.fromHsk n :: Env.EnvName)
+    n' = Env.toIsa (Env.fromHsk n :: Env.Name)
     (e_vs, e_typ) = Env.typscheme_of_hsk_typ typ
     vs' = map (\(v, sort) -> (Env.toIsa v, Env.isa_of_sort sort)) e_vs
     typ' = Env.toIsa e_typ
@@ -607,7 +607,7 @@ convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
                  identifier <- lookupIdentifier_Type classqN
                  let classinfo
                                    = case fromJust identifier of
-                                       Env.Type (Env.Class _ classinfo) -> classinfo
+                                       Env.TypeDecl (Env.Class _ classinfo) -> classinfo
                                        t -> error $ "found:\n" ++ show t
                  let methods       = Env.methodsOf classinfo
                  let classVarN     = Env.classVarOf classinfo
@@ -620,12 +620,12 @@ convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
           isType t = case t of { Hsx.TyCon _ -> True; _ -> False }
           toHsDecl (Hsx.InsDecl decl) = decl
 
-          mk_method_annotation :: Env.EnvName -> Env.EnvType -> Env.Identifier -> Env.Identifier
+          mk_method_annotation :: Env.Name -> Env.Type -> Env.Identifier -> Env.Identifier
           mk_method_annotation tyvarN tycon class_method_annot
               = assert (Env.isTypeAnnotation class_method_annot)
                   $ let lexinfo = Env.lexInfoOf class_method_annot
                         (_, typ)     = Env.typschemeOf lexinfo
-                        typ'    = Env.substituteTyVars [(Env.EnvTyVar tyvarN, tycon)] typ
+                        typ'    = Env.substituteTyVars [(Env.TyVar tyvarN, tycon)] typ
                     in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typschemeOf = ([], typ') }))
 
 convertDecl pragmas junk = pattern_match_exhausted "Hsx.Decl -> Isa.Stmt" junk
@@ -1079,7 +1079,7 @@ lookupIdentifier_Constant qname
   This function looks up the lexical information for the given
   type identifier.
 -}
-lookupIdentifier_Type' :: Env.EnvName -> ContextM (Maybe Env.Identifier)
+lookupIdentifier_Type' :: Env.Name -> ContextM (Maybe Env.Identifier)
 lookupIdentifier_Type' envName
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
@@ -1128,5 +1128,5 @@ lookupType fname = do
   case identifier of
     Nothing -> return Nothing
     Just id -> let typscheme = Env.typschemeOf (Env.lexInfoOf id) 
-               in if snd typscheme == Env.EnvTyNone
+               in if snd typscheme == Env.TyNone
                   then return Nothing else return $ Just (Env.hsk_typ_of_typscheme typscheme)

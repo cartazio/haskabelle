@@ -245,7 +245,7 @@ parseEntry (Haskell raw_identifier op)
     = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
           op' = (case op of Function -> fromMaybe Function (lookup raw_identifier hsk_infix_ops)
                             etc      -> etc)
-      in makeIdentifier op' moduleID identifierID ([], Env.EnvTyNone)
+      in makeIdentifier op' moduleID identifierID ([], Env.TyNone)
 parseEntry (Isabelle raw_identifier op)
     -- the raw identifier may look like "Datatype.option.None", where
     -- "Datatype" is the ModuleID, and "None" is the real identifier,
@@ -254,7 +254,7 @@ parseEntry (Isabelle raw_identifier op)
           moduleID'                = (case wordsBy (== '.') moduleID of 
                                         []  -> moduleID
                                         m:_ -> m)
-      in makeIdentifier op moduleID' identifierID ([], Env.EnvTyNone)
+      in makeIdentifier op moduleID' identifierID ([], Env.TyNone)
 
 parseRawIdentifier :: String -> (String, String)
 parseRawIdentifier string
@@ -268,7 +268,7 @@ parseRawIdentifier string
                modul      = concat $ intersperse "." (init parts)
            in (modul, identifier)
 
-makeIdentifier :: OpKind -> Env.ModuleID -> Env.IdentifierID -> ([(Env.EnvName, [Env.EnvName])], Env.EnvType) -> Env.Identifier
+makeIdentifier :: OpKind -> Env.ModuleID -> Env.IdentifierID -> ([(Env.Name, [Env.Name])], Env.Type) -> Env.Identifier
 makeIdentifier Variable m identifier t
     = Env.Constant $ Env.Variable $ Env.makeLexInfo m identifier t
 makeIdentifier Function m identifier t
@@ -278,16 +278,16 @@ makeIdentifier (UnaryOp prio) m identifier t
 makeIdentifier (InfixOp assoc prio) m identifier t
     = Env.Constant $ Env.InfixOp (Env.makeLexInfo m identifier t) (transformAssoc assoc) prio
 makeIdentifier (Class classinfo) m identifier t
-    = let supers  = map (Env.EnvUnqualName . snd . parseRawIdentifier) (superclasses classinfo)
+    = let supers  = map (Env.UnqualName . snd . parseRawIdentifier) (superclasses classinfo)
           meths   = map (\(n, tstr) -> let t = Env.typscheme_of_hsk_typ (parseType tstr)
                                        in makeTypeAnnot (Env.makeLexInfo m n t))
                         (methods classinfo)
-          classV  = Env.EnvUnqualName (classVar classinfo)
+          classV  = Env.UnqualName (classVar classinfo)
       in 
-        Env.Type $ Env.Class (Env.makeLexInfo m identifier t)
+        Env.TypeDecl $ Env.Class (Env.makeLexInfo m identifier t)
                              (Env.makeClassInfo supers meths classV)
 makeIdentifier Type m identifier t
-    = Env.Type $ Env.Data (Env.makeLexInfo m identifier t) []
+    = Env.TypeDecl $ Env.Data (Env.makeLexInfo m identifier t) []
 
 makeTypeAnnot :: Env.LexInfo -> Env.Identifier
 makeTypeAnnot lexinfo = Env.Constant (Env.TypeAnnotation lexinfo)
@@ -296,10 +296,10 @@ parseType :: String -> Hsx.Type
 parseType string = case Hsx.parseFileContents ("__foo__ :: " ++ string) of
   (Hsx.ParseOk (Hsx.Module _ _ _ _ _ _ [Hsx.TypeSig _ _ t])) -> t
 
-transformAssoc :: Assoc -> Env.EnvAssoc
-transformAssoc RightAssoc = Env.EnvAssocRight
-transformAssoc LeftAssoc  = Env.EnvAssocLeft
-transformAssoc NoneAssoc  = Env.EnvAssocNone
+transformAssoc :: Assoc -> Env.Assoc
+transformAssoc RightAssoc = Env.AssocRight
+transformAssoc LeftAssoc  = Env.AssocLeft
+transformAssoc NoneAssoc  = Env.AssocNone
 
 
 {- Applying adaptions -}
@@ -321,7 +321,7 @@ query slot = do s <- getAdptState; return (slot s)
 set :: (AdptState -> AdptState) -> AdaptM ()
 set update = do s <- getAdptState; put (update s); return ()
 
-shadow :: [Env.EnvName] -> AdaptM ()
+shadow :: [Env.Name] -> AdaptM ()
 shadow names
     = set (\state 
                -> let (AdaptionTable mappings) = adaptionTable state 
@@ -387,14 +387,14 @@ runAdaption oldEnv newEnv tbl adaption
                                           })
 
 
-qualifyConstantName :: Env.GlobalE -> Env.ModuleID -> Env.EnvName -> Env.EnvName
+qualifyConstantName :: Env.GlobalE -> Env.ModuleID -> Env.Name -> Env.Name
 qualifyConstantName globalEnv mID name
-    = fromMaybe (Env.qualifyEnvName mID name)
+    = fromMaybe (Env.qualifyName mID name)
         $ Env.resolveConstantName globalEnv mID name
 
-qualifyTypeName :: Env.GlobalE -> Env.ModuleID -> Env.EnvName -> Env.EnvName
+qualifyTypeName :: Env.GlobalE -> Env.ModuleID -> Env.Name -> Env.Name
 qualifyTypeName globalEnv mID name
-    = fromMaybe (Env.qualifyEnvName mID name)
+    = fromMaybe (Env.qualifyName mID name)
         $ Env.resolveTypeName globalEnv mID name
 
 
@@ -404,8 +404,8 @@ adaptGlobalEnv adaptions env = Env.updateGlobalEnv (\n ->
     Just new_id -> [new_id]
     Nothing -> adapt_type_in_identifier env adaptions n) env
 
-adapt_type_in_identifier :: Env.GlobalE -> AdaptionTable -> Env.EnvName -> [Env.Identifier]
-adapt_type_in_identifier globalEnv adaptions n@(Env.EnvQualName mID _)
+adapt_type_in_identifier :: Env.GlobalE -> AdaptionTable -> Env.Name -> [Env.Identifier]
+adapt_type_in_identifier globalEnv adaptions n@(Env.QualName mID _)
     = let old_ids = Env.lookupIdentifiers_OrLose mID n globalEnv
           old_lexinfos = map Env.lexInfoOf old_ids
           old_types = map Env.typschemeOf old_lexinfos
@@ -425,7 +425,7 @@ adapt_type_in_identifier globalEnv adaptions n@(Env.EnvQualName mID _)
       in 
         zipWith Env.updateIdentifier old_ids new_lexinfos
 
-translateName :: AdaptionTable -> Env.EnvName -> Maybe Env.Identifier
+translateName :: AdaptionTable -> Env.Name -> Maybe Env.Identifier
 translateName (AdaptionTable mappings) name =
   lookupBy (\n1 id2 -> n1 == Env.identifier2name id2) name mappings where
     lookupBy                :: (a -> b -> Bool) -> a -> [(b, c)] -> Maybe c
@@ -441,7 +441,7 @@ translateIdentifier tbl id
         Nothing     -> id
         Just new_id -> new_id
 
-translateEnvType :: AdaptionTable -> (Env.EnvName -> Env.EnvName) -> Env.EnvType -> Maybe Env.EnvType
+translateEnvType :: AdaptionTable -> (Env.Name -> Env.Name) -> Env.Type -> Maybe Env.Type
 translateEnvType (AdaptionTable mappings) qualify typ = let
     type_renams = mappings
       |> filter (Env.isData . fst) 
@@ -455,23 +455,23 @@ translateEnvType (AdaptionTable mappings) qualify typ = let
     transl n = case AList.lookup renamings (qualify n) of
       Nothing -> return n
       Just n' -> put True >> return n'
-    translate :: Env.EnvType -> State Bool Env.EnvType
+    translate :: Env.Type -> State Bool Env.Type
     translate typ = case typ of 
-      Env.EnvTyNone      -> return Env.EnvTyNone
-      Env.EnvTyVar n     -> liftM Env.EnvTyVar (transl n)
-      Env.EnvTyCon n ts  -> do n'  <- transl n
-                               ts' <- mapM translate ts
-                               return (Env.EnvTyCon n' ts')
-      Env.EnvTyFun t1 t2 -> do t1' <- translate t1
-                               t2' <- translate t2
-                               return (Env.EnvTyFun t1' t2')
-      Env.EnvTyTuple ts  -> do ts' <- mapM translate ts
-                               return (Env.EnvTyTuple ts')
+      Env.TyNone      -> return Env.TyNone
+      Env.TyVar n     -> liftM Env.TyVar (transl n)
+      Env.TyCon n ts  -> do n' <- transl n
+                            ts' <- mapM translate ts
+                            return (Env.TyCon n' ts')
+      Env.TyFun t1 t2 -> do t1' <- translate t1
+                            t2' <- translate t2
+                            return (Env.TyFun t1' t2')
+      Env.TyTuple ts  -> do ts' <- mapM translate ts
+                            return (Env.TyTuple ts')
   in case runState (translate typ) False of
     (_, False) -> Nothing        -- no match found in AdaptionTable. 
     (new_type, True) -> Just new_type
 
-adaptEnvName :: Env.EnvName -> AdaptM Env.EnvName
+adaptEnvName :: Env.Name -> AdaptM Env.Name
 adaptEnvName n 
     = do Just mID <- query currentModuleID
          tbl      <- query adaptionTable
@@ -484,7 +484,7 @@ adaptEnvName n
                       in assert (isJust (Env.lookupConstant mID new_id_name newEnv))
                            $ return new_id_name
 
-adaptEnvType :: Env.EnvType -> AdaptM Env.EnvType
+adaptEnvType :: Env.Type -> AdaptM Env.Type
 adaptEnvType t
     = do Just mID <- query currentModuleID
          adaptions      <- query adaptionTable

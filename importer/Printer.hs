@@ -489,7 +489,7 @@ instance Printer Isa.DoBlockFragment where
     pprint' adapt reserved (Isa.DoQualifier exp) = pprint' adapt reserved exp
 
 
-reAdaptEnvName :: AdaptionTable -> Env.EnvName -> Maybe Env.EnvName
+reAdaptEnvName :: AdaptionTable -> Env.Name -> Maybe Env.Name
 reAdaptEnvName adapt name
     = let AdaptionTable mappings = adapt
           mappings' = [ (Env.identifier2name id2, Env.identifier2name id1) 

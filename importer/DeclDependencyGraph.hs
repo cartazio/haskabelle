@@ -29,11 +29,11 @@ import qualified Importer.Msg as Msg
 
 {-|
   This data structure represents the dependency graph of Haskell declarations.
-  The nodes of this graph are elements of type 'Hsx.Decl' keys are of type 'Env.EnvName'.
+  The nodes of this graph are elements of type 'Hsx.Decl' keys are of type 'Env.Name'.
 -}
 data HskDeclDepGraph = HskDeclDepGraph (Graph, 
-                                        Vertex -> (Hsx.Decl, Env.EnvName, [Env.EnvName]), 
-                                        Env.EnvName -> Maybe Vertex)
+                                        Vertex -> (Hsx.Decl, Env.Name, [Env.Name]), 
+                                        Env.Name -> Maybe Vertex)
 
 {-|
   This function computes the dependency graph of the given Haskell declarations of the
@@ -50,10 +50,10 @@ makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
   This function constructs the outgoing edges of the given declaration in the given environment
   module.
 -}
-makeEdgesFromDecl :: Env.GlobalE -> Hsx.ModuleName -> Hsx.Decl -> [(Hsx.Decl, Env.EnvName, [Env.EnvName])]
+makeEdgesFromDecl :: Env.GlobalE -> Hsx.ModuleName -> Hsx.Decl -> [(Hsx.Decl, Env.Name, [Env.Name])]
 makeEdgesFromDecl globalEnv modul decl =
   let
-    canonicalize hsqname = Env.resolveEnvName_OrLose globalEnv (Env.fromHsk modul) (Env.fromHsk hsqname)
+    canonicalize hsqname = Env.resolveName_OrLose globalEnv (Env.fromHsk modul) (Env.fromHsk hsqname)
     names = map canonicalize $ namesFromDecl decl
     used_names = Set.map canonicalize $ Set.unions [extractFreeVarNs decl, extractDataConNs decl, extractFieldNs decl]
     used_types = Set.map canonicalize $ extractTypeConNs decl
@@ -64,7 +64,7 @@ makeEdgesFromDecl globalEnv modul decl =
 {-|
   ???
 -}
-handleDuplicateEdges :: [(Hsx.Decl, Env.EnvName, [Env.EnvName])] -> [(Hsx.Decl, Env.EnvName, [Env.EnvName])]
+handleDuplicateEdges :: [(Hsx.Decl, Env.Name, [Env.Name])] -> [(Hsx.Decl, Env.Name, [Env.Name])]
 handleDuplicateEdges edges
     = concatMap handleGroup (groupBy (\(_,x,_) (_,y,_) -> x == y) edges)
     where handleGroup edges
