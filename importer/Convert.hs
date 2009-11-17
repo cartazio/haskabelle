@@ -89,7 +89,7 @@ add_pragmas (Hsx.UnknownDeclPragma src "HASKABELLE" pragma) =
     directive : args = words pragma
   in if directive `elem` pragmas
   then AList.map_default (directive, []) (fold insert args)
-  else error ("unknowm pragma " ++ directive ++ " encountered at " ++ srcloc2string src)
+  else error ("unknown pragma " ++ directive ++ " encountered at " ++ srcloc2string src)
 add_pragmas _ = id
 
 
@@ -101,14 +101,14 @@ add_pragmas _ = id
 -- about it.)
 
 data HskModule = HskModule Hsx.SrcLoc Hsx.ModuleName [HskDependentDecls]
-  deriving (Show)
+  deriving Show
 
 {-|
   This data structure is supposed to collect function declarations
   that depend mutually recursive on each other.
 -}
 newtype HskDependentDecls = HskDependentDecls [Hsx.Decl]
-  deriving (Show)
+  deriving Show
 
 {-|
   ???
@@ -316,20 +316,21 @@ generateRecordAux pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs conde
         = let strip (Hsx.QualConDecl _loc _FIXME _context decl) = decl
               decls = map strip condecls
           in do tyvars <- mapM (convert pragmas) tyvarNs
-                tycon  <- convert pragmas tyconN
+                let vs = map (rpair []) tyvars
+                tycon <- convert pragmas tyconN
                 let dataTy = Isa.Type tycon (map Isa.TVar tyvars)
                 let fieldNames = concatMap extrFieldNames decls
-                fields <-  mapM (liftM fromJust . lookupIdentifier_Constant . Hsx.UnQual) (nub fieldNames)
-                let funBinds = map (mkAFunBinds (length decls) dataTy) fields
-                               ++ map (mkUFunBinds (length decls) dataTy) fields
+                fields <- mapM (liftM fromJust . lookupIdentifier_Constant . Hsx.UnQual) (nub fieldNames)
+                let funBinds = map (mkAFunBinds (length decls) vs dataTy) fields
+                      ++ map (mkUFunBinds (length decls) vs dataTy) fields
                 return funBinds
               where extrFieldNames (Hsx.RecDecl conName fields) = map fst $ flattenRecFields fields
                     extrFieldNames _ = []
-                    mkAFunBinds numCon dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
+                    mkAFunBinds numCon vs dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typschemeOf=(_, fty)} constrs)) =
                         let binds = map (mkAFunBind fname) constrs
                             fname' = Isa.Name fname
                             funTy = Isa.Func dty (Env.toIsa fty)
-                        in Isa.Primrec [Isa.TypeSign fname' funTy] binds
+                        in Isa.Primrec [Isa.TypeSign fname' vs funTy] binds
                     mkAFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
                             con = Isa.Const $ Isa.Name cname
@@ -340,12 +341,12 @@ generateRecordAux pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs conde
                             pat = Isa.Parenthesized $ foldl Isa.App con conArgs
                             term = Isa.Const (Isa.Name "x")
                         in (fname', [pat], term)
-                    mkUFunBinds numCon dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typeOf=fty} constrs)) =
+                    mkUFunBinds numCon vs dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typschemeOf=(_, fty)} constrs)) =
                         let uname = "update_" ++ fname
                             binds = map (mkUFunBind fname uname) constrs
                             uname' = Isa.Name uname
                             funTy = Isa.Func (Env.toIsa fty) (Isa.Func dty dty)
-                        in Isa.Primrec [Isa.TypeSign uname' funTy] binds
+                        in Isa.Primrec [Isa.TypeSign uname' vs funTy] binds
                     mkUFunBind fname uname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let uname' = Isa.Name uname
                             con = Isa.Const $ Isa.Name cname
@@ -461,7 +462,17 @@ instance Convert Hsx.QName Isa.Name where
     convert' pragmas qn = return (Env.toIsa (Env.fromHsk qn :: Env.EnvName))
 
 instance Convert Hsx.Type Isa.Type where
+    convert' pragmas t @ (Hsx.TyForall _ _ _) = pattern_match_exhausted "Hsx.Type -> Isa.Type" t
     convert' pragmas t = return (Env.toIsa (Env.fromHsk t :: Env.EnvType))
+
+convert_type_sign :: Hsx.Name -> Hsx.Type -> Isa.TypeSign
+convert_type_sign n typ =
+  let
+    n' = Env.toIsa (Env.fromHsk n :: Env.EnvName)
+    (e_vs, e_typ) = Env.typscheme_of_hsk_typ typ
+    vs' = map (\(v, sort) -> (Env.toIsa v, Env.isa_of_sort sort)) e_vs
+    typ' = Env.toIsa e_typ
+  in Isa.TypeSign n' vs' typ'
 
 instance Convert Hsx.BangType Isa.Type where
     convert' pragmas t@(Hsx.BangedTy _)   = pattern_match_exhausted "Hsx.BangType -> Isa.Type" t
@@ -527,17 +538,15 @@ convertDecl pragmas (Hsx.TypeSig _loc names typ)
 convertDecl pragmas (Hsx.FunBind matchs)
         = do let (names, patterns, bodies, wbinds) = unzip4 (map splitMatch matchs)
              assert (all (== head names) (tail names)) (return ())
-             assert (all isEmpty wbinds) (return ())      -- all decls are global at this point.
-             ftype      <- lookupType (Hsx.UnQual (names!!0)) -- as all
-                                                        -- names are
-                                                        -- equal, pick
-                                                        -- first one.
+             assert (all isEmpty wbinds) (return ()) -- all decls are global at this point.
+             ftype <- lookupType (Hsx.UnQual (names !! 0)) -- as all names are equal, pick first one.
              let name = names !! 0
-             name'      <- convert' pragmas name
+             name' <- convert' pragmas name
              let n = name_of name
              let permissive = n `elem` these (lookup permissive_pragma pragmas)
-             fsig'      <- (case ftype of Nothing -> return Isa.NoType
-                                          Just t -> convert' pragmas t) >>= (return . Isa.TypeSign name')
+             let fsig' = case ftype of { 
+               Nothing -> Isa.TypeSign name' [] Isa.NoType;
+               Just typ -> convert_type_sign name typ }
              patsNames  <- mapM (mapM (convert pragmas)) patterns
              let patsNames' = map unzip patsNames
                  patterns'  = map fst patsNames'
@@ -561,11 +570,10 @@ convertDecl pragmas (Hsx.PatBind loc pattern rhs _wherebinds)
                       rhs'  <- convert pragmas rhs
                       let rhs'' = mkSimpleLet aliases rhs'
                       ftype <- lookupType (Hsx.UnQual name)
-                      sig'  <- -- trace (prettyShow' "ftype" ftype)$
-                               (case ftype of 
-                                  Nothing -> return Isa.NoType
-                                  Just t  -> convert' pragmas t) >>= (return . Isa.TypeSign name') 
-                      return [Isa.Definition sig' (pat', rhs'')]
+                      let sig' = case ftype of { 
+                        Nothing -> Isa.TypeSign name' [] Isa.NoType;
+                        Just typ -> convert_type_sign name typ }
+                      return [Isa.Definition sig' (name', rhs'')]
             _   -> dieWithLoc loc (Msg.complex_toplevel_patbinding)
     
 convertDecl pragmas decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
@@ -586,8 +594,8 @@ convertDecl pragmas decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
                              _                           -> False
           convertToTypeSig (Hsx.ClsDecl (Hsx.TypeSig _ names typ))
                   = do names' <- mapM (convert pragmas) names
-                       typ'   <- convert pragmas typ
-                       return (map (flip Isa.TypeSign typ') names')
+                       typ'   <- convert pragmas typ {-FIXME-}
+                       return (map (\name' -> Isa.TypeSign name' [] typ') names')
 
 convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
         | length tys /= 1 = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
@@ -595,6 +603,7 @@ convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
         | otherwise
             = do classqN'   <- convert pragmas classqN
                  type'      <- convert pragmas (head tys)
+                 let (tyco', _) = Isa.dest_Type type'
                  identifier <- lookupIdentifier_Type classqN
                  let classinfo
                                    = case fromJust identifier of
@@ -606,7 +615,7 @@ convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
                  let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
                  withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
                    do decls' <- mapsM (convertDecl pragmas) (map toHsDecl inst_decls)
-                      return [Isa.Instance classqN' type' decls']
+                      return [Isa.Instance classqN' tyco' [] decls'] {- FIXME -}
         where 
           isType t = case t of { Hsx.TyCon _ -> True; _ -> False }
           toHsDecl (Hsx.InsDecl decl) = decl
@@ -615,9 +624,9 @@ convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
           mk_method_annotation tyvarN tycon class_method_annot
               = assert (Env.isTypeAnnotation class_method_annot)
                   $ let lexinfo = Env.lexInfoOf class_method_annot
-                        typ     = Env.typeOf lexinfo
+                        (_, typ)     = Env.typschemeOf lexinfo
                         typ'    = Env.substituteTyVars [(Env.EnvTyVar tyvarN, tycon)] typ
-                    in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typeOf = typ' }))
+                    in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typschemeOf = ([], typ') }))
 
 convertDecl pragmas junk = pattern_match_exhausted "Hsx.Decl -> Isa.Stmt" junk
 
@@ -1114,13 +1123,10 @@ lookupInfixOpName qname
   This function looks up the type for the given identifier.
 -}
 lookupType :: Hsx.QName -> ContextM (Maybe Hsx.Type)
-lookupType fname
-    -- We're interested in the type of a Constant.
-    = do identifier <- lookupIdentifier_Constant fname
-         case identifier of
-           Nothing -> return Nothing
-           Just id -> let typ = Env.typeOf (Env.lexInfoOf id) 
-                      in if (typ == Env.EnvTyNone) then return Nothing
-                                                    else return $ Just (Env.toHsk typ)
-
-
+lookupType fname = do
+  identifier <- lookupIdentifier_Constant fname
+  case identifier of
+    Nothing -> return Nothing
+    Just id -> let typscheme = Env.typschemeOf (Env.lexInfoOf id) 
+               in if snd typscheme == Env.EnvTyNone
+                  then return Nothing else return $ Just (Env.hsk_typ_of_typscheme typscheme)

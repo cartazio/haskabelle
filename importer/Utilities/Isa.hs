@@ -41,9 +41,9 @@ renameIsaCmd thy renamings cmd
                      renameClause rs (n, pats, body) 
                          = (translate thy rs n, pats, alphaConvertTerm thy rs body)
 
-           Isa.Definition sig (p, t) -> Isa.Definition sig' (p', t')
+           Isa.Definition sig (n, t) -> Isa.Definition sig' (n', t')
                where sig' = renameTypeSign thy rs sig
-                     p' = alphaConvertTerm thy rs p
+                     n' = translate thy rs n
                      t' = alphaConvertTerm thy rs t
 
            _ -> error ("renameIsaCmd: Fall through: " ++ show cmd)

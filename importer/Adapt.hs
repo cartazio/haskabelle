@@ -579,10 +579,10 @@ instance Adapt Isa.Stmt where
                                 defs
                   return (Isa.Primrec typesigs' defs')
 
-    adapt (Isa.Definition typesig (pat, term))
+    adapt (Isa.Definition typesig (n, term))
         = do typesig' <- adapt typesig
-             shadowing (accumulate add_const_names pat) $
-               do term' <- adapt term ; return (Isa.Definition typesig' (pat, term'))
+             shadowing [n] $
+               do term' <- adapt term ; return (Isa.Definition typesig' (n, term'))
 
     adapt (Isa.Class classN supclassNs typesigs)
         = do classN'     <- adaptClass classN

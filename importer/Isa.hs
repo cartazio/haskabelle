@@ -93,15 +93,15 @@ data TypeSpec = TypeSpec [Name] Name
 data TypeSign = TypeSign Name [(Name, Sort)] Type
   deriving Show
 
-data Stmt = -- FIXME not all statements are modelled wholly appropriately
+data Stmt =
     Datatype [(TypeSpec, [(Name, [Type])])]
   | Record TypeSpec [(Name, Type)]
   | TypeSynonym [(TypeSpec, Type)]
-  | Definition TypeSign (Pat, Term)
-  | Primrec [TypeSign] [(Name, [Pat], Term)]
-  | Fun [TypeSign] Bool [(Name, [Pat], Term)]
+  | Definition TypeSign (Name, Term)
+  | Primrec [TypeSign] [(Name, [Pat], Term)] -- FIXME separate type for equational specifications
+  | Fun [TypeSign] Bool [(Name, [Pat], Term)] -- and flag: primrec, fun, function (definition syntactically determined)
   | Class Name [Name] [TypeSign]
-  | Instance Name Name [(Name, Sort)] [Stmt] -- FIXME own category for equational specfications needed
+  | Instance Name Name [(Name, Sort)] [Stmt] -- FIXME own category for equational specfications
   | Comment String
   deriving Show
 
@@ -198,7 +198,7 @@ idents_of_stmt (TypeSynonym specs) =
 idents_of_stmt (Definition sig (p, t)) =
   let
     (x1, xs3a) = idents_of_typesign sig
-    xs3b = xs3a |> add_idents_term p |> add_idents_term t
+    xs3b = xs3a |> add_idents_term t
   in (([x1], []), xs3b)
 idents_of_stmt (Primrec sigs eqns) =
   let
