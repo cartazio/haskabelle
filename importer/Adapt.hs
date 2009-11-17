@@ -437,44 +437,41 @@ adapt_type_in_identifier globalEnv tbl n@(Env.EnvQualName mID _)
           = translateEnvType tbl (qualifyTypeName globalEnv (Env.moduleOf lexinfo)) typ
 
 translateEnvType :: AdaptionTable -> (Env.EnvName -> Env.EnvName) -> Env.EnvType -> Maybe Env.EnvType
-translateEnvType (AdaptionTable mappings) qualify typ
-    = let type_renams   = filter (Env.isData . fst) mappings
-          type_renams'  = assert (all (Env.isData . snd) type_renams) 
-                            $ map (\(t1,t2) -> (Env.identifier2name t1, Env.identifier2name t2)) 
-                                  type_renams
-          class_renams  = filter (Env.isClass . fst) mappings
-          class_renams' = assert (all (Env.isClass . snd) class_renams)
-                            $ map (\(c1,c2) -> (Env.identifier2name c1, Env.identifier2name c2))
-                                  class_renams
-          renamings     = type_renams' ++ class_renams'
-      in 
-        case runState (translate renamings typ) False of
-          (_, False)       -> Nothing        -- no match found in AdaptionTable. 
-          (new_type, True) -> Just new_type
-    where 
-      translate :: [(Env.EnvName, Env.EnvName)] -> Env.EnvType -> State Bool Env.EnvType
-      translate alist typ
-          = let transl n = case lookup (qualify n) alist of
-                             Nothing -> return n
-                             Just n' -> do put True; return n'
-                in case typ of 
-                     Env.EnvTyNone      -> return Env.EnvTyNone
-                     Env.EnvTyVar n     -> transl n >>= (return . Env.EnvTyVar)
-                     Env.EnvTyCon n ts  -> do n'  <- transl n
-                                              ts' <- mapM (translate alist) ts
-                                              return (Env.EnvTyCon n' ts')
-                     Env.EnvTyFun t1 t2 -> do t1' <- translate alist t1
-                                              t2' <- translate alist t2
-                                              return (Env.EnvTyFun t1' t2')
-                     Env.EnvTyTuple ts  -> do ts' <- mapM (translate alist) ts
-                                              return (Env.EnvTyTuple ts')
-                     Env.EnvTyScheme ctx t
-                        -> do let (tyvarNs, classNss) = unzip ctx
-                              tyvarNs'  <- mapM transl tyvarNs
-                              classNss' <- mapM (mapM transl) classNss
-                              t'        <- translate alist t
-                              let ctx'   = zip tyvarNs' classNss'
-                              return (Env.EnvTyScheme ctx' t')
+translateEnvType (AdaptionTable mappings) qualify typ = let
+    type_renams = mappings
+      |> filter (Env.isData . fst) 
+      |> asserting (all (Env.isData . snd))
+      |> (map . map_both) Env.identifier2name
+    class_renams  = mappings
+      |> filter (Env.isClass . fst) 
+      |> asserting (all (Env.isClass . snd))
+      |> (map . map_both) Env.identifier2name
+    renamings = type_renams ++ class_renams
+    transl n = case lookup (qualify n) renamings of
+      Nothing -> return n
+      Just n' -> put True >> return n'
+    translate :: Env.EnvType -> State Bool Env.EnvType
+    translate typ = case typ of 
+      Env.EnvTyNone      -> return Env.EnvTyNone
+      Env.EnvTyVar n     -> liftM Env.EnvTyVar (transl n)
+      Env.EnvTyCon n ts  -> do n'  <- transl n
+                               ts' <- mapM translate ts
+                               return (Env.EnvTyCon n' ts')
+      Env.EnvTyFun t1 t2 -> do t1' <- translate t1
+                               t2' <- translate t2
+                               return (Env.EnvTyFun t1' t2')
+      Env.EnvTyTuple ts  -> do ts' <- mapM translate ts
+                               return (Env.EnvTyTuple ts')
+      Env.EnvTyScheme ctx t
+         -> do let (tyvarNs, classNss) = unzip ctx
+               tyvarNs'  <- mapM transl tyvarNs
+               classNss' <- mapM (mapM transl) classNss
+               t'        <- translate t
+               let ctx'   = zip tyvarNs' classNss'
+               return (Env.EnvTyScheme ctx' t')
+  in case runState (translate typ) False of
+    (_, False) -> Nothing        -- no match found in AdaptionTable. 
+    (new_type, True) -> Just new_type
 
 adaptEnvName :: Env.EnvName -> AdaptM Env.EnvName
 adaptEnvName n 
