@@ -86,13 +86,13 @@ flat = List.concat
 maps :: (a -> [b]) -> [a] -> [b]
 maps = List.concatMap
 
-index_to_large :: a
-index_to_large = [] !! 0
+index_too_large :: a
+index_too_large = [] !! 0
 
 nth_map :: Int -> (a -> a) -> [a] -> [a]
 nth_map 0 f (x : xs) = f x : xs
 nth_map n f (x : xs) = x : nth_map (n - 1) f xs
-nth_map _ _ [] = index_to_large
+nth_map _ _ [] = index_too_large
 
 map_index :: ((Int, a) -> b) -> [a] -> [b]
 map_index f = mapp 0 where
