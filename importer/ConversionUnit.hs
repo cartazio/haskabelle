@@ -40,7 +40,7 @@ import Importer.Utilities.Hsk
 
 import qualified Importer.Isa as Isa
 import qualified Importer.Msg as Msg
-import qualified Importer.LexEnv as Env
+import qualified Importer.Env as Env
 
 import qualified Importer.Configuration as Config (getCustomTheory)
 import Importer.Configuration hiding (getCustomTheory)

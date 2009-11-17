@@ -102,7 +102,7 @@ data Module = Module ThyName [ThyName] [Stmt]
   deriving Show
 
 
-{- Identifier categories -}
+{- Identifiers -}
 
 data Ident = ClassI Name | TycoI Name | ConstI Name
   deriving (Eq, Ord, Show)

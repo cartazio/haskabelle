@@ -1,9 +1,4 @@
-{-# LANGUAGE
-  MultiParamTypeClasses,
-  FlexibleContexts,
-  TypeSynonymInstances,
-  GeneralizedNewtypeDeriving #-}
-
+{-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, TypeSynonymInstances, GeneralizedNewtypeDeriving #-}
 
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 
@@ -11,7 +6,7 @@ Definition of a Global Environment for identifier resolution and information
 retrieval.
 -}
 
-module Importer.LexEnv
+module Importer.Env
     ( GlobalE,
       EnvAssoc(..),
       Identifier(..),
@@ -65,7 +60,7 @@ module Importer.LexEnv
     ) where
 
 import Maybe
-import List
+import List (partition, nub)
 import qualified Data.Map as Map
 
 import Control.Monad.Reader
@@ -684,31 +679,29 @@ primitive_datacon_table
       ]
 
 
----
---- LexEnv
 --
---   Part of a Hsx.ModuleName Enviornment. Mappings between identifier's name and the Identifier data type.
+--  Mappings between identifier's name and the Identifier data type.
 --
 
 {-|
   This data structure provides identifier information for constants and types.
 -}
-data LexE = LexEnv (Map.Map IdentifierID Constant) (Map.Map IdentifierID Type)
-  deriving (Show)
+data EnvConstTypes = EnvConstTypes (Map.Map IdentifierID Constant) (Map.Map IdentifierID Type)
+  deriving Show
 
 {-|
   This function takes a list of identifiers (that contain identifier information) and collects the
   identifier information in a lexical environment. The identifiers are normalized, i.e. possibly merged.
 -}
-makeLexEnv :: [Identifier] -> LexE
-makeLexEnv identifiers
+makeEnvConstTypes :: [Identifier] -> EnvConstTypes
+makeEnvConstTypes identifiers
     = let (constants, types) = splitIdentifiers identifiers
           constant_bindings  = zip (map (nameOf . lexInfoOf . Constant) constants) constants
           type_bindings      = zip (map (nameOf . lexInfoOf . Type) types) types
           constants_map      = Map.fromListWith mergeConstants_OrFail constant_bindings
           types_map          = Map.fromListWith mergeTypes_OrFail type_bindings
       in 
-        LexEnv constants_map types_map
+        EnvConstTypes constants_map types_map
                  
 {-|
   Same as 'mergeConstants' but throws an exception if it was not successful.
@@ -781,8 +774,8 @@ mergeConstants c1 c2
   separately. If two identifiers cannot be merged the identifier from the first
   environment is discarded!
 -}
-mergeLexEnvs (LexEnv cmap1 tmap1) (LexEnv cmap2 tmap2)
-    = LexEnv (Map.unionWith constant_merger cmap1 cmap2)
+mergeEnvConstTypess (EnvConstTypes cmap1 tmap1) (EnvConstTypes cmap2 tmap2)
+    = EnvConstTypes (Map.unionWith constant_merger cmap1 cmap2)
              (Map.unionWith type_merger tmap1 tmap2)
     where 
       constant_merger c1 c2 = case mergeConstants c1 c2 of
@@ -791,11 +784,6 @@ mergeLexEnvs (LexEnv cmap1 tmap1) (LexEnv cmap2 tmap2)
       type_merger t1 t2     = case mergeTypes t1 t2 of
                                 Nothing  -> t2
                                 Just res -> res
-
---
--- ModuleEnv 
---
-
 
 {-|
   This data structure represents export declarations.
@@ -825,10 +813,8 @@ data EnvImport = EnvImport ModuleID Bool (Maybe ModuleID)
   This includes the name of the module, a list of its imports, a list of its exports
   and its lexical environment.
 -}
-data ModuleE = ModuleEnv{ moduleEName :: ModuleID,
-                          moduleEImports :: [EnvImport],
-                          moduleEExports :: [EnvExport],
-                          moduleELex :: LexE }
+data EnvModule = EnvModule { moduleEName :: ModuleID, moduleEImports :: [EnvImport],
+    moduleEExports :: [EnvExport], moduleELex :: EnvConstTypes }
   deriving (Show)
 
 {-|
@@ -848,14 +834,14 @@ isQualifiedImport (EnvImport _ isQual _) = isQual
   This function constructs a module environment from a list of imports, a predicate
   indicating which identifier to export and a list of declared identifiers.
 -}
-makeModuleEnv :: [EnvImport] -- ^import declarations
+makeEnvModule :: [EnvImport] -- ^import declarations
               -> (Identifier -> Bool) -- ^predicate indicating which identifiers to export
               -> [Identifier] -- ^declared identifiers
-              -> ModuleE -- ^constructed environment
-makeModuleEnv imports shall_export_p identifiers
+              -> EnvModule -- ^constructed environment
+makeEnvModule imports shall_export_p identifiers
     = let m = moduleOf (lexInfoOf (head identifiers))
       in assert (all (== m) $ map (moduleOf . lexInfoOf) (tail identifiers))
-           $ ModuleEnv m imports exports (makeLexEnv identifiers)
+           $ EnvModule m imports exports (makeEnvConstTypes identifiers)
     where
       exports = map export (filter shall_export_p identifiers)
       export id@(Type (Data _ _)) = EnvExportAll (identifier2name id) 
@@ -864,15 +850,15 @@ makeModuleEnv imports shall_export_p identifiers
 {-|
   This function constructs a module environment from a Haskell module.
 -}
-makeModuleEnv_FromModule :: Hsx.Module ->  LexM ModuleE
-makeModuleEnv_FromModule (Hsx.Module loc modul pragmas warning exports imports topdecls)
-    = let lexenv   = makeLexEnv (concatMap (computeConstantMappings modul) topdecls)
+makeEnvModule_FromModule :: Hsx.Module ->  LexM EnvModule
+makeEnvModule_FromModule (Hsx.Module loc modul pragmas warning exports imports topdecls)
+    = let env = makeEnvConstTypes (concatMap (computeConstantMappings modul) topdecls)
           imports' = map fromHsk imports ++ defaultImports
           exports' = case exports of
                        Nothing -> [EnvExportMod (fromHsk modul)] 
                        Just jexports -> map fromHsk jexports
           mod = fromHsk modul
-      in return $ ModuleEnv mod imports' exports' lexenv
+      in return $ EnvModule mod imports' exports' env
 
 customExportList :: ModuleID -> CustomTheory -> [EnvExport]
 customExportList mod custThy
@@ -882,11 +868,11 @@ customExportList mod custThy
           types' = map (EnvExportAll . EnvQualName mod) types
       in constants' ++ types'
 
-customLexEnv :: ModuleID -> CustomTheory -> LexE
-customLexEnv mod custThy
+customEnvConstTypes :: ModuleID -> CustomTheory -> EnvConstTypes
+customEnvConstTypes mod custThy
     = let constants = getCustomConstants custThy 
           types = getCustomTypes custThy
-      in LexEnv (env Variable constants) (env (`Data` []) types)
+      in EnvConstTypes (env Variable constants) (env (`Data` []) types)
             where env ctr exps = Map.fromListWith (\a b -> a) $ 
                                     map (\a -> (a,ctr $ LexInfo {nameOf = a,typeOf = EnvTyNone, moduleOf = mod})) exps
 
@@ -951,20 +937,20 @@ computeConstantMappings modul decl
 {-|
   This function merges two module environments provided they have the same name (otherwise,
   an exception is thrown). Duplicates in the resulting imports and exports are removed, and 
-  the lexical environment is merged by 'mergeLexEnvs'.
+  the lexical environment is merged by 'mergeEnvConstTypess'.
 -}
 
-mergeModuleEnvs (ModuleEnv m1 is1 es1 lex1) (ModuleEnv m2 is2 es2 lex2)
+mergeEnvModules (EnvModule m1 is1 es1 lex1) (EnvModule m2 is2 es2 lex2)
     = assert (m1 == m2)
-        $ ModuleEnv m1 (nub $ is1 ++ is2) (nub $ es1 ++ es2) (mergeLexEnvs lex1 lex2)
+        $ EnvModule m1 (nub $ is1 ++ is2) (nub $ es1 ++ es2) (mergeEnvConstTypess lex1 lex2)
 
 
 {-|
   This function provides a list of all module names that are imported in fully qualified form.
 -}
 
-importedModuleIDs :: ModuleE -> [ModuleID]
-importedModuleIDs (ModuleEnv _ imports _ _)
+importedModuleIDs :: EnvModule -> [ModuleID]
+importedModuleIDs (EnvModule _ imports _ _)
     = map (\(imp@(EnvImport m isQualified nickname ))
                -> case (isQualified, isJust nickname) of
                     -- Notice: Hsx.ModuleName names can _always_ be explicitly qualified.
@@ -978,7 +964,7 @@ importedModuleIDs (ModuleEnv _ imports _ _)
   This function checks whether the module identified by the given name is imported in the 
   given module environment.
 -}
-isImportedModule :: ModuleID -> ModuleE -> Bool
+isImportedModule :: ModuleID -> EnvModule -> Bool
 isImportedModule moduleID moduleEnv
     = case filter (== moduleID) (importedModuleIDs moduleEnv) of
         []     -> False
@@ -994,7 +980,7 @@ isImportedModule moduleID moduleEnv
 {-|
   This data structure represents a global environment.
 -}
-data GlobalE = GlobalEnv (Map.Map ModuleID ModuleE)
+data GlobalE = GlobalEnv (Map.Map ModuleID EnvModule)
   deriving (Show)
 
 {-|
@@ -1009,7 +995,7 @@ prelude = "Prelude"
 initialGlobalEnv :: GlobalE
 initialGlobalEnv = GlobalEnv 
                      $ Map.singleton prelude 
-                           (ModuleEnv prelude [] [] (LexEnv (Map.empty) (Map.empty)))
+                           (EnvModule prelude [] [] (EnvConstTypes (Map.empty) (Map.empty)))
 
 renameHsModuleNames :: (ModuleID -> Maybe ModuleID) -> GlobalE -> GlobalE
 renameHsModuleNames ren (GlobalEnv env) = GlobalEnv . Map.fromList . map rename . Map.toList $ env
@@ -1034,7 +1020,7 @@ makeGlobalEnv compute_imports shall_export_p identifiers
             $ do let (constants, types) = splitIdentifiers identifiers
                  let types'             = mergeInstancesWithClasses types
                  (moduleID, ids) <- groupIdentifiers (map Constant constants ++ map Type types')
-                 return (moduleID, makeModuleEnv (compute_imports moduleID) shall_export_p ids)
+                 return (moduleID, makeEnvModule (compute_imports moduleID) shall_export_p ids)
     where 
       failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
@@ -1070,15 +1056,15 @@ environmentOf custs ms custMods = runLexM custs $ makeGlobalEnv_FromModule ms cu
 makeGlobalEnv_FromModule :: [Hsx.Module] -> CustomTranslations -> LexM GlobalE
 makeGlobalEnv_FromModule ms  custMods
     = do mapping <- mapM (\ m@(Hsx.Module _ modul _ _ _ _ _) ->
-                         do env <- makeModuleEnv_FromModule m
+                         do env <- makeEnvModule_FromModule m
                             return (fromHsk modul,env) ) ms
-         let custMapping = map (\(m, ct) -> let mid = fromHsk m in (mid, makeModuleEnv_FromCustThy mid ct)) (Map.toList custMods)
+         let custMapping = map (\(m, ct) -> let mid = fromHsk m in (mid, makeEnvModule_FromCustThy mid ct)) (Map.toList custMods)
          return $ GlobalEnv $ Map.fromListWith failDups (mapping ++ custMapping)
     where failDups a b = error ("Duplicate modules: " ++ show a ++ ", " ++ show b)
 
-makeModuleEnv_FromCustThy :: ModuleID -> CustomTheory -> ModuleE
-makeModuleEnv_FromCustThy mod custThy = 
-    ModuleEnv mod [] (customExportList mod custThy) (customLexEnv mod custThy)
+makeEnvModule_FromCustThy :: ModuleID -> CustomTheory -> EnvModule
+makeEnvModule_FromCustThy mod custThy = 
+    EnvModule mod [] (customExportList mod custThy) (customEnvConstTypes mod custThy)
 
 {-|
   This method builds the union of two global environments, prioritising the first one.
@@ -1087,8 +1073,8 @@ makeModuleEnv_FromCustThy mod custThy =
 unionGlobalEnvs :: GlobalE -> GlobalE -> GlobalE
 unionGlobalEnvs globalEnv1 globalEnv2
     = let compute_old_imports mID 
-              = let get_imports (ModuleEnv _ is _ _) = is
-                in case mapMaybe (findModuleEnv mID) [globalEnv1, globalEnv2] of
+              = let get_imports (EnvModule _ is _ _) = is
+                in case mapMaybe (findEnvModule mID) [globalEnv1, globalEnv2] of
                      []      -> error ("unionGlobalEnvs: Internal error during computation of imports.")
                      [m]     -> get_imports m
                      [m1,m2] -> get_imports m1 ++ get_imports m2
@@ -1110,7 +1096,7 @@ unionGlobalEnvs globalEnv1 globalEnv2
                          -> let env1 = if Map.member m map1 then moduleEnv1 else moduleEnv2
                                 env2 = if Map.member m map1 then moduleEnv2 else moduleEnv1
                             in
-                               mergeModuleEnvs env1 env2)
+                               mergeEnvModules env1 env2)
                     map1 map2
 
 
@@ -1118,14 +1104,14 @@ unionGlobalEnvs globalEnv1 globalEnv2
   This method looks up the module environment in the given global environment using
   the given module name.
 -}
-findModuleEnv :: ModuleID -> GlobalE -> Maybe ModuleE
-findModuleEnv mID (GlobalEnv globalmap)
+findEnvModule :: ModuleID -> GlobalE -> Maybe EnvModule
+findEnvModule mID (GlobalEnv globalmap)
     = Map.lookup mID globalmap
 {-|
-  Same as 'findModuleEnv' but throws an exception on failure.
+  Same as 'findEnvModule' but throws an exception on failure.
 -}
-findModuleEnv_OrLose m globalEnv
-    = case findModuleEnv m globalEnv of
+findEnvModule_OrLose m globalEnv
+    = case findEnvModule m globalEnv of
         Just env -> env
         Nothing  -> error ("Couldn't find module `" ++ show m ++ "'.")
 
@@ -1135,16 +1121,16 @@ findModuleEnv_OrLose m globalEnv
 -}
 computeExportedNames :: ModuleID -> GlobalE -> [IdentifierID]
 computeExportedNames moduleID globalEnv
-    = case findModuleEnv moduleID globalEnv of
+    = case findEnvModule moduleID globalEnv of
         Nothing -> []
-        Just (ModuleEnv moduleID' _ exports (LexEnv constants_map types_map))
+        Just (EnvModule moduleID' _ exports (EnvConstTypes constants_map types_map))
             -> assert (moduleID == moduleID') $ do
                   export <- exports   -- List Monad concats implicitly for us.
                   case export of         
                     EnvExportVar   qn -> [idOf (unqualifyEnvName moduleID qn)]
                     EnvExportAbstr qn -> [idOf (unqualifyEnvName moduleID qn)]
                     EnvExportAll qn 
-                        -> case Importer.LexEnv.lookupType moduleID qn globalEnv of
+                        -> case lookupType moduleID qn globalEnv of
                              Just t@(Type (Data _ constructors))
                                  -> let id_of = nameOf . lexInfoOf
                                     in id_of t : map (id_of . Constant . Constructor) constructors
@@ -1171,8 +1157,8 @@ isExported identifier moduleID globalEnv
   This function is supposed to be used to get the full-qualified name for a alias of
   a module name.
 -}
-resolveModuleID :: ModuleID -> ModuleE -> ModuleID
-resolveModuleID moduleID (ModuleEnv _ imps _ _)
+resolveModuleID :: ModuleID -> EnvModule -> ModuleID
+resolveModuleID moduleID (EnvModule _ imps _ _)
     = fromMaybe moduleID (lookfor moduleID imps)
     where 
       lookfor _ [] = Nothing
@@ -1222,27 +1208,27 @@ resolveModuleID moduleID (ModuleEnv _ imps _ _)
   Note that types and constants have different namespaces. Hence the result can be a type
   and a constant.
 -}
-lookup :: ModuleID -> EnvName -> GlobalE -> (Maybe Constant, Maybe Type)
-lookup currentModule qname globalEnv 
+lookupName :: ModuleID -> EnvName -> GlobalE -> (Maybe Constant, Maybe Type)
+lookupName currentModule qname globalEnv 
     = let (cs, ts) = splitIdentifiers (lookup' currentModule qname globalEnv)
       in (listToMaybe cs, listToMaybe ts)
     where
       lookup' :: ModuleID -> EnvName -> GlobalE -> [Identifier]
       lookup' currentModule qname globalEnv                            
-          = case findModuleEnv currentModule globalEnv of
+          = case findEnvModule currentModule globalEnv of
               Nothing -> []
-              Just currentModuleEnv ->
+              Just currentEnvModule ->
                   case qname of
                     EnvQualName m n 
                         | m == currentModule
                             -> lookup' m (EnvUnqualName n) globalEnv
-                        | isImportedModule (resolveModuleID m currentModuleEnv) currentModuleEnv
+                        | isImportedModule (resolveModuleID m currentEnvModule) currentEnvModule
                             -> let identifiers = lookup' m (EnvUnqualName n) globalEnv
                               in (filter (\id -> isExported id m globalEnv) identifiers)
                         | otherwise 
                             -> []
                     EnvUnqualName n ->
-                        let (ModuleEnv _ imports _ (LexEnv cmap tmap)) = currentModuleEnv
+                        let (EnvModule _ imports _ (EnvConstTypes cmap tmap)) = currentEnvModule
                             local_con = Map.lookup n cmap
                             local_typ = Map.lookup n tmap      
                             others    = concatMap (\(EnvImport m _ _) -> lookup' currentModule (EnvQualName m n) globalEnv)
@@ -1265,7 +1251,7 @@ lookup currentModule qname globalEnv
 -}
 lookupIdentifiers_OrLose :: ModuleID -> EnvName -> GlobalE -> [Identifier]
 lookupIdentifiers_OrLose mID n globalEnv
-    = case Importer.LexEnv.lookup mID n globalEnv of
+    = case lookupName mID n globalEnv of
          (Just c, Nothing)  -> [Constant c]
          (Nothing, Just t)  -> [Type t]
          (Just c, Just t)   -> [Constant c, Type t]
@@ -1277,7 +1263,7 @@ lookupIdentifiers_OrLose mID n globalEnv
 -}
 lookupConstant :: ModuleID -> EnvName -> GlobalE -> Maybe Identifier
 lookupConstant m n env
-    = case Importer.LexEnv.lookup m n env of
+    = case lookupName m n env of
           (Just c, _) -> Just (Constant c)
           _           -> Nothing
 
@@ -1296,7 +1282,7 @@ lookupConstant_OrLose m n env
 -}
 lookupType :: ModuleID -> EnvName -> GlobalE -> Maybe Identifier
 lookupType m n env
-    = case Importer.LexEnv.lookup m n env of
+    = case lookupName m n env of
         (_, Just t) -> Just (Type t)
         _           -> Nothing
 
@@ -1313,7 +1299,7 @@ lookupType_OrLose m n env
 -}
 lookupImports_OrLose :: ModuleID -> GlobalE -> [EnvImport]
 lookupImports_OrLose moduleID globalEnv
-    = let (ModuleEnv _ imps _ _) = findModuleEnv_OrLose moduleID globalEnv 
+    = let (EnvModule _ imps _ _) = findEnvModule_OrLose moduleID globalEnv 
       in imps
 
 {-|
@@ -1322,7 +1308,7 @@ lookupImports_OrLose moduleID globalEnv
 -}
 resolveEnvName_OrLose :: GlobalE -> ModuleID -> EnvName -> EnvName
 resolveEnvName_OrLose globalEnv mID name
-    = case Importer.LexEnv.lookup mID name globalEnv of
+    = case lookupName mID name globalEnv of
         (Just c, Nothing)  -> constant2name c
         (Nothing, Just t)  -> type2name t
         (Nothing, Nothing) -> error (Msg.failed_lookup "Constant or Type" mID name globalEnv)
@@ -1354,7 +1340,7 @@ resolveTypeName globalEnv mID name
 -}
 allIdentifiers :: GlobalE -> [Identifier]
 allIdentifiers (GlobalEnv modulemap)
-    = concatMap (\(ModuleEnv _ _ _ (LexEnv cmap tmap)) 
+    = concatMap (\(EnvModule _ _ _ (EnvConstTypes cmap tmap)) 
                      -> map Constant (Map.elems cmap) ++
                         map Type (Map.elems tmap))
         $ Map.elems modulemap
@@ -1376,7 +1362,7 @@ updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
           rev_mod_tbl = Map.fromListWith (failDups "rev_mod_tbl")        -- Map from old_mID to [new_mID]
                           (groupAlist [ (o,n) | (n,o) <- mod_alist ]) 
 
-          -- The new ModuleE gets the same imports as the old ModuleE, but we
+          -- The new EnvModule gets the same imports as the old EnvModule, but we
           -- have to account for old imports being possibly updated themselves.
           -- E.g. if `Foo' imported `Prelude', and `Prelude` was split into `List', 
           -- and `Datatype`, then 'Foo' now has to import 'Prelude', 'List', 
@@ -1384,8 +1370,8 @@ updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
           recompute_imports new_mID
               = let old_mID         = fromMaybe (error $ "Internal error: New module " ++ new_mID ++ " not found during update of global environment!")
                                       (Map.lookup new_mID mod_tbl)
-                    old_mEnv        = findModuleEnv_OrLose old_mID globalEnv
-                    old_imports     = (let (ModuleEnv _ imps _ _) = old_mEnv in imps)
+                    old_mEnv        = findEnvModule_OrLose old_mID globalEnv
+                    old_imports     = (let (EnvModule _ imps _ _) = old_mEnv in imps)
                     old_import_mIDs = importedModuleIDs old_mEnv
                 in  
                   do (old_imported_mID, old_import) <- zip old_import_mIDs old_imports
@@ -1397,8 +1383,8 @@ updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
                                    in if old_imported_mID `elem` mIDs then new_imports
                                                                       else old_import : new_imports
 
-          -- The new ModuleE must export all those identifiers that are the same
-          -- as the exported identifiers in the old ModuleE, and all those that
+          -- The new EnvModule must export all those identifiers that are the same
+          -- as the exported identifiers in the old EnvModule, and all those that
           -- resulted from updating any such identifier.
           recompute_exports new_id
               = or (do old_id  <- fromMaybe (error $ "Internal error: New identifier " ++ show new_id ++ " not found during update of global environment!")

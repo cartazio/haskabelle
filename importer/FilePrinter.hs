@@ -16,7 +16,7 @@ import Importer.Convert
 import Importer.Adapt (Adaption (..), AdaptionTable, readAdapt, preludeFile)
 import Importer.Configuration
 import Importer.Printer (pprint)
-import Importer.LexEnv
+import Importer.Env
 import qualified Importer.Isa as Isa  (Module(..), ThyName(..))
 import Importer.Utilities.Hsk
 

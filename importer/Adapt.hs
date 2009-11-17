@@ -20,7 +20,7 @@ import qualified Language.Haskell.Exts as Hsx
 import Importer.Utilities.Hsk (extractBindingNs)
 import qualified Importer.Isa as Isa
 import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign, prettyShow')
-import qualified Importer.LexEnv as Env
+import qualified Importer.Env as Env
 import Importer.ConversionUnit (IsaUnit(IsaUnit))
 
 
@@ -559,7 +559,7 @@ instance Adapt Isa.Stmt where
                                      -> do funN' <- adaptName funN
                                            assert (funN `elem` funNs) $ return ()
                                            pats' <- mapM adapt pats
-                                           shadowing (concatMap extractNames pats') $
+                                           shadowing (accumulate (fold add_const_names) pats') $
                                              do body' <- adapt body ; return (funN', pats', body'))
                                 defs
                   return (Isa.Fun typesigs' permissive defs')
@@ -572,14 +572,14 @@ instance Adapt Isa.Stmt where
                                      -> do funN' <- adaptName funN
                                            assert (funN `elem` funNs) $ return ()
                                            pats' <- mapM adapt pats
-                                           shadowing (concatMap extractNames pats') $
+                                           shadowing (accumulate (fold add_const_names) pats') $
                                              do body' <- adapt body ; return (funN', pats', body'))
                                 defs
                   return (Isa.Primrec typesigs' defs')
 
     adapt (Isa.Definition typesig (pat, term))
         = do typesig' <- adapt typesig
-             shadowing (extractNames pat) $
+             shadowing (accumulate add_const_names pat) $
                do term' <- adapt term ; return (Isa.Definition typesig' (pat, term'))
 
     adapt (Isa.Class classN supclassNs typesigs)
@@ -655,7 +655,7 @@ instance Adapt Isa.Term where
 
     adapt (Isa.Let bindings body)
         = do pats' <- mapM adapt (map fst bindings)
-             nested_binding (zipWith (\p' t -> (extractNames p', adapt t))
+             nested_binding (zipWith (\p' t -> (accumulate add_const_names p', adapt t))
                                      pats' (map snd bindings)) $
                \terms' -> do body' <- adapt body
                              return (Isa.Let (zip pats' terms') body')
@@ -664,7 +664,7 @@ instance Adapt Isa.Term where
         = do term'     <- adapt term
              patterns' <- mapM (\(pat, body) 
                                     -> do pat' <- adapt pat
-                                          shadowing (extractNames pat') $
+                                          shadowing (accumulate add_const_names pat') $
                                             do body' <- adapt body
                                                return (pat', body'))
                                patterns
@@ -678,7 +678,7 @@ instance Adapt Isa.Term where
         adpt e (Isa.Generator (pat, exp) : rest) stmts'
             = do pat' <- adapt pat
                  exp' <- adapt exp
-                 shadowing (extractNames pat') $ 
+                 shadowing (accumulate add_const_names pat') $ 
                    adpt e rest (Isa.Generator (pat', exp') : stmts')
     adapt (Isa.DoBlock pre stmts post) = 
         do stmts' <- mapM adapt stmts
@@ -689,7 +689,7 @@ instance Adapt Isa.DoBlockFragment where
     adapt (Isa.DoQualifier exp) = liftM Isa.DoQualifier $ adapt exp
 
                
-extractNames :: Isa.Term -> [Isa.Name]
-extractNames (Isa.Const n)                   = [n]
-extractNames (Isa.App t1 t2)               = extractNames t1 ++ extractNames t2
-extractNames etc = []
+add_const_names :: Isa.Term -> [Isa.Name] -> [Isa.Name]
+add_const_names (Isa.Const n) = insert n
+add_const_names (Isa.App t1 t2) = add_const_names t1 *> add_const_names t2
+add_const_names _ = id

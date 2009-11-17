@@ -20,7 +20,7 @@ import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd,
 import Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
 
 import qualified Importer.Isa as Isa
-import qualified Importer.LexEnv as Env
+import qualified Importer.Env as Env
 
 import Importer.Adapt (AdaptionTable(AdaptionTable))
 

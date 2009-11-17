@@ -40,7 +40,7 @@ import qualified Importer.Isa as Isa
 import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign, prettyShow, prettyShow')
 
 import qualified Importer.Msg as Msg
-import qualified Importer.LexEnv as Env
+import qualified Importer.Env as Env
 
 import Importer.Configuration hiding (getMonadInstance)
 import qualified Importer.Configuration as Config (getMonadInstance)
