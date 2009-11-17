@@ -26,6 +26,9 @@ module Importer.Env
       toHsk,
       fromIsa,
       toIsa,
+      typscheme_of_hsk_typ,
+      hsk_typ_of_typscheme,
+      isa_of_sort,
       resolveEnvName_OrLose,
       makeLexInfo,
       makeClassInfo,
@@ -112,7 +115,6 @@ data EnvType = EnvTyVar EnvName
              | EnvTyCon EnvName [EnvType]
              | EnvTyFun EnvType EnvType
              | EnvTyTuple [EnvType]
-             | EnvTyScheme [(EnvName, [EnvName])] EnvType
              | EnvTyNone
   deriving (Eq, Ord, Show)
 
@@ -193,12 +195,11 @@ substituteTyVars alist typ
   an identifier
 -}
 
-data LexInfo = LexInfo { 
-                        nameOf   :: IdentifierID,
-                        typeOf   :: EnvType,
-                        moduleOf :: ModuleID
-                       }
-  deriving (Eq, Ord, Show)
+data LexInfo = LexInfo {
+  nameOf :: IdentifierID,
+  typschemeOf :: ([(EnvName, [EnvName])], EnvType),
+  moduleOf :: ModuleID
+} deriving (Eq, Ord, Show)
 
 
 {-| 
@@ -265,13 +266,12 @@ data Identifier = Constant Constant
   This function constructs a identifier information structure, given a module
   the identifier and the type of the identifier.
 -}
-makeLexInfo :: ModuleID -> IdentifierID -> EnvType -> LexInfo
-makeLexInfo moduleID identifierID t
-    = let mID = (if moduleID == "" then prelude else moduleID)
-      in 
-        LexInfo { nameOf   = identifierID,
-                  typeOf   = t,
-                  moduleOf = mID }
+makeLexInfo :: ModuleID -> IdentifierID -> ([(EnvName, [EnvName])], EnvType) -> LexInfo
+makeLexInfo moduleID identifierID t = LexInfo {
+  nameOf   = identifierID,
+  typschemeOf = t,
+  moduleOf = if moduleID == "" then prelude else moduleID
+}
 
 {-|
   This function constructs a class information structure, given a list of its
@@ -427,6 +427,7 @@ updateIdentifier identifier lexinfo
       updateType (Data _ conNs) lexinfo          = Data lexinfo conNs
       updateType (Class _ classinfo) lexinfo     = Class lexinfo classinfo
       updateType (Instance _ instinfo) lexinfo   = Instance lexinfo instinfo
+      updateType (TypeDef _) lexinfo             = TypeDef lexinfo
 {-|
   This function provides the environment name for the given identifier
 -}
@@ -526,14 +527,6 @@ instance Hsk2Env Hsx.Type EnvType where
         type2' = fromHsk type2
       in EnvTyFun type1' type2'
 
-    fromHsk (Hsx.TyForall _ [] typ)  = fromHsk typ
-    fromHsk (Hsx.TyForall _ ctx typ) =
-      EnvTyScheme (groupAlist $ concatMap dest_entry ctx) (fromHsk typ)
-      where
-        dest_entry (Hsx.ClassA classqN typs) =
-          [ (fromHsk tyvarN, fromHsk classqN) | tyvarN <- map dest_tyvar typs ]
-        dest_tyvar (Hsx.TyVar tyvarN) = tyvarN
-
     -- Types aren't curried or partially appliable in HOL, so we must pull a nested
     -- chain of type application inside out:
     --
@@ -551,6 +544,7 @@ instance Hsk2Env Hsx.Type EnvType where
                 split junk                                --  the head of the returned list.
                     = error ("Hsx.Type -> EnvType (split Hsx.TyApp): " ++ (show junk))
 
+    {-fromHsk (Hsx.TyForall _ _ typ) = fromHsk typ |> tracing (const "illegal typscheme")-}
     fromHsk junk = error ("Hsx.Type -> EnvType: Fall Through: " ++ Isa.prettyShow' "thing" junk)
 
     toHsk (EnvTyVar n)          = Hsx.TyVar (toHsk n)
@@ -561,15 +555,29 @@ instance Hsk2Env Hsx.Type EnvType where
         = let tycon'            = toHsk (EnvTyCon qn [])
               tyvar':tyvars'    = map toHsk tyvars
           in foldl Hsx.TyApp (Hsx.TyApp tycon' tyvar') tyvars'
-    toHsk (EnvTyScheme alist t) = Hsx.TyForall Nothing ctx (toHsk t)
+
+typscheme_of_hsk_typ :: Hsx.Type -> ([(EnvName, [EnvName])], EnvType)
+typscheme_of_hsk_typ (Hsx.TyForall _ ctx typ) = (vs, fromHsk typ)
+  where
+    dest_entry (Hsx.ClassA classqN typs) =
+      [ (fromHsk tyvarN, fromHsk classqN) | tyvarN <- map dest_tyvar typs ]
+    dest_tyvar (Hsx.TyVar tyvarN) = tyvarN
+    vs = if null ctx then [] else groupAlist (concatMap dest_entry ctx)
+typscheme_of_hsk_typ typ = ([], fromHsk typ)
+
+hsk_typ_of_typscheme :: ([(EnvName, [EnvName])], EnvType) -> Hsx.Type
+hsk_typ_of_typscheme (vs, typ) = Hsx.TyForall Nothing vs' (toHsk typ) where
+  vs_aux = groupAlist $ concat [ map (flip (,) tyvarN) classNs | (tyvarN, classNs) <- vs ]
+  vs' = [ Hsx.ClassA (toHsk classN) (map (Hsx.TyVar . toHsk) tyvarNs) | (classN, tyvarNs) <- vs_aux ]
+
+{-    toHsk (EnvTyScheme alist t) = Hsx.TyForall Nothing ctx (toHsk t)
         where
           revalist = groupAlist 
                        $ concat [ map (flip (,) tyvarN) classNs | (tyvarN, classNs) <- alist ]
           ctx      = [ Hsx.ClassA (toHsk classN) (map (Hsx.TyVar . toHsk) tyvarNs) 
                            | (classN, tyvarNs) <- revalist ]
 
-    toHsk junk = error ("EnvType -> Hsx.Type: Fall Through: " ++ Isa.prettyShow' "thing" junk)
-
+    toHsk junk = error ("EnvType -> Hsx.Type: Fall Through: " ++ Isa.prettyShow' "thing" junk) -}
 instance Hsk2Env Hsx.ExportSpec EnvExport where
     fromHsk (Hsx.EVar qname)        = EnvExportVar   (fromHsk qname)
     fromHsk (Hsx.EAbs qname)        = EnvExportAbstr (fromHsk qname)
@@ -621,16 +629,15 @@ instance Isa2Env Isa.Type EnvType where
     fromIsa (Isa.Prod types)   = EnvTyTuple (map fromIsa types)
     fromIsa (Isa.Func t1 t2)     = EnvTyFun (fromIsa t1) (fromIsa t2)
     fromIsa (Isa.Type qn tyvars) = EnvTyCon (fromIsa qn) (map fromIsa tyvars)
-    fromIsa (Isa.TyScheme ctx t)  = EnvTyScheme ctx' (fromIsa t)
-        where ctx' = [ (fromIsa vN, map fromIsa cNs) | (vN, cNs) <- ctx ]
     
     toIsa (EnvTyNone)             = Isa.NoType
     toIsa (EnvTyVar n)            = Isa.TVar (toIsa n)
     toIsa (EnvTyTuple types)      = Isa.Prod (map toIsa types)
     toIsa (EnvTyFun t1 t2)        = Isa.Func (toIsa t1) (toIsa t2)
     toIsa (EnvTyCon qn tyvars)    = Isa.Type (toIsa qn) (map toIsa tyvars)
-    toIsa (EnvTyScheme ctx t)     = Isa.TyScheme ctx' (toIsa t)
-        where ctx' = [ (toIsa vN, map toIsa cNs) | (vN, cNs) <- ctx ]
+
+isa_of_sort :: [EnvName] -> [Isa.Name]
+isa_of_sort = map toIsa
 
 {-|
   This data type represents which kind a particular constructor is of. 
@@ -763,8 +770,8 @@ mergeConstants c1 c2
                     (_,_) -> Nothing
         in case merge c1 c2 of { Just c' -> Just c'; Nothing -> merge c2 c1 }
     where 
-      update lexinfo@(LexInfo { typeOf = EnvTyNone }) (LexInfo { typeOf = typ })
-          = lexinfo { typeOf = typ }
+      update lexinfo@(LexInfo { typschemeOf = ([], EnvTyNone) }) (LexInfo { typschemeOf = typ })
+          = lexinfo { typschemeOf = typ }
       update lexinfo typ    -- Cannot merge + internal inconsistency.
           = error ("Internal Error (mergeLexInfo): Type collision between `" ++ show lexinfo ++ "'" 
                    ++ " and `" ++ show typ ++ "'.")
@@ -874,7 +881,7 @@ customEnvConstTypes mod custThy
           types = getCustomTypes custThy
       in EnvConstTypes (env Variable constants) (env (`Data` []) types)
             where env ctr exps = Map.fromListWith (\a b -> a) $ 
-                                    map (\a -> (a,ctr $ LexInfo {nameOf = a,typeOf = EnvTyNone, moduleOf = mod})) exps
+                                    map (\a -> (a,ctr $ LexInfo {nameOf = a, typschemeOf = ([], EnvTyNone), moduleOf = mod})) exps
 
 {-|
   This function infers identifier information for the identifiers mentioned in the given Haskell 
@@ -885,12 +892,12 @@ computeConstantMappings modul decl
     = do name <- namesFromDecl decl
          let nameID         = fromHsk name
          let moduleID       = fromHsk modul
-         let defaultLexInfo = LexInfo { nameOf=nameID, typeOf=EnvTyNone, moduleOf=moduleID}
+         let defaultLexInfo = LexInfo { nameOf=nameID, typschemeOf=([], EnvTyNone), moduleOf=moduleID}
          case decl of
            Hsx.PatBind _ _ _ _           -> [Constant (Variable defaultLexInfo)]
            Hsx.FunBind _                 -> [Constant (Function defaultLexInfo)]
            Hsx.InfixDecl _ a p _         -> [Constant (InfixOp  defaultLexInfo (fromHsk a) p)]
-           Hsx.TypeSig _ _ typ           -> [Constant (TypeAnnotation (defaultLexInfo { typeOf = fromHsk typ}))]
+           Hsx.TypeSig _ _ typ           -> [Constant (TypeAnnotation (defaultLexInfo { typschemeOf = typscheme_of_hsk_typ typ }))]
            Hsx.ClassDecl _ ctx _ ns _ ds -> let
                sups      = map fromHsk (extractSuperclassNs ctx)
                typesigs  = extractMethodSigs ds
@@ -908,7 +915,7 @@ computeConstantMappings modul decl
                       constructors' = map (Constant . Constructor) constructors
                       fields = concatMap mkRecordFields constructors
                       fields' = mergeFields fields
-                  in [Type (Data (defaultLexInfo { typeOf = tycon }) constructors)] ++ constructors'
+                  in [Type (Data (defaultLexInfo { typschemeOf = ([], tycon) }) constructors)] ++ constructors'
                          ++ fields'
                where
                  mergeFields fields = Map.elems $ Map.fromListWith mergePair fields
@@ -916,7 +923,7 @@ computeConstantMappings modul decl
                      = (Constant (Field lex (constrs ++ constrs')))
                  mkRecordFields (SimpleConstr _ _) = []
                  mkRecordFields constr@(RecordConstr _ _ fields) = 
-                     let mkField (RecordField id ty) = (id,Constant (Field (LexInfo id ty moduleID) [constr]))
+                     let mkField (RecordField id ty) = (id,Constant (Field (LexInfo id ([], ty) moduleID) [constr]))
                      in map mkField fields
                  mkType name tyvarNs 
                    = EnvTyCon name $ map (EnvTyVar . fromHsk) tyvarNs
@@ -925,13 +932,13 @@ computeConstantMappings modul decl
                  mkDataCon :: EnvType -> Hsx.QualConDecl -> Constructor
                  mkDataCon tycon (Hsx.QualConDecl _ _ _ (Hsx.ConDecl n args))
                      = let typ = foldr EnvTyFun tycon (map (fromHsk. unBang) args)
-                       in SimpleConstr conNe (makeLexInfo moduleID (fromHsk n) typ)
+                       in SimpleConstr conNe (makeLexInfo moduleID (fromHsk n) ([], typ))
                  mkDataCon tycon (Hsx.QualConDecl _ _ _ (Hsx.RecDecl name fields))
                      = let fields' = flattenRecFields fields
                            typ = foldr EnvTyFun tycon (map (fromHsk. snd) fields')
                            mkField (n,ty) = RecordField (fromHsk n) (fromHsk ty)
                            recFields = map mkField fields'
-                       in RecordConstr conNe (makeLexInfo moduleID (fromHsk name) typ) recFields
+                       in RecordConstr conNe (makeLexInfo moduleID (fromHsk name) ([], typ)) recFields
            Hsx.TypeDecl _ typeName _ _ -> [Type (TypeDef defaultLexInfo)]
 
 {-|

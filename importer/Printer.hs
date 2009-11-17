@@ -294,14 +294,14 @@ instance Printer Isa.Stmt where
           <+> (if null superclassNs || null typesigs then empty else plus) $$
             space <> space <>
               vcat (zipWith (<+>) (repeat (text "fixes")) (map ppSig typesigs))
-        where ppSig (Isa.TypeSign n t)
-                  = pprint' adapt reserved n <+> text "::" <+> pprint' adapt reserved t
+        where ppSig (Isa.TypeSign n arities t)
+                  = pprint' adapt reserved n <+> text "::" <+> withTyScheme arities (pprint' adapt reserved t)
           
-    pprint' adapt reserved (Isa.Instance classN typ cmds)
+    pprint' adapt reserved (Isa.Instance classN tycoN arities cmds)
         = do thy <- queryPP currentTheory
-             let cmds' = map (renameInstanceCmd thy typ) cmds
-             blankline $
-               text "instantiation" <+> pprint' adapt reserved typ <+> text "::" <+> pprint' adapt reserved classN $$
+             let cmds' = map (renameInstanceCmd thy (Isa.Type tycoN (map (Isa.TVar . fst) arities))) cmds
+             blankline $ {- FIMXE arguments -}
+               text "instantiation" <+> pprint' adapt reserved tycoN <+> text "::" <+> pprint' adapt reserved classN $$
                text "begin" $$
                space <> space <> vcat (map (pprint' adapt reserved) cmds') $$
                (blankline $
@@ -387,9 +387,6 @@ instance Printer Isa.Type where
         parcommas (map (pprint' adapt reserved) typs)
         <+> pprint' adapt reserved cname
 
-    pprint' adapt reserved (Isa.TyScheme [] t)  = pprint' adapt reserved t
-    pprint' adapt reserved (Isa.TyScheme ctx t) = withTyScheme ctx (pprint' adapt reserved t)
-
     pprint' adapt reserved (Isa.Func t1 t2)
         = maybeWithinHOL $
             case t1 of Isa.Func _ _ -> parens (pprint' adapt reserved t1) <+> rightarrow <+> pprint' adapt reserved t2
@@ -401,8 +398,9 @@ instance Printer Isa.Type where
 
 
 instance Printer Isa.TypeSign where
-  pprint' adapt reserved (Isa.TypeSign name Isa.NoType) = pprint' adapt reserved name
-  pprint' adapt reserved (Isa.TypeSign name typ) = pprint' adapt reserved name <+> text "::" <+> maybeWithinHOL (pprint' adapt reserved typ)
+  pprint' adapt reserved (Isa.TypeSign name _ Isa.NoType) = pprint' adapt reserved name
+  pprint' adapt reserved (Isa.TypeSign name arities typ) = pprint' adapt reserved name <+> text "::"
+    <+> maybeWithinHOL (withTyScheme arities (pprint' adapt reserved typ))
     
 instance Printer Isa.Literal where
     -- We annotate Integer literals explicitly to be of our sort "num"
@@ -509,9 +507,6 @@ mk_isFoo adapt foo n = case reAdaptEnvName adapt (Env.fromIsa n) of
 isNil adapt = mk_isFoo adapt Hsx.ListCon
 isCons adapt = mk_isFoo adapt Hsx.Cons
 isPairCon adapt = mk_isFoo adapt (Hsx.TupleCon 2)
-
-isEmptySig (Isa.TypeSign _ Isa.NoType) = True
-isEmptySig _ = False
 
 pprintAsList :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
 pprintAsList adapt reserved list = let

@@ -8,7 +8,7 @@ Abstract representation of Isar/HOL theory.
 module Importer.Isa (ThyName(..), Name(..), Type(..), Literal(..), Term(..), Pat,
   ListComprFragment(..), DoBlockFragment(..),
   Stmt(..), TypeSpec(..), TypeSign(..), Module(..),
-  retopologize, base_name_of) where
+  dest_Type, dest_TVar, retopologize, base_name_of) where
 
 import Data.Graph as Graph
 
@@ -37,14 +37,21 @@ base_name_of (Name n) = n
 
 {- Expressions -}
 
+type Sort = [Name]
+
 data Type =
     Type Name [Type]
   | Func Type Type
   | Prod [Type]
   | TVar Name
   | NoType
-  | TyScheme [(Name, [Name])] Type -- FIXME remove from this type, occurs only at statements
   deriving Show
+
+dest_Type :: Type -> (Name, [Type])
+dest_Type (Type n tys) = (n, tys)
+
+dest_TVar :: Type -> Name
+dest_TVar (TVar n) = n
 
 data Literal = Int Integer | Char Char | String String
   deriving Show
@@ -83,7 +90,7 @@ data DoBlockFragment =
 data TypeSpec = TypeSpec [Name] Name
   deriving Show
 
-data TypeSign = TypeSign Name Type -- FIXME integrate type schemes here
+data TypeSign = TypeSign Name [(Name, Sort)] Type
   deriving Show
 
 data Stmt = -- FIXME not all statements are modelled wholly appropriately
@@ -94,7 +101,7 @@ data Stmt = -- FIXME not all statements are modelled wholly appropriately
   | Primrec [TypeSign] [(Name, [Pat], Term)]
   | Fun [TypeSign] Bool [(Name, [Pat], Term)]
   | Class Name [Name] [TypeSign]
-  | Instance Name Type [Stmt] -- FIXME own category for equational specfications
+  | Instance Name Name [(Name, Sort)] [Stmt] -- FIXME own category for equational specfications needed
   | Comment String
   deriving Show
 
@@ -102,7 +109,7 @@ data Module = Module ThyName [ThyName] [Stmt]
   deriving Show
 
 
-{- Identifiers -}
+{- Identifier categories -}
 
 data Ident = ClassI Name | TycoI Name | ConstI Name
   deriving (Eq, Ord, Show)
@@ -118,8 +125,6 @@ add_idents_type (TVar _) =
   id
 add_idents_type NoType =
   id
-add_idents_type (TyScheme vs ty) =
-  fold (insert . ClassI) (concatMap snd vs) *> add_idents_type ty-- FIXME
 
 add_idents_term :: Term -> [Ident] -> [Ident]
 add_idents_term (Literal _) =
@@ -165,9 +170,12 @@ add_idents_typespec :: TypeSpec -> [Ident] -> [Ident]
 add_idents_typespec (TypeSpec _ n) =
   insert (TycoI n)
 
+idents_of_typctxt :: [(Name, Sort)] -> [Ident]
+idents_of_typctxt = map ClassI . maps snd
+
 idents_of_typesign :: TypeSign -> (Ident, [Ident])
-idents_of_typesign (TypeSign n ty) =
-  (ConstI n, accumulate add_idents_type ty)
+idents_of_typesign (TypeSign n vs ty) =
+  (ConstI n, accumulate add_idents_type ty ++ idents_of_typctxt vs)
 
 idents_of_stmt :: Stmt -> (([Ident], [Ident]), [Ident])
 idents_of_stmt (Datatype specs) =
@@ -208,9 +216,9 @@ idents_of_stmt (Class n superclasses sigs) =
     (xs2, xs3a) = map_split idents_of_typesign sigs
     xs3b = flat xs3a |> fold (insert . ClassI) superclasses
   in (([x1], xs2), xs3b)
-idents_of_stmt (Instance n ty stmts) = -- this is only an approximation
+idents_of_stmt (Instance c tyco vs stmts) = -- this is only an approximation
   let
-    xs3a = [ClassI n] |> add_idents_type ty
+    xs3a = ClassI c : TycoI tyco : idents_of_typctxt vs
     (_, xs3b) = map_split idents_of_stmt stmts
     xs3 = fold insert (flat xs3b) xs3a
   in (([], []), xs3)

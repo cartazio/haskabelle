@@ -29,7 +29,7 @@ renameTyVarInType thy (from, to) typ
            Isa.NoType      -> Isa.NoType
 
 renameTypeSign :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.TypeSign -> Isa.TypeSign
-renameTypeSign thy rs (Isa.TypeSign name ty) = Isa.TypeSign (translate thy rs name) ty
+renameTypeSign thy rs (Isa.TypeSign name vs ty) = Isa.TypeSign (translate thy rs name) vs ty
 
 renameIsaCmd :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.Stmt -> Isa.Stmt
 renameIsaCmd thy renamings cmd
@@ -123,7 +123,7 @@ translate thy alist name
 apply2 f [a,b]     = f a b
 apply3 f [a,b,c]   = f a b c
 
-nameOfTypeSign (Isa.TypeSign name _) = name
+nameOfTypeSign (Isa.TypeSign name _ _) = name
 
 namesFromIsaCmd :: Isa.Stmt -> [Isa.Name]
 namesFromIsaCmd (Isa.Fun sigs _ _)       = map nameOfTypeSign sigs
