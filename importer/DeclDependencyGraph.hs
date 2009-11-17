@@ -19,7 +19,7 @@ import qualified Language.Haskell.Exts as Hsx
 
 import Importer.Utilities.Hsk
 
-import qualified Importer.LexEnv as Env
+import qualified Importer.Env as Env
 import qualified Importer.Msg as Msg
 
 
