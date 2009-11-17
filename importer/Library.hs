@@ -11,7 +11,7 @@ module Importer.Library (
   map2, fold2, map_split, ultimately,
   insert, remove,
   accumulate, has_duplicates, burrow_indices,
-  these,
+  the, these, the_default,
   unfoldr, unfoldr1, unfoldl, unfoldl1,
   liftM, mapsM,
   groupAlist, wordsBy
@@ -154,9 +154,15 @@ burrow_indices is f xs =
 
 {- optional values -}
 
+the :: Maybe a -> a
+the = Maybe.fromJust
+
 these :: Maybe [a] -> [a]
 these Nothing = []
 these (Just xs) = xs
+
+the_default :: a -> Maybe a -> a
+the_default = Maybe.fromMaybe
 
 
 {- structural operations -}
