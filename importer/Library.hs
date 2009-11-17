@@ -4,7 +4,7 @@ A collection of generic functions.
 -}
 
 module Importer.Library (
-  assert, tracing,
+  assert, asserting, tracing,
   (|>), (*>),
   pair, rpair, map_fst, map_snd, map_both,
   split_list, filter_out, fold, fold_rev, map_filter, flat, maps, nth_map, map_index, fold_index,
@@ -28,6 +28,9 @@ import Debug.Trace (trace)
 
 tracing :: (a -> String) -> a -> a
 tracing f x = trace (f x) x
+
+asserting :: (a -> Bool) -> a -> a
+asserting f x = assert (f x) x
 
 
 {- functions -}
