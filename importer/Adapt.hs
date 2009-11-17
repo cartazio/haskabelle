@@ -9,6 +9,7 @@ module Importer.Adapt(Adaption(..), AdaptionTable(AdaptionTable),
 ) where
 
 import Importer.Library
+import qualified Importer.AList as AList
 import Data.Maybe (mapMaybe, fromMaybe, catMaybes, isJust)
 import List (partition, sort, group, intersperse)
 import Control.Monad.State
@@ -447,7 +448,7 @@ translateEnvType (AdaptionTable mappings) qualify typ = let
       |> asserting (all (Env.isClass . snd))
       |> (map . map_both) Env.identifier2name
     renamings = type_renams ++ class_renams
-    transl n = case lookup (qualify n) renamings of
+    transl n = case AList.lookup renamings (qualify n) of
       Nothing -> return n
       Just n' -> put True >> return n'
     translate :: Env.EnvType -> State Bool Env.EnvType
@@ -503,10 +504,17 @@ adaptType :: Isa.Type -> AdaptM Isa.Type
 adaptType t = do t' <- adaptEnvType (Env.fromIsa t); return (Env.toIsa t')
 
 adaptClass :: Isa.Name -> AdaptM Isa.Name
-adaptClass classN = do let ignore = Isa.Name "_"
-                       t <- adaptType (Isa.TyScheme [(ignore, [classN])] Isa.NoType)
-                       let (Isa.TyScheme [(_, [classN'])] _) = t
-                       return classN'
+adaptClass classN = do
+  Just mID <- query currentModuleID
+  AdaptionTable mappings <- query adaptionTable
+  let { class_renams = mappings |> filter (Env.isClass . fst)
+    |> asserting (all (Env.isClass . snd)) |> (map . map_both) Env.identifier2name }
+  oldEnv <- query oldGlobalEnv
+  let classN' = AList.lookup class_renams (qualifyTypeName oldEnv mID (Env.fromIsa classN))
+  let classN'' = case classN' of {
+    Nothing -> classN;
+    Just classN' -> Env.toIsa classN' }
+  return classN''
 
 adaptModules ::  AdaptionTable  -> Env.GlobalE -> Env.GlobalE -> [Isa.Module] -> [Isa.Module]
 adaptModules adaptionTable adaptedGlobalEnv globalEnv modules =
