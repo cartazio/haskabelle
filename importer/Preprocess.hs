@@ -303,10 +303,8 @@ splitPatBinds (Hsx.BDecls decls)
                           typeSigs'
       in (Hsx.BDecls (patTypeSigs ++ patDecls'), Hsx.BDecls (otherTypeSigs ++ otherDecls'))
 
-    where split decl@(Hsx.PatBind loc pat rhs binds)
-              = (Just decl, Nothing, Nothing)
-          split decl@(Hsx.TypeSig loc names typ)
-              = (Nothing, Just decl, Nothing)
+    where split decl@(Hsx.PatBind _ _ _ _) = (Just decl, Nothing, Nothing)
+          split decl@(Hsx.TypeSig _ _ _) = (Nothing, Just decl, Nothing)
           split decl = (Nothing, Nothing, Just decl)
 splitPatBinds junk = error ("splitPatBinds: Fall through. " ++ show junk)
 
@@ -512,69 +510,3 @@ checkForRecursiveBinds bindings
       in case find_recursive_binds (getPatDecls bindings) of
         []  -> bindings
         d:_ -> error (Msg.recursive_bindings_disallowed (getSrcLoc d))
-
-
-
-
-------------------------------------------------------------
-------------------------------------------------------------
---------------------------- Tests --------------------------
-------------------------------------------------------------
-------------------------------------------------------------
-
-{-
-
-runTest = quickCheck prop_NoWhereDecls
-
-onlyPatBinds (Hsx.BDecls binds) = all isPat binds
-    where isPat Hsx.PatBind{} = True
-          isPat Hsx.TypeSig{} = True
-          isPat _ = False
-noPatBinds (Hsx.BDecls binds) = all noPat binds
-    where noPat Hsx.PatBind{} = False
-          noPat _ = True
-
-
-prop_splitPatBindsCorrect binds = let (pat,nonPat) = splitPatBinds binds
-                                  in onlyPatBinds pat && noPatBinds nonPat
-
-noLocalDecl :: Hsx.ModuleName -> Bool
-noLocalDecl m = True
-
-
-hasWhereDecls :: Data a => a -> Bool
-hasWhereDecls node = everything (||) (mkQ False fromDecl `extQ` fromMatch) node
-    where fromDecl (Hsx.PatBind _ _ _ binds) = isNonEmpty binds
-          fromDecl _ = False
-          fromMatch (Hsx.Match _ _ _ _ binds) = isNonEmpty binds
-          isNonEmpty (Hsx.BDecls binds) = not (null binds)
-          isNonEmpty (Hsx.IPBinds binds) = not (null binds)
-
-prop_NoWhereDecls mod = not $ hasWhereDecls $ preprocessHsx.ModuleName mod
-
-prop_NoLocalDecl mod = noLocalDecl $ preprocessHsx.ModuleName mod
-
-checkDelocM :: PropertyM DelocaliserM a -> Property
-checkDelocM deloc = forAll arbitrary $ \ (NonNegative gsState, delocState) ->
-              monadic (fst . evalGensym gsState . evalDelocaliser delocState) deloc
-
-
-                          
-
-{-|
-  'flattenHsx.TypeSig' really flattens the type declaration.
--}
-prop_flattenHsx.TypeSig_isFlat = forAll typeSigDecl $ \ decl ->
-                        all isFlat $ flattenHsx.TypeSig decl
-    where isFlat (Hsx.TypeSig _src names _type) = length names `elem` [0,1]
-          isFlat _ = False
-
-prop_flattenHsx.TypeSig_isEquiv = forAll typeSigDecl $ \ decl ->
-                               let flat = flattenHsx.TypeSig decl in
-                               flat `equiv` [decl]
-    where d `subOf` e = (`all` d) $ \ (Hsx.TypeSig _src names typ) -> 
-                        (`all` names) $ \ name ->
-                        (`any` e) $ \ (Hsx.TypeSig _src' names' typ') ->
-                        (`any` names) $ \ name' -> name == name' && typ == typ'
-          d `equiv` e = d `subOf` e && e `subOf` d
--}
