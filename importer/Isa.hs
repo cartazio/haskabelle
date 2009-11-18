@@ -97,9 +97,9 @@ data Stmt =
     Datatype [(TypeSpec, [(Name, [Type])])]
   | Record TypeSpec [(Name, Type)]
   | TypeSynonym [(TypeSpec, Type)]
-  | Definition TypeSign (Name, Term)
+  | Definition TypeSign (Name, Term) -- FIXME could also contain arguments
   | Primrec [TypeSign] [(Name, [Pat], Term)] -- FIXME separate type for equational specifications
-  | Fun [TypeSign] Bool [(Name, [Pat], Term)] -- and flag: primrec, fun, function (definition syntactically determined)
+  | Fun [TypeSign] Bool [(Name, [Pat], Term)] -- and flag: definition, primrec, fun, function
   | Class Name [Name] [TypeSign]
   | Instance Name Name [(Name, Sort)] [Stmt] -- FIXME own category for equational specfications
   | Comment String
