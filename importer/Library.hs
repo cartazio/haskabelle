@@ -15,7 +15,7 @@ module Importer.Library (
   insert, remove, has_duplicates, accumulate, 
   separate, slice,
   ultimately,
-  uncombl, uncombr, unfoldr1, unfoldl1,
+  uncombl, uncombr,
   liftM, filterM, mapsM, when
 ) where
 
@@ -206,17 +206,6 @@ uncombr :: (a -> Maybe (b, a)) -> a -> ([b], a)
 uncombr dest x = case dest x of
   Nothing -> ([], x)
   Just (z, y) -> (z : zs, y') where (zs, y') = uncombr dest y
-
-unfoldr1, unfoldl1  :: (a -> Maybe (a, a)) -> a -> [a]
-
-unfoldr1 f x 
-    = case f x of Nothing -> [x]
-                  Just (z, x') -> z : unfoldr1 f x'
-
-unfoldl1 f x = aux [] f x
-    where aux acc f x = case f x of
-                          Nothing -> x:acc
-                          Just (z, x') -> aux (z:acc) f x'
 
 
 {- monads -}

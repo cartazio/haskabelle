@@ -534,14 +534,13 @@ instance Hsk2Env Hsx.Type Type where
     --        ==> Type T [(TyVar a), (TyVar b)]   
     --
     fromHsk tyapp@(Hsx.TyApp _ _) 
-        = let tycon:tyvars = unfoldl1 split tyapp
+        = let (tycon, tyvars) = uncombl dest tyapp
               tycon'       = fromHsk tycon
               tyvars'      = map fromHsk tyvars
           in case tycon' of TyCon n [] -> TyCon n tyvars'
-          where split (Hsx.TyApp tyapp x) = Just (x, tyapp)
-                split (Hsx.TyCon _)       = Nothing         -- Note that this Hsx.Type will become
-                split junk                                --  the head of the returned list.
-                    = error ("Hsx.Type -> Env.Type (split Hsx.TyApp): " ++ (show junk))
+          where dest (Hsx.TyApp typ1 typ2) = Just (typ1, typ2)
+                dest (Hsx.TyCon _) = Nothing
+                dest junk = error ("Hsx.Type -> Env.Type (dest Hsx.TyApp): " ++ show junk)
 
     fromHsk junk = error ("Hsx.Type -> Env.Type: Fall Through: " ++ Isa.prettyShow' "thing" junk)
 

@@ -509,10 +509,7 @@ isCons adapt = mk_isFoo adapt Hsx.Cons
 isPairCon adapt = mk_isFoo adapt (Hsx.TupleCon 2)
 
 pprintAsList :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
-pprintAsList adapt reserved list = let
-  (xs, [Isa.Const nil]) = splitAt (length list - 1) list
-  in assert (isNil adapt nil)
-    $ brackets (hsep (punctuate comma (map (pprint' adapt reserved) xs)))
+pprintAsList adapt reserved ts = brackets (hsep (punctuate comma (map (pprint' adapt reserved) ts)))
 
 pprintAsTuple :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
 pprintAsTuple adapt reserved = parens . hsep . punctuate comma . map (pprint' adapt reserved)
@@ -542,22 +539,20 @@ categorizeApp _ (Isa.App (Isa.Const opN) _) lookupFn
 categorizeApp _ _ _ = FunApp
 
 flattenListApp :: AdaptionTable -> Isa.Term -> Maybe [Isa.Term]
-flattenListApp adapt app = let
-  list = unfoldr1 split app
-  in case last list of -- proper list?
-    (Isa.Const c) | isNil adapt c -> Just list
+flattenListApp adapt t = case uncombr dest_cons t of
+    (ts, Isa.Const c) | isNil adapt c -> Just ts
     _ -> Nothing
   where
-    split (Isa.App (Isa.App (Isa.Const c) x) xs) | isCons adapt c = Just (x, xs)
-    split _ = Nothing
+    dest_cons (Isa.App (Isa.App (Isa.Const c) t1) t2) | isCons adapt c = Just (t1, t2)
+    dest_cons _ = Nothing
 
 flattenTupleApp :: AdaptionTable -> Isa.Term -> Maybe [Isa.Term]
-flattenTupleApp adapt app = let list = unfoldr1 split app in
-                      if (length list) > 1 then Just list
-                                           else Nothing
+flattenTupleApp adapt t = case uncombr dest_pair t of
+    (ts, t) | not (null ts) -> Just (ts ++ [t])
+    _ -> Nothing
   where
-    split (Isa.App (Isa.App (Isa.Const c) x) xs) | isPairCon adapt c = Just (x, xs)
-    split _ = Nothing
+    dest_pair (Isa.App (Isa.App (Isa.Const c) t1) t2) | isPairCon adapt c = Just (t1, t2)
+    dest_pair _ = Nothing
 
 -- flattenLambdas ``%x . %y . %z . foo'' => ([x,y,z], foo)
 --
