@@ -13,7 +13,7 @@ import System.Exit (exitWith, ExitCode (ExitFailure))
 import Importer.FilePrinter (importProject, importFiles)
 import Importer.Adapt (readAdapt, Adaption (..))
 import Importer.Configuration (readConfig)
-import Importer.Version
+import Importer.Version (version)
 
 usage :: String -> IO ()
 usage executableName = do
