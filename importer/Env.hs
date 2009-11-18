@@ -62,13 +62,14 @@ module Importer.Env
       prelude
     ) where
 
+import Importer.Library
+import qualified Importer.AList as AList
+
 import Maybe
 import List (partition, nub)
 import qualified Data.Map as Map
 
 import Control.Monad.Reader
-
-import Importer.Library
 
 import qualified Language.Haskell.Exts as Hsx
 
@@ -559,17 +560,17 @@ typscheme_of_hsk_typ (Hsx.TyForall _ ctx typ) = (vs, fromHsk typ)
     dest_entry (Hsx.ClassA classqN typs) =
       [ (fromHsk tyvarN, fromHsk classqN) | tyvarN <- map dest_tyvar typs ]
     dest_tyvar (Hsx.TyVar tyvarN) = tyvarN
-    vs = if null ctx then [] else groupAlist (concatMap dest_entry ctx)
+    vs = if null ctx then [] else AList.group (concatMap dest_entry ctx)
 typscheme_of_hsk_typ typ = ([], fromHsk typ)
 
 hsk_typ_of_typscheme :: ([(Name, [Name])], Type) -> Hsx.Type
 hsk_typ_of_typscheme (vs, typ) = Hsx.TyForall Nothing vs' (toHsk typ) where
-  vs_aux = groupAlist $ concat [ map (flip (,) tyvarN) classNs | (tyvarN, classNs) <- vs ]
+  vs_aux = AList.group $ concat [ map (flip (,) tyvarN) classNs | (tyvarN, classNs) <- vs ]
   vs' = [ Hsx.ClassA (toHsk classN) (map (Hsx.TyVar . toHsk) tyvarNs) | (classN, tyvarNs) <- vs_aux ]
 
 {-    toHsk (TyScheme alist t) = Hsx.TyForall Nothing ctx (toHsk t)
         where
-          revalist = groupAlist 
+          revalist = AList.group 
                        $ concat [ map (flip (,) tyvarN) classNs | (tyvarN, classNs) <- alist ]
           ctx      = [ Hsx.ClassA (toHsk classN) (map (Hsx.TyVar . toHsk) tyvarNs) 
                            | (classN, tyvarNs) <- revalist ]
@@ -1049,7 +1050,7 @@ mergeInstancesWithClasses ts
 -}
 groupIdentifiers :: [Identifier] -> [(ModuleID, [Identifier])]
 groupIdentifiers identifiers
-    = groupAlist [ (moduleOf (lexInfoOf id), id) | id <- identifiers ]
+    = AList.group [ (moduleOf (lexInfoOf id), id) | id <- identifiers ]
 
 environmentOf :: Customisations -> [Hsx.Module] -> CustomTranslations -> GlobalE
 environmentOf custs ms custMods = runLexM custs $ makeGlobalEnv_FromModule ms custMods
@@ -1355,7 +1356,7 @@ allIdentifiers (GlobalEnv modulemap)
 updateGlobalEnv :: (Name -> [Identifier]) -> GlobalE -> GlobalE
 updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
     = let all_ids     = allIdentifiers globalEnv
-          id_alist    = groupAlist $ concatMap (\id -> case update (identifier2name id) of 
+          id_alist    = AList.group $ concatMap (\id -> case update (identifier2name id) of 
                                                          []      -> [(id, id)]
                                                          new_ids -> [ (new, id) | new <- new_ids ])
                                          all_ids
@@ -1364,7 +1365,7 @@ updateGlobalEnv update globalEnv@(GlobalEnv modulemaps)
           id_tbl      = Map.fromListWith (failDups "id_tbl")  id_alist   -- Map from new_id  to [old_id]
           mod_tbl     = Map.fromListWith (failDups "mod_tbl") mod_alist  -- Map from new_mID to old_mID
           rev_mod_tbl = Map.fromListWith (failDups "rev_mod_tbl")        -- Map from old_mID to [new_mID]
-                          (groupAlist [ (o,n) | (n,o) <- mod_alist ]) 
+                          (AList.group [ (o,n) | (n,o) <- mod_alist ]) 
 
           -- The new Module gets the same imports as the old Module, but we
           -- have to account for old imports being possibly updated themselves.
