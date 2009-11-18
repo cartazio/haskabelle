@@ -7,15 +7,16 @@ module Importer.Library (
   assert, asserting, tracing,
   (|>), (*>),
   pair, rpair, map_fst, map_snd, map_both,
-  split_list, filter_out, fold, fold_rev, map_filter, flat, maps, nth_map, map_index, fold_index,
-  map2, fold2, map_split, ultimately,
-  insert, remove,
-  separate, slice,
-  accumulate, has_duplicates, burrow_indices,
   the, these, the_default,
-  unfoldr, unfoldr1, unfoldl, unfoldl1,
-  liftM, filterM, mapsM, when,
-  groupAlist
+  split_list,
+  filter_out, fold, fold_rev, map_filter, flat, maps,
+  map2, fold2, map_split,
+  nth_map, map_index, fold_index, burrow_indices,
+  insert, remove, has_duplicates, accumulate, 
+  separate, slice,
+  ultimately,
+  uncombl, uncombr, unfoldr1, unfoldl1,
+  liftM, filterM, mapsM, when
 ) where
 
 import qualified List
@@ -67,6 +68,19 @@ map_both :: (a -> b) -> (a, a) -> (b, b)
 map_both f (x, y) = (f x, f y)
 
 
+{- options -}
+
+the :: Maybe a -> a
+the = Maybe.fromJust
+
+these :: Maybe [a] -> [a]
+these Nothing = []
+these (Just xs) = xs
+
+the_default :: a -> Maybe a -> a
+the_default = Maybe.fromMaybe
+
+
 {- lists -}
 
 split_list :: [a] -> Maybe (a, [a])
@@ -78,11 +92,11 @@ filter_out f = filter (not . f)
 
 fold :: (a -> b -> b) -> [a] -> b -> b
 fold f [] y = y
-fold f (x:xs) y = fold f xs (f x y)
+fold f (x : xs) y = fold f xs (f x y)
 
 fold_rev :: (a -> b -> b) -> [a] -> b -> b
 fold_rev _ [] y = y
-fold_rev f (x:xs) y = f x (fold_rev f xs y)
+fold_rev f (x : xs) y = f x (fold_rev f xs y)
 
 map_filter :: (a -> Maybe b) -> [a] -> [b]
 map_filter = Maybe.mapMaybe
@@ -93,23 +107,6 @@ flat = List.concat
 maps :: (a -> [b]) -> [a] -> [b]
 maps = List.concatMap
 
-index_too_large :: a
-index_too_large = [] !! 0
-
-nth_map :: Int -> (a -> a) -> [a] -> [a]
-nth_map 0 f (x : xs) = f x : xs
-nth_map n f (x : xs) = x : nth_map (n - 1) f xs
-nth_map _ _ [] = index_too_large
-
-map_index :: ((Int, a) -> b) -> [a] -> [b]
-map_index f = mapp 0 where
-  mapp _ [] = []
-  mapp i (x : xs) = f (i, x) : mapp (i + 1) xs
-
-fold_index :: ((Int, a) -> b -> b) -> [a] -> b -> b
-fold_index f = foldd 0 where
-  foldd _ [] y = y
-  foldd i (x : xs) y = foldd (i + 1) xs (f (i, x) y)
 
 unequal_lengths :: a
 unequal_lengths = error "UnequalLengths"
@@ -132,24 +129,24 @@ map_split f (x : xs) =
     (ys, ws) = map_split f xs
   in (y : ys, w : ws)
 
-ultimately :: (a -> Maybe (b, a)) -> a -> ([b], a)
-ultimately f x = case f x of
-  Nothing -> ([], x)
-  Just (r, y) -> let (rs, z) = ultimately f y in (r : rs, z)
 
-insert :: Eq a => a -> [a] -> [a]
-insert x xs = if x `elem` xs then xs else x : xs
+index_too_large :: a
+index_too_large = [] !! 0
 
-remove :: Eq a => a -> [a] -> [a]
-remove = List.delete
+nth_map :: Int -> (a -> a) -> [a] -> [a]
+nth_map 0 f (x : xs) = f x : xs
+nth_map n f (x : xs) = x : nth_map (n - 1) f xs
+nth_map _ _ [] = index_too_large
 
-accumulate :: (a -> [b] -> [b]) -> a -> [b]
-accumulate f x = f x []
+map_index :: ((Int, a) -> b) -> [a] -> [b]
+map_index f = mapp 0 where
+  mapp _ [] = []
+  mapp i (x : xs) = f (i, x) : mapp (i + 1) xs
 
-has_duplicates :: Eq a => [a] -> Bool
-has_duplicates = dups where
-  dups [] = False
-  dups (x : xs) = x `elem` xs || dups xs
+fold_index :: ((Int, a) -> b -> b) -> [a] -> b -> b
+fold_index f = foldd 0 where
+  foldd _ [] y = y
+  foldd i (x : xs) y = foldd (i + 1) xs (f (i, x) y)
 
 burrow_indices :: [Int] -> ([a] -> [a]) -> [a] -> [a]
 burrow_indices is f xs =
@@ -157,6 +154,22 @@ burrow_indices is f xs =
     ys = f (map ((!!) xs) is)
   in if length xs /= length ys then unequal_lengths
   else fold (\i -> nth_map i (\_ -> ys !! i)) is xs
+
+
+insert :: Eq a => a -> [a] -> [a]
+insert x xs = if x `elem` xs then xs else x : xs
+
+remove :: Eq a => a -> [a] -> [a]
+remove = List.delete
+
+has_duplicates :: Eq a => [a] -> Bool
+has_duplicates = dups where
+  dups [] = False
+  dups (x : xs) = x `elem` xs || dups xs
+
+accumulate :: (a -> [b] -> [b]) -> a -> [b]
+accumulate f x = f x []
+
 
 separate :: a -> [[a]] -> [a]
 separate _ [] = []
@@ -169,30 +182,32 @@ slice f xs = let (ys, zs) = List.break f xs
   in ys : if null zs then [] else slice f (List.tail zs)
 
 
-{- optional values -}
-
-the :: Maybe a -> a
-the = Maybe.fromJust
-
-these :: Maybe [a] -> [a]
-these Nothing = []
-these (Just xs) = xs
-
-the_default :: a -> Maybe a -> a
-the_default = Maybe.fromMaybe
+ultimately :: (a -> Maybe (b, a)) -> a -> ([b], a)
+ultimately f x = case f x of
+  Nothing -> ([], x)
+  Just (r, y) -> let (rs, z) = ultimately f y in (r : rs, z)
 
 
 {- structural operations -}
 
-unfoldr, unfoldl    :: (b -> Maybe (a, b)) -> b -> [a]
+combl :: (a -> b -> a) -> a -> [b] -> a
+combl f = flip (fold (flip f))
+
+combr :: (b -> a -> a) -> [b] -> a -> a
+combr = fold_rev
+
+uncombl :: (a -> Maybe (a, b)) -> a -> (a, [b])
+uncombl dest x = uncomb x [] where
+  uncomb x zs = case dest x of
+    Nothing -> (x, zs)
+    Just (y, z) -> uncomb y (z : zs)
+
+uncombr :: (a -> Maybe (b, a)) -> a -> ([b], a)
+uncombr dest x = case dest x of
+  Nothing -> ([], x)
+  Just (z, y) -> (z : zs, y') where (zs, y') = uncombr dest y
+
 unfoldr1, unfoldl1  :: (a -> Maybe (a, a)) -> a -> [a]
-
-unfoldr f x = List.unfoldr f x
-
-unfoldl f x = aux [] f x
-    where aux acc f x = case f x of
-                Nothing     -> []
-                Just (z, x') -> aux (z:acc) f x'
 
 unfoldr1 f x 
     = case f x of Nothing -> [x]
@@ -221,10 +236,3 @@ mapsM f (x : xs) = do
 
 when :: Monad m => Bool -> m () -> m ()
 when = Monad.when
-
-
-{- misc -}
-
-groupAlist :: Eq a => [(a, b)] -> [(a, [b])]
-groupAlist xs = map (\k -> (k, [ l | (k', l) <- xs, k' == k ]))
-                  $ List.nub (map fst xs)
