@@ -15,6 +15,8 @@ module Importer.ConversionUnit
       liftIO
     ) where
 
+import Importer.Library
+
 import Maybe
 import qualified Data.Set as Set hiding (Set)
 import Data.Set (Set)
@@ -23,16 +25,13 @@ import Data.Map (Map)
 import Data.Graph
 import Data.Tree
 
-import Monad
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Error
+import Control.Monad.Reader (ReaderT, MonadReader, MonadIO, ask, liftIO, runReaderT, lift)
+import Control.Monad.State (StateT, MonadState, get, put, modify, execStateT)
+import Control.Monad.Error (MonadError)
 
 import IO
 import System.FilePath
 import System.Directory
-
-import Importer.Library
 
 import qualified Language.Haskell.Exts as Hsx
 

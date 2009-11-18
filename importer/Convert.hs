@@ -13,17 +13,17 @@ Conversion from abstract Haskell code to abstract Isar/HOL theory.
 
 module Importer.Convert (convertHskUnit) where
 
+import Importer.Library
+import qualified Importer.AList as AList
+
 import Data.List (nub, unzip4, partition)
 import Maybe
 import qualified Data.Map as Map
 
-import Control.Monad
-import Control.Monad.Writer
-import Control.Monad.Reader
-import Control.Monad.State
-
-import Importer.Library
-import qualified Importer.AList as AList
+import Control.Monad (foldM, mapAndUnzipM)
+import Control.Monad.Writer (WriterT, MonadWriter, runWriterT, tell)
+import Control.Monad.Reader (ask, ReaderT, MonadReader, lift, runReaderT, local)
+import Control.Monad.State (StateT, MonadState, runStateT, get, put)
 
 import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym

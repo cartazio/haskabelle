@@ -237,7 +237,7 @@ moduleHierarchyDepth (Hsx.ModuleName name) = length $ filter (== '.') name
   source file.
 -}
 isHaskellSourceFile :: FilePath -> Bool
-isHaskellSourceFile fp = map toLower (last (wordsBy (== '.') fp)) == "hs"
+isHaskellSourceFile fp = map toLower (last (slice (== '.') fp)) == "hs"
 
 {-|
   This function takes a context (from a class definition) and extracts

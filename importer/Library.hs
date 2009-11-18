@@ -10,21 +10,28 @@ module Importer.Library (
   split_list, filter_out, fold, fold_rev, map_filter, flat, maps, nth_map, map_index, fold_index,
   map2, fold2, map_split, ultimately,
   insert, remove,
+  separate, slice,
   accumulate, has_duplicates, burrow_indices,
   the, these, the_default,
   unfoldr, unfoldr1, unfoldl, unfoldl1,
-  liftM, mapsM,
-  groupAlist, wordsBy
+  liftM, filterM, mapsM, when,
+  groupAlist
 ) where
 
 import qualified List
 import qualified Maybe
-import Monad (liftM)
-import Control.Exception (assert)
-import Debug.Trace (trace)
+import qualified Monad
+import qualified Control.Exception as Exception
+import qualified Debug.Trace as Debug
 
 
 {- diagnostics -}
+
+trace :: String -> a -> a
+trace = Debug.trace
+
+assert :: Bool -> a -> a
+assert = Exception.assert
 
 tracing :: (a -> String) -> a -> a
 tracing f x = trace (f x) x
@@ -151,6 +158,16 @@ burrow_indices is f xs =
   in if length xs /= length ys then unequal_lengths
   else fold (\i -> nth_map i (\_ -> ys !! i)) is xs
 
+separate :: a -> [[a]] -> [a]
+separate _ [] = []
+separate _ [ys] = ys
+separate x (ys : yss) = ys ++ x : separate x yss
+
+slice :: (a -> Bool) -> [a] -> [[a]]
+slice f [] = []
+slice f xs = let (ys, zs) = List.break f xs
+  in ys : if null zs then [] else slice f (List.tail zs)
+
 
 {- optional values -}
 
@@ -189,6 +206,12 @@ unfoldl1 f x = aux [] f x
 
 {- monads -}
 
+liftM :: Monad m => (a -> b) -> m a -> m b
+liftM = Monad.liftM
+
+filterM :: Monad m => (a -> m Bool) -> [a] -> m [a]
+filterM = Monad.filterM
+
 mapsM :: Monad m => (a -> m [b]) -> [a] -> m [b]
 mapsM f [] = return []
 mapsM f (x : xs) = do
@@ -196,15 +219,12 @@ mapsM f (x : xs) = do
   zs <- mapsM f xs
   return (ys ++ zs)
 
+when :: Monad m => Bool -> m () -> m ()
+when = Monad.when
+
 
 {- misc -}
 
 groupAlist :: Eq a => [(a, b)] -> [(a, [b])]
 groupAlist xs = map (\k -> (k, [ l | (k', l) <- xs, k' == k ]))
                   $ List.nub (map fst xs)
-
-wordsBy            :: (a -> Bool) -> [a] -> [[a]]
-wordsBy pred l     =  case dropWhile pred l of
-                      [] -> []
-                      l' -> w : wordsBy pred l''
-                            where (w, l'') = break pred l'

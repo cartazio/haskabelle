@@ -3,16 +3,17 @@
 Adaption tables and their application
 -}
 
-module Importer.Adapt(Adaption(..), AdaptionTable(AdaptionTable),
+module Importer.Adapt (Adaption(..), AdaptionTable(AdaptionTable),
   readAdapt, makeAdaptionTable_FromHsModule, extractHskEntries,
   adaptGlobalEnv, adaptIsaUnit
 ) where
 
 import Importer.Library
 import qualified Importer.AList as AList
+
 import Data.Maybe (mapMaybe, fromMaybe, catMaybes, isJust)
-import List (partition, sort, group, intersperse)
-import Control.Monad.State
+import List (partition, sort, group)
+import Control.Monad.State (State, get, put, foldM, evalState, runState, liftM2)
 import System.FilePath (combine)
 
 import qualified Importer.Msg as Msg
@@ -239,6 +240,9 @@ check_raw_adaption_table tbl
       isClassEntry (Haskell _ (Class _))   = True
       isClassEntry _                       = False
 
+explode_identifier :: String -> [String]
+explode_identifier = slice ((==) '.')
+
 parseEntry :: AdaptionEntry -> Env.Identifier
 
 parseEntry (Haskell raw_identifier op)
@@ -251,7 +255,7 @@ parseEntry (Isabelle raw_identifier op)
     -- "Datatype" is the ModuleID, and "None" is the real identifier,
     -- and "option" basically noisy garbage.
     = let (moduleID, identifierID) = parseRawIdentifier raw_identifier
-          moduleID'                = (case wordsBy (== '.') moduleID of 
+          moduleID'                = (case explode_identifier moduleID of 
                                         []  -> moduleID
                                         m:_ -> m)
       in makeIdentifier op moduleID' identifierID ([], Env.TyNone)
@@ -263,9 +267,9 @@ parseRawIdentifier string
            in assert (last modul == '.' && 
                       last identifier == ')') 
                  $ (init modul, tail (init identifier))
-      else let parts      = wordsBy (== '.') string
+      else let parts      = explode_identifier string
                identifier = last parts
-               modul      = concat $ intersperse "." (init parts)
+               modul      = separate '.' (init parts)
            in (modul, identifier)
 
 makeIdentifier :: OpKind -> Env.ModuleID -> Env.IdentifierID -> ([(Env.Name, [Env.Name])], Env.Type) -> Env.Identifier

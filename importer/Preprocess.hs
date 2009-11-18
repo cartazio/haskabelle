@@ -6,6 +6,8 @@
 
 module Importer.Preprocess (preprocessModule) where
 
+import Importer.Library
+
 import Maybe
 import List
 import Data.Map (Map)
@@ -19,10 +21,8 @@ import Data.Generics
 import Data.Generics.Biplate
 import Data.Generics.Str
 
-import Control.Monad.Writer
-import Control.Monad.Reader
-
-import Importer.Library
+import Control.Monad.Reader (ReaderT, MonadReader, ask, runReaderT, runReader, Reader)
+import Control.Monad.Writer (WriterT, MonadWriter, tell, runWriterT, lift, MonadFix)
 
 import Language.Haskell.Exts as Hsx
 
