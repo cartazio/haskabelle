@@ -7,7 +7,7 @@ Abstract representation of Isar/HOL theory.
 
 module Importer.Isa (ThyName(..), Name(..), Type(..), Literal(..), Term(..), Pat,
   ListComprFragment(..), DoBlockFragment(..),
-  Stmt(..), TypeSpec(..), TypeSign(..), Module(..),
+  Function_Kind(..), Function_Stmt(..), Stmt(..), TypeSpec(..), TypeSign(..), Module(..),
   dest_Type, dest_TVar, retopologize, base_name_of) where
 
 import Data.Graph as Graph
@@ -93,15 +93,19 @@ data TypeSpec = TypeSpec [Name] Name
 data TypeSign = TypeSign Name [(Name, Sort)] Type
   deriving Show
 
+data Function_Kind = Definition | Primrec | Fun | Function_Sorry
+  deriving (Show, Eq)
+
+data Function_Stmt = Function_Stmt Function_Kind [TypeSign] [(Name, [Pat], Term)]
+  deriving Show
+
 data Stmt =
     Datatype [(TypeSpec, [(Name, [Type])])]
   | Record TypeSpec [(Name, Type)]
   | TypeSynonym [(TypeSpec, Type)]
-  | Definition TypeSign (Name, Term)
-  | Primrec [TypeSign] [(Name, [Pat], Term)] -- FIXME separate type for equational specifications
-  | Fun [TypeSign] Bool [(Name, [Pat], Term)] -- and flag: primrec, fun, function (definition syntactically determined)
+  | Function Function_Stmt
   | Class Name [Name] [TypeSign]
-  | Instance Name Name [(Name, Sort)] [Stmt] -- FIXME own category for equational specfications
+  | Instance Name Name [(Name, Sort)] [Function_Stmt]
   | Comment String
   deriving Show
 
@@ -177,6 +181,13 @@ idents_of_typesign :: TypeSign -> (Ident, [Ident])
 idents_of_typesign (TypeSign n vs ty) =
   (ConstI n, accumulate add_idents_type ty ++ idents_of_typctxt vs)
 
+idents_of_function_stmt :: Function_Stmt -> (([Ident], [Ident]), [Ident])
+idents_of_function_stmt (Function_Stmt kind sigs eqns) =
+  let
+    (xs1, xs3a) = map_split idents_of_typesign sigs
+    xs3b = flat xs3a |> fold (\(_, ps, t) -> fold add_idents_term ps *> add_idents_term t) eqns
+  in ((xs1, []), xs3b)
+
 idents_of_stmt :: Stmt -> (([Ident], [Ident]), [Ident])
 idents_of_stmt (Datatype specs) =
   let
@@ -195,21 +206,7 @@ idents_of_stmt (TypeSynonym specs) =
     xs1 = accumulate (fold (add_idents_typespec . fst)) specs
     xs3 = accumulate (fold (add_idents_type . snd)) specs
   in ((xs1, []), xs3)
-idents_of_stmt (Definition sig (p, t)) =
-  let
-    (x1, xs3a) = idents_of_typesign sig
-    xs3b = xs3a |> add_idents_term t
-  in (([x1], []), xs3b)
-idents_of_stmt (Primrec sigs eqns) =
-  let
-    (xs1, xs3a) = map_split idents_of_typesign sigs
-    xs3b = flat xs3a |> fold (\(_, ps, t) -> fold add_idents_term ps *> add_idents_term t) eqns
-  in ((xs1, []), xs3b)
-idents_of_stmt (Fun sigs permissive eqns) =
-  let
-    (xs1, xs3a) = map_split idents_of_typesign sigs
-    xs3b = flat xs3a |> fold (\(_, ps, t) -> fold add_idents_term ps *> add_idents_term t) eqns
-  in ((xs1, []), xs3b)
+idents_of_stmt (Function stmt) = idents_of_function_stmt stmt
 idents_of_stmt (Class n superclasses sigs) =
   let
     x1 = ClassI n
@@ -219,7 +216,7 @@ idents_of_stmt (Class n superclasses sigs) =
 idents_of_stmt (Instance c tyco vs stmts) = -- this is only an approximation
   let
     xs3a = ClassI c : TycoI tyco : idents_of_typctxt vs
-    (_, xs3b) = map_split idents_of_stmt stmts
+    (_, xs3b) = map_split idents_of_function_stmt stmts
     xs3 = fold insert (flat xs3b) xs3a
   in (([], []), xs3)
 idents_of_stmt (Comment _) =
