@@ -77,7 +77,7 @@ import Control.Monad.Reader
 import Language.Haskell.Exts as Hsx
 
 import qualified Importer.Gensym as Gensym
-import Importer.Utilities.Env
+import Importer.Env
 
 
 {-|

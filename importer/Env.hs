@@ -11,7 +11,7 @@ This module provides traversal schemes for SYB that enable access to
 modular defined environment information.
 -}
 
-module Importer.Utilities.Env
+module Importer.Env
     ( EnvDef,
       everywhereEnv,
       everythingEnv,

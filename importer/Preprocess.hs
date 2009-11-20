@@ -26,7 +26,7 @@ import Control.Monad.Writer (WriterT, MonadWriter, tell, runWriterT, lift, Monad
 
 import Language.Haskell.Exts as Hsx
 
-import Importer.Utilities.Env
+import Importer.Env
 import Importer.Utilities.Hsk
 import qualified Importer.Gensym as Gensym
 
