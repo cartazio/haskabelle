@@ -24,7 +24,7 @@ import Control.Monad.Writer (WriterT, MonadWriter, runWriterT, tell)
 import Control.Monad.Reader (ask, ReaderT, MonadReader, lift, runReaderT, local)
 import Control.Monad.State (StateT, MonadState, runStateT, get, put)
 
-import Importer.Utilities.Gensym
+import qualified Importer.Gensym as Gensym
 
 import qualified Importer.Msg as Msg
 
@@ -212,7 +212,7 @@ getCurrentMonadDoSyntax =
 {-|
   The conversion process is done in this monad.
 -}
-newtype ContextM v = ContextM (ReaderT Customisations (StateT Context GensymM) v)
+newtype ContextM v = ContextM (ReaderT Customisations (StateT Context Gensym.GensymM) v)
     deriving (Monad, MonadState Context, Functor, MonadReader Customisations)
 
 queryCustomisations = ask
@@ -220,7 +220,7 @@ queryCustomisations = ask
 {-|
   This function lifts a gensym computation to a context computation
 -}
-liftGensym :: GensymM a -> ContextM a
+liftGensym :: Gensym.GensymM a -> ContextM a
 liftGensym = ContextM . lift . lift
 
 {-|
@@ -229,7 +229,7 @@ liftGensym = ContextM . lift . lift
 -}
 runConversion :: Customisations -> Adaption -> Env.GlobalE -> ContextM v -> (v, Context)
 runConversion custs adapt env (ContextM m) =
-  evalGensym 0 $ runStateT (runReaderT m custs) (initContext adapt env)
+  Gensym.evalGensym 0 $ runStateT (runReaderT m custs) (initContext adapt env)
 
 {-|
   This function queries the given field in the context monad
@@ -720,7 +720,7 @@ convertPat pragmas (Hsx.PRec qname fields) =
                         case lookup iden fields' of
                           Nothing -> if isAs
                                      then liftConvert . liftGensym . liftM Isa.Const . liftM Isa.Name $
-                                          gensym "a"
+                                          Gensym.gensym "a"
                                      else return (Isa.Const (Isa.Name "_"))
                           Just pat -> convertPat pragmas pat
                 recArgs <- mapM toSimplePat recFields
@@ -737,7 +737,7 @@ convertPat pragmas (Hsx.PWildCard) =
     do isAs <- isInsideAsPattern
        if isAs
          then liftConvert . liftGensym . liftM Isa.Const . liftM Isa.Name $
-              gensym "a"
+              Gensym.gensym "a"
          else return (Isa.Const (Isa.Name "_"))
 
 convertPat pragmas junk = liftConvert $ pattern_match_exhausted 
@@ -814,13 +814,13 @@ instance Convert Hsx.Exp Isa.Term where
     convert' pragmas (Hsx.LeftSection e qop)
         = do e'   <- convert pragmas e
              qop' <- convert pragmas qop
-             g    <- liftGensym (genIsaName (Isa.Name "arg"))
+             g    <- liftGensym (Gensym.genIsaName (Isa.Name "arg"))
              return (makeAbs [g] $ Isa.App (Isa.App qop' e') (Isa.Const g))
 
     convert' pragmas (Hsx.RightSection qop e)
         = do e'   <- convert pragmas e
              qop' <- convert pragmas qop
-             g <- liftGensym (genIsaName (Isa.Name "arg"))
+             g <- liftGensym (Gensym.genIsaName (Isa.Name "arg"))
              return (makeAbs [g] $ Isa.App (Isa.App qop' (Isa.Const g)) e')
 
     convert' pragmas (Hsx.RecConstr qname updates) = 
@@ -955,7 +955,7 @@ makeAbs varNs body
 makeTupleDataCon :: [Pragma] -> Int -> ContextM Isa.Term
 makeTupleDataCon pragmas n     -- n < 2  cannot happen (cf. Language.Haskell.Exts.Hsx.TupleCon)
     = assert (n > 2) $ -- n == 2, i.e. pairs, can and are dealt with by usual conversion.
-      do argNs  <- mapM (liftGensym . genHsQName) (replicate n (Hsx.UnQual (Hsx.Ident "arg")))
+      do argNs  <- mapM (liftGensym . Gensym.genHsQName) (replicate n (Hsx.UnQual (Hsx.Ident "arg")))
          args   <- return (map Hsx.Var argNs)
          argNs' <- mapM (convert pragmas) argNs
          args'  <- convert pragmas (Hsx.Tuple args)
@@ -979,7 +979,7 @@ makePatternMatchingAbs :: [Isa.Pat] -> Isa.Term -> ContextM Isa.Term
 makePatternMatchingAbs patterns theBody
     = foldM mkMatchingAbs theBody (reverse patterns) -- foldM is a left fold.
       where mkMatchingAbs body pat
-                = do g <- liftGensym (genIsaName (Isa.Name "arg"))
+                = do g <- liftGensym (Gensym.genIsaName (Isa.Name "arg"))
                      return $ Isa.Abs g (Isa.Case (Isa.Const g) [(pat, body)])
 
 

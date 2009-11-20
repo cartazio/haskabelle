@@ -3,7 +3,7 @@
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 -}
 
-module Importer.Utilities.Gensym where
+module Importer.Gensym where
 
 import Control.Monad.State
 
@@ -12,17 +12,12 @@ import qualified Importer.Isa as Isa (Name(..))
 
 
 newtype GensymM a = GensymM (State Int a)
-    deriving (Monad, Functor, MonadFix, MonadState Int)
+  deriving (Monad, Functor, MonadFix, MonadState Int)
 
---deriving instance State Int GensymM
-
-{-|
-  This function generates a fresh symbol based on the given string.
--}
 gensym :: String -> GensymM String
 gensym prefix = do count <- get
-                   put $ (count+1)
-                   return (prefix ++ (show count))
+                   put (count + 1)
+                   return (prefix ++ show count)
 
 genHsName :: Hsx.Name -> GensymM Hsx.Name
 genHsName (Hsx.Ident  prefix) = liftM Hsx.Ident  (gensym prefix) 
@@ -38,7 +33,7 @@ genIsaName (Isa.QName t prefix) = liftM (Isa.QName t) (gensym prefix)
 genIsaName (Isa.Name prefix)    = liftM Isa.Name      (gensym prefix)
 
 evalGensym :: Int -> GensymM a -> a
-evalGensym init (GensymM state) =  evalState state init
+evalGensym init (GensymM state) = evalState state init
 
 runGensym :: Int -> GensymM a -> (a, Int)
 runGensym init (GensymM state)  = runState state init

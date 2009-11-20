@@ -76,7 +76,7 @@ import Control.Monad.Reader
 
 import Language.Haskell.Exts as Hsx
 
-import Importer.Utilities.Gensym
+import qualified Importer.Gensym as Gensym
 import Importer.Utilities.Env
 
 
@@ -562,9 +562,9 @@ type Renaming = (Hsx.QName, Hsx.QName)
   This function generates renamings for all variables given in the
   list to provide fresh names.
 -}
-freshIdentifiers :: [Hsx.QName] -> GensymM [Renaming]
+freshIdentifiers :: [Hsx.QName] -> Gensym.GensymM [Renaming]
 freshIdentifiers qnames
-    = do freshs <- mapM genHsQName qnames
+    = do freshs <- mapM Gensym.genHsQName qnames
          return (zip qnames freshs)
 
 {-|

@@ -28,7 +28,7 @@ import Language.Haskell.Exts as Hsx
 
 import Importer.Utilities.Env
 import Importer.Utilities.Hsk
-import Importer.Utilities.Gensym
+import qualified Importer.Gensym as Gensym
 
 import qualified Importer.Msg as Msg
 
@@ -44,13 +44,13 @@ import qualified Importer.Msg as Msg
   conversion.
 -}
 preprocessModule :: [String] -> Hsx.Module -> Hsx.Module
-preprocessModule reserved (Hsx.Module loc modul pragmas warning exports imports topdecls)
-    = Hsx.Module loc modul pragmas warning exports imports topdecls4
-      where topdecls1    =  map (whereToLet .  deguardify) topdecls
-            ((topdecls2 ,topdecls2'), gensymcount) 
-                         = runGensym 0 (evalDelocaliser Set.empty (delocaliseAll topdecls1))
-            topdecls3    = topdecls2 ++ topdecls2'
-            topdecls4    = evalGensym gensymcount (mapM (normalizeNames_Decl reserved) topdecls3)
+preprocessModule reserved (Hsx.Module loc modul pragmas warning exports imports topdecls) =
+  Hsx.Module loc modul pragmas warning exports imports topdecls4 where
+    topdecls1 =  map (whereToLet .  deguardify) topdecls
+    ((topdecls2, topdecls2'), gensymcount) 
+                 = Gensym.runGensym 0 (evalDelocaliser Set.empty (delocaliseAll topdecls1))
+    topdecls3 = topdecls2 ++ topdecls2'
+    topdecls4 = Gensym.evalGensym gensymcount (mapM (normalizeNames_Decl reserved) topdecls3)
 
 
 {-|
@@ -68,7 +68,7 @@ preprocessModule reserved (Hsx.Module loc modul pragmas warning exports imports 
   We keep track of the names that are directly bound by a declaration,
   as functions must not close over them. See below for an explanation.
  -}
-newtype DelocaliserM a = DelocaliserM (ReaderT HskNames (WriterT [Hsx.Decl] GensymM) a)
+newtype DelocaliserM a = DelocaliserM (ReaderT HskNames (WriterT [Hsx.Decl] Gensym.GensymM) a)
     deriving (Monad, Functor, MonadFix, MonadReader HskNames, MonadWriter [Hsx.Decl])
 
 {-instance MonadWriter [Hsx.Decl] DelocaliserM where
@@ -86,7 +86,7 @@ addTopDecls = tell
 addTopDecl :: Hsx.Decl -> DelocaliserM ()
 addTopDecl = addTopDecls . (:[])
 
-liftGensym :: GensymM a -> DelocaliserM a
+liftGensym :: Gensym.GensymM a -> DelocaliserM a
 liftGensym = DelocaliserM . lift . lift
 
 
@@ -94,7 +94,7 @@ liftGensym = DelocaliserM . lift . lift
   This function executes the given delocaliser monad starting with an
   empty list of bound variables.
 -}
-evalDelocaliser :: HskNames -> DelocaliserM a -> GensymM (a,[Hsx.Decl]) 
+evalDelocaliser :: HskNames -> DelocaliserM a -> Gensym.GensymM (a,[Hsx.Decl]) 
 evalDelocaliser state (DelocaliserM sm) =
     let wm = runReaderT sm state in
     runWriterT wm
@@ -236,7 +236,7 @@ delocaliseFunDefs funDefs =
            closureUNameList = map uname closureNameList
            funNames = map (Hsx.UnQual . funName) funDefs
        renamings <- liftGensym $ freshIdentifiers funNames
-       envUName <- liftGensym $ genHsName (Hsx.Ident "env")
+       envUName <- liftGensym $ Gensym.genHsName (Hsx.Ident "env")
        let envName = Hsx.UnQual envUName
            addEnv (orig,ren) = (orig, Hsx.App (Hsx.Var ren) (Hsx.Var envName))
            envTuple = case closureNameList of
@@ -331,7 +331,7 @@ should_be_renamed reserved qn = case qn of
     where consider (Hsx.Ident s)  = s `elem` reserved
           consider (Hsx.Symbol s) = s `elem` reserved
 
-normalizeNames_Decl :: [String] -> Hsx.Decl -> GensymM Hsx.Decl
+normalizeNames_Decl :: [String] -> Hsx.Decl -> Gensym.GensymM Hsx.Decl
 normalizeNames_Decl reserved (Hsx.FunBind matchs)
     = do matchs' <- mapM normalizePatterns_Match matchs
          return (Hsx.FunBind matchs')
