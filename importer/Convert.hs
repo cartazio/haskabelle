@@ -37,7 +37,7 @@ import Importer.Adapt (makeAdaptionTable_FromHsModule, extractHskEntries,
 import qualified Language.Haskell.Exts as Hsx
 
 import qualified Importer.Isa as Isa
-import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign, prettyShow, prettyShow')
+import qualified Importer.Utilities.Isa as Isa (prettyShow, prettyShow')
 
 import qualified Importer.Msg as Msg
 import qualified Importer.Env as Env
@@ -558,7 +558,7 @@ convertDecl pragmas (Hsx.FunBind matchs)
              let bodies'' = zipWith mkSimpleLet aliases bodies'
              thy        <- queryContext theory
              return [Isa.Function (Isa.Function_Stmt kind [fsig']
-               (zip3 (repeat (Isa.nameOfTypeSign fsig')) patterns' bodies''))]
+               (zip3 (repeat (Isa.name_of_type_sign fsig')) patterns' bodies''))]
        where splitMatch (Hsx.Match _loc name patterns (Hsx.UnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of Hsx.BDecls [] -> True; _ -> False

@@ -10,20 +10,21 @@ module Importer.Adapt (Adaption(..), AdaptionTable(AdaptionTable),
 
 import Importer.Library
 import qualified Importer.AList as AList
-
 import Data.Maybe (mapMaybe, fromMaybe, catMaybes, isJust)
 import List (partition, sort, group)
 import Control.Monad.State (State, get, put, foldM, evalState, runState, liftM2)
+
 import System.FilePath (combine)
 
 import qualified Importer.Msg as Msg
 
-import qualified Language.Haskell.Exts as Hsx
-import Importer.Utilities.Hsk (extractBindingNs)
-import qualified Importer.Isa as Isa
-import qualified Importer.Utilities.Isa as Isa (nameOfTypeSign, prettyShow')
 import qualified Importer.Env as Env
 import Importer.ConversionUnit (IsaUnit(IsaUnit))
+
+import qualified Language.Haskell.Exts as Hsx
+import qualified Importer.Utilities.Hsk as Hsx (extractBindingNs)
+import qualified Importer.Isa as Isa
+import qualified Importer.Utilities.Isa as Isa (prettyShow')
 
 
 {- Fundamental data structures -}
@@ -189,7 +190,7 @@ makeAdaptionTable_FromHsModule adapt env hsmodules = let
                                 []                       -> Just $ name (head ids)
                                 [id] | Env.isInstance id -> Just $ name id
                                      | otherwise         -> Nothing)
-              $ concatMap extractBindingNs decls
+              $ concatMap Hsx.extractBindingNs decls
   in filterAdaptionTable (\(from, to) -> let
     fromN = Env.nameOf (Env.lexInfoOf from)
     toN = Env.nameOf (Env.lexInfoOf to)
@@ -545,8 +546,8 @@ instance Adapt Isa.Module where
 instance Adapt Isa.Function_Stmt where
     adapt (Isa.Function_Stmt kind sigs eqns) =
         do sigs' <- mapM adapt sigs
-           let funNs = map Isa.nameOfTypeSign (sigs ++ sigs')
-           shadowing (map Isa.nameOfTypeSign sigs) $
+           let funNs = map Isa.name_of_type_sign (sigs ++ sigs')
+           shadowing (map Isa.name_of_type_sign sigs) $
              do eqns' <- mapM (\(funN, pats, body) ->
                   do funN' <- adaptName funN
                      assert (funN `elem` funNs) $ return ()

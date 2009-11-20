@@ -8,10 +8,11 @@ module Importer.Msg where
 import List (intersperse)
 import Maybe (fromMaybe)
 
-import Importer.Utilities.Hsk (srcloc2string, module2FilePath)
-import Importer.Utilities.Isa (prettyShow')
-
 import qualified Language.Haskell.Exts as Hsx
+import qualified Importer.Utilities.Hsk as Hsx (srcloc2string, module2FilePath)
+
+import qualified Importer.Utilities.Isa as Isa (prettyShow')
+
 
 spacify x = x ++ " "
 linify  x = x ++ "\n\n"
@@ -20,7 +21,7 @@ quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
 
 printEnv env = "The Global Environment looked like:\n"
-               ++ prettyShow' "globalenv" env
+               ++ Isa.prettyShow' "globalenv" env
 
 assoc_mismatch op1 assoc1 op2 assoc2
     = let { op1' = quote op1; assoc1' = quote assoc1; } in
@@ -38,14 +39,14 @@ missing_fun_sig name env
       ++ printEnv env
 
 failed_import m errormsg
-    = "While trying to import " ++ quote (module2FilePath m)
+    = "While trying to import " ++ quote (Hsx.module2FilePath m)
       ++ ", the following error occured:\n" ++ errormsg
 
 duplicate_import ms
     = "Duplicate in imported modules: " ++ show ms
 
 failed_parsing loc msg
-    = srcloc2string loc ++ ": " ++ msg
+    = Hsx.srcloc2string loc ++ ": " ++ msg
 
 cycle_in_dependency_graph moduleNs
     = "Dependency graph is not a DAG. In particular, a cycle was found between\n"
@@ -54,7 +55,7 @@ cycle_in_dependency_graph moduleNs
 prettyHsx hs = Hsx.prettyPrint hs
 
 free_vars_found loc freeVariableNames
-    = srcloc2string loc ++ ": " ++ "Closures disallowed. The following variables occur free: "
+    = Hsx.srcloc2string loc ++ ": " ++ "Closures disallowed. The following variables occur free: "
       ++ concatMap (spacify . quote . prettyHsx) freeVariableNames
 
 merge_collision fn_str x y
@@ -71,7 +72,7 @@ found_duplicates str x y
 identifier_collision_in_lookup curModuleName qname foundIdentifiers
     = "Ambiguous occurences found for " ++ quote qname ++ "\n"
       ++ "while trying to look it up in " ++ quote curModuleName ++ ":\n\n" 
-      ++ concatMap (linify . prettyShow' (show qname)) foundIdentifiers
+      ++ concatMap (linify . Isa.prettyShow' (show qname)) foundIdentifiers
 
 failed_lookup lookup_kind_str curModuleName envname globalEnv
     = "No entry for the " ++ lookup_kind_str ++ " " ++ quote envname ++ "\n"
@@ -79,7 +80,7 @@ failed_lookup lookup_kind_str curModuleName envname globalEnv
       ++ printEnv globalEnv
 
 ambiguous_decl_definitions decls
-    = "Ambiguous definitions between\n" ++ concatMap (linify . prettyShow' "decl") decls
+    = "Ambiguous definitions between\n" ++ concatMap (linify . Isa.prettyShow' "decl") decls
 
 complex_toplevel_patbinding
     = "Complex pattern binding on toplevel is not supported by Isar/HOL."
@@ -97,10 +98,10 @@ only_simple_instantiations
     = "Only simple instantiations in the manner of Haskell 1.0 allowed."
 
 recursive_bindings_disallowed srcloc
-    = srcloc2string srcloc ++ ": " ++ "Recursive bindings disallowed."
+    = Hsx.srcloc2string srcloc ++ ": " ++ "Recursive bindings disallowed."
 
 forward_bindings_disallowed srcloc
-    = srcloc2string srcloc ++ ": " ++ "Forward references to bindings disallowed."
+    = Hsx.srcloc2string srcloc ++ ": " ++ "Forward references to bindings disallowed."
 
 found_inconsistency_in_guards srcloc
-    = srcloc2string srcloc ++ ": " ++ "Guard inconsistency."
+    = Hsx.srcloc2string srcloc ++ ": " ++ "Guard inconsistency."
