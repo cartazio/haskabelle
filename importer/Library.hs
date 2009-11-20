@@ -14,7 +14,7 @@ module Importer.Library (
   nth_map, map_index, fold_index, burrow_indices,
   insert, remove, has_duplicates, accumulate, 
   separate, slice,
-  perhaps_map, ultimately,
+  perhaps, perhaps_map, ultimately,
   uncombl, uncombr,
   liftM, filterM, mapsM, when
 ) where
@@ -184,6 +184,9 @@ slice f [] = []
 slice f xs = let (ys, zs) = List.break f xs
   in ys : if null zs then [] else slice f (List.tail zs)
 
+
+perhaps :: (a -> Maybe a) -> a -> a
+perhaps f x = the_default x (f x)
 
 perhaps_map :: (a -> Maybe b) -> [a] -> Maybe [b]
 perhaps_map f [] = Just []
