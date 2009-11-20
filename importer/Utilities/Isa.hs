@@ -4,7 +4,7 @@ Auxiliary.
 -}
 
 module Importer.Utilities.Isa
-    (renameIsaCmd, namesFromIsaCmd, renameTyVarInType, nameOfTypeSign,
+    (renameFunctionStmt, namesFromIsaCmd, renameTyVarInType, nameOfTypeSign,
      mk_InstanceCmd_name, prettyShow, prettyShow') where
 
 import Maybe
@@ -31,26 +31,16 @@ renameTyVarInType thy (from, to) typ
 renameTypeSign :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.TypeSign -> Isa.TypeSign
 renameTypeSign thy rs (Isa.TypeSign name vs ty) = Isa.TypeSign (translate thy rs name) vs ty
 
-renameIsaCmd :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.Stmt -> Isa.Stmt
-renameIsaCmd thy renamings cmd
-    = let rs = canonicalizeRenamings thy renamings
-      in case cmd of
-           Isa.Fun tysigs permissive clauses -> Isa.Fun tysigs' permissive clauses'
-               where tysigs' = map (renameTypeSign thy rs) tysigs
-                     clauses' = map (renameClause rs) clauses
-                     renameClause rs (n, pats, body) 
-                         = (translate thy rs n, pats, alphaConvertTerm thy rs body)
-
-           Isa.Definition sig (n, t) -> Isa.Definition sig' (n', t')
-               where sig' = renameTypeSign thy rs sig
-                     n' = translate thy rs n
-                     t' = alphaConvertTerm thy rs t
-
-           _ -> error ("renameIsaCmd: Fall through: " ++ show cmd)
-
+renameFunctionStmt :: Isa.ThyName -> [(Isa.Name, Isa.Name)]
+  -> Isa.Function_Stmt -> Isa.Function_Stmt
+renameFunctionStmt thy raw_renamings (Isa.Function_Stmt kind tysigs clauses) =
+    Isa.Function_Stmt kind (map (renameTypeSign thy renamings) tysigs)
+      (map renameClause clauses)
+  where
+    renamings = canonicalizeRenamings thy raw_renamings
+    renameClause (n, pats, body) = (translate thy renamings n, pats, alphaConvertTerm thy renamings body)
 
 alphaConvertTerm :: Isa.ThyName -> [(Isa.Name, Isa.Name)] -> Isa.Term -> Isa.Term
-
 alphaConvertTerm thy alist term = aconvert (canonicalizeRenamings thy alist) term
     where 
       aconvert alist term
@@ -126,10 +116,8 @@ apply3 f [a,b,c]   = f a b c
 nameOfTypeSign (Isa.TypeSign name _ _) = name
 
 namesFromIsaCmd :: Isa.Stmt -> [Isa.Name]
-namesFromIsaCmd (Isa.Fun sigs _ _)       = map nameOfTypeSign sigs
-namesFromIsaCmd (Isa.Definition sig _) = [nameOfTypeSign sig]
-namesFromIsaCmd junk 
-    = error ("namesFromIsaCmd: Fall through: " ++ show junk)
+namesFromIsaCmd (Isa.Function (Isa.Function_Stmt _ sigs _)) = map nameOfTypeSign sigs
+namesFromIsaCmd stmt = error ("namesFromIsaCmd: Fall through: " ++ show stmt)
 
 name2str (Isa.QName _ s) = s
 name2str (Isa.Name s)    = s

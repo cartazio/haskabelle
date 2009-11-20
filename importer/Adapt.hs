@@ -542,6 +542,19 @@ instance Adapt Isa.Module where
         where setModuleID v state
                   = state { currentModuleID = v }
 
+instance Adapt Isa.Function_Stmt where
+    adapt (Isa.Function_Stmt kind sigs eqns) =
+        do sigs' <- mapM adapt sigs
+           let funNs = map Isa.nameOfTypeSign (sigs ++ sigs')
+           shadowing (map Isa.nameOfTypeSign sigs) $
+             do eqns' <- mapM (\(funN, pats, body) ->
+                  do funN' <- adaptName funN
+                     assert (funN `elem` funNs) $ return ()
+                     pats' <- mapM adapt pats
+                     shadowing (accumulate (fold add_const_names) pats') $
+                       do body' <- adapt body ; return (funN', pats', body')) eqns
+                return (Isa.Function_Stmt kind sigs' eqns')
+
 instance Adapt Isa.Stmt where
 
     adapt (Isa.TypeSynonym aliases) = liftM Isa.TypeSynonym (mapM adpt aliases)
@@ -557,36 +570,7 @@ instance Adapt Isa.Stmt where
         do types' <- mapM adaptType types
            return (name, types')
 
-    adapt (Isa.Fun typesigs permissive defs)
-        = do typesigs' <- mapM adapt typesigs
-             let funNs = map Isa.nameOfTypeSign (typesigs ++ typesigs')
-             shadowing (map Isa.nameOfTypeSign typesigs) $
-               do defs' <- mapM (\(funN, pats, body)
-                                     -> do funN' <- adaptName funN
-                                           assert (funN `elem` funNs) $ return ()
-                                           pats' <- mapM adapt pats
-                                           shadowing (accumulate (fold add_const_names) pats') $
-                                             do body' <- adapt body ; return (funN', pats', body'))
-                                defs
-                  return (Isa.Fun typesigs' permissive defs')
-         
-    adapt (Isa.Primrec typesigs defs)
-        = do typesigs' <- mapM adapt typesigs
-             let funNs = map Isa.nameOfTypeSign (typesigs ++ typesigs')
-             shadowing (map Isa.nameOfTypeSign typesigs) $
-               do defs' <- mapM (\(funN, pats, body)
-                                     -> do funN' <- adaptName funN
-                                           assert (funN `elem` funNs) $ return ()
-                                           pats' <- mapM adapt pats
-                                           shadowing (accumulate (fold add_const_names) pats') $
-                                             do body' <- adapt body ; return (funN', pats', body'))
-                                defs
-                  return (Isa.Primrec typesigs' defs')
-
-    adapt (Isa.Definition typesig (n, term))
-        = do typesig' <- adapt typesig
-             shadowing [n] $
-               do term' <- adapt term ; return (Isa.Definition typesig' (n, term'))
+    adapt (Isa.Function function_stmt) = liftM Isa.Function (adapt function_stmt)
 
     adapt (Isa.Class classN supclassNs typesigs)
         = do classN'     <- adaptClass classN
@@ -594,13 +578,13 @@ instance Adapt Isa.Stmt where
              typesigs'   <- mapM adapt typesigs
              return (Isa.Class classN' supclassNs' typesigs')
 
-    adapt (Isa.Instance classN tycoN arities cmds)
+    adapt (Isa.Instance classN tycoN arities stmt)
         = do classN' <- adaptClass classN
              type' <- adaptType (Isa.Type tycoN (map (Isa.TVar . fst) arities))
              let (tycoN', tvars') = ((map_snd . map) Isa.dest_TVar . Isa.dest_Type) type'
              sorts' <- (mapM . mapM) adaptClass (map snd arities)
-             cmds' <- mapM adapt cmds
-             return (Isa.Instance classN' tycoN' (zip tvars' sorts') cmds')
+             stmt' <- mapM adapt stmt
+             return (Isa.Instance classN' tycoN' (zip tvars' sorts') stmt')
 
 instance Adapt Isa.TypeSpec where
     adapt (Isa.TypeSpec tyvarNs tycoN)

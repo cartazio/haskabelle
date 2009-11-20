@@ -7,15 +7,14 @@ Pretty printing of abstract Isar/HOL theory.
 
 module Importer.Printer (pprint) where
 
+import Importer.Library
+
 import Maybe
 import Control.Monad
 
 import qualified Text.PrettyPrint as P
 
-import Importer.Library
-
-import Importer.Utilities.Isa (renameIsaCmd, namesFromIsaCmd, 
-                               mk_InstanceCmd_name)
+import Importer.Utilities.Isa (renameFunctionStmt, namesFromIsaCmd, mk_InstanceCmd_name)
 
 import Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
 
@@ -244,76 +243,30 @@ instance Printer Isa.Module where
                (vcat $ map (pprint' adapt reserved) cmds) $+$
                text "\nend\n"
 
-instance Printer Isa.Stmt where
-    pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
+instance Printer Isa.Function_Stmt where
 
-    pprint' adapt reserved (Isa.Datatype (decl : decls)) =
-      blankline $ vcat (text "datatype" <+> pprintDecl decl :
-        map ((text "and     " <+>) . pprintDecl) decls) where
-        pprintDecl (tyspec, dataspecs) =
-          pprint' adapt reserved tyspec  <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
-            (map pprintConstr dataspecs))
-        pprintConstr (con, types)  =
-          hsep $ pprint' adapt reserved con : map (pprint' adapt reserved) types
-
-    pprint' adapt reserved (Isa.Record tyspec conspecs)
-        = blankline $
-          text "record" <+> pprint' adapt reserved tyspec <+> equals $$
-          space <+> vcat (map pp conspecs)
-          where pp (slotName, slotType) = pprint' adapt reserved slotName <+> text "::" <+> pprint' adapt reserved slotType
-
-    pprint' adapt reserved (Isa.Definition tysig matching)
-        = case matching of
-            (pat, term)
-                -> blankline $
-                   text "definition" <+> pprint' adapt reserved tysig $$
-                   text "where" $$
-                   space <+> (maybeWithinHOL $ ppEquation pat term)
-        where 
-          ppEquation pat term
-              = do thy <- queryPP currentTheory 
-                   env <- queryPP globalEnv
-                   let lookup = (\n -> lookupIdentifier thy n env)
-                   pprint' adapt reserved pat <+> equals <+> parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
-
-    pprint' adapt reserved (Isa.Primrec tysigs equations) =
-      printFunDef adapt reserved "primrec" "" tysigs equations
-
-    pprint' adapt reserved (Isa.Fun tysigs False equations) =
-      printFunDef adapt reserved "fun" "" tysigs equations
-
-    pprint' adapt reserved (Isa.Fun tysigs True equations) =
-      printFunDef adapt reserved "function (sequential)" "sorry termination sorry" tysigs equations
-
-    pprint' adapt reserved (Isa.Class classN superclassNs typesigs)
-        = blankline $
-          text "class"
-          <+> pprint' adapt reserved classN 
-          <+> (if null superclassNs && null typesigs then empty else equals)
-          <+> hsep (punctuate plus (map (pprint' adapt reserved) superclassNs))
-          <+> (if null superclassNs || null typesigs then empty else plus) $$
-            space <> space <>
-              vcat (zipWith (<+>) (repeat (text "fixes")) (map ppSig typesigs))
-        where ppSig (Isa.TypeSign n arities t)
-                  = pprint' adapt reserved n <+> text "::" <+> withTyScheme arities (pprint' adapt reserved t)
-          
-    pprint' adapt reserved (Isa.Instance classN tycoN arities cmds)
-        = do thy <- queryPP currentTheory
-             let cmds' = map (renameInstanceCmd thy (Isa.Type tycoN (map (Isa.TVar . fst) arities))) cmds
-             blankline $ {- FIMXE arguments -}
-               text "instantiation" <+> pprint' adapt reserved tycoN <+> text "::" <+> pprint' adapt reserved classN $$
-               text "begin" $$
-               space <> space <> vcat (map (pprint' adapt reserved) cmds') $$
-               (blankline $
-                text "instance sorry\n" $$
-                text "end")
-        where
-          renameInstanceCmd thy t c
-              = let renams = [ (n, mk_InstanceCmd_name n t) | n <- namesFromIsaCmd c ]
-                in renameIsaCmd thy renams c
- 
-    pprint' adapt reserved (Isa.TypeSynonym aliases) = blankline $ text "types" <+> vcat (map pp aliases)
-        where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
+    pprint' adapt reserved (Isa.Function_Stmt kind sigs eqns) =
+      blankline $
+        text prologue <+> vcat (punctuate (text " and ") (map (pprint' adapt reserved) sigs)) $$
+        text "where" $$
+        vcat (zipWith (<+>) (space : repeat (char '|'))
+          (map pprint_eqn eqns)) $$
+        text epilogue
+      where 
+        (prologue, epilogue) = case kind of
+          Isa.Definition -> ("definition", "")
+          Isa.Primrec -> ("primrec", "")
+          Isa.Fun -> ("fun", "")
+          Isa.Function_Sorry -> ("function (sequential)", "sorry termination sorry")
+        pprint_eqn (fname, pattern, term) = do
+          thy <- queryPP currentTheory 
+          env <- queryPP globalEnv
+          let lookup = (\n -> lookupIdentifier thy n env)
+          maybeWithinHOL $
+            pprint' adapt reserved fname <+> 
+            hsep (map (pprint' adapt reserved) pattern) <+> 
+            equals <+> 
+            parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
 
 printFunDef adapt reserved prologue epilogue tysigs equations
     = blankline $
@@ -332,6 +285,55 @@ printFunDef adapt reserved prologue epilogue tysigs equations
                               hsep (map (pprint' adapt reserved) pattern) <+> 
                               equals <+> 
                               parensIf (isCompound adapt term lookup) (pprint' adapt reserved term)
+
+instance Printer Isa.Stmt where
+
+    pprint' adapt reserved (Isa.Comment string) = empty -- blankline $ comment string
+
+    pprint' adapt reserved (Isa.Datatype (decl : decls)) =
+      blankline $ vcat (text "datatype" <+> pprintDecl decl :
+        map ((text "and     " <+>) . pprintDecl) decls) where
+        pprintDecl (tyspec, dataspecs) =
+          pprint' adapt reserved tyspec  <+> vcat (zipWith (<+>) (equals : repeat (char '|'))
+            (map pprintConstr dataspecs))
+        pprintConstr (con, types)  =
+          hsep $ pprint' adapt reserved con : map (pprint' adapt reserved) types
+
+    pprint' adapt reserved (Isa.Record tyspec conspecs)
+        = blankline $
+          text "record" <+> pprint' adapt reserved tyspec <+> equals $$
+          space <+> vcat (map pp conspecs)
+          where pp (slotName, slotType) = pprint' adapt reserved slotName <+> text "::" <+> pprint' adapt reserved slotType
+
+    pprint' adapt reserved (Isa.Function stmt) = pprint' adapt reserved stmt
+
+    pprint' adapt reserved (Isa.Class classN superclassNs typesigs)
+        = blankline $
+          text "class"
+          <+> pprint' adapt reserved classN 
+          <+> (if null superclassNs && null typesigs then empty else equals)
+          <+> hsep (punctuate plus (map (pprint' adapt reserved) superclassNs))
+          <+> (if null superclassNs || null typesigs then empty else plus) $$
+            space <> space <>
+              vcat (zipWith (<+>) (repeat (text "fixes")) (map ppSig typesigs))
+        where ppSig (Isa.TypeSign n arities t)
+                  = pprint' adapt reserved n <+> text "::" <+> withTyScheme arities (pprint' adapt reserved t)
+          
+    pprint' adapt reserved (Isa.Instance classN tycoN arities stmts)
+        = do thy <- queryPP currentTheory
+             let stmts' = map (\stmt -> renameFunctionStmt thy
+                    [ (n, mk_InstanceCmd_name n (Isa.Type tycoN (map (Isa.TVar . fst) arities)))
+                      | n <- namesFromIsaCmd (Isa.Function stmt) ] stmt) stmts
+             blankline $ {- FIMXE arguments -}
+               text "instantiation" <+> pprint' adapt reserved tycoN <+> text "::" <+> pprint' adapt reserved classN $$
+               text "begin" $$
+               space <> space <> vcat (map (pprint' adapt reserved) stmts') $$
+               (blankline $
+                text "instance sorry\n" $$
+                text "end")
+ 
+    pprint' adapt reserved (Isa.TypeSynonym aliases) = blankline $ text "types" <+> vcat (map pp aliases)
+        where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
 
 instance Printer Isa.ThyName where
     pprint' adapt reserved (Isa.ThyName name) =

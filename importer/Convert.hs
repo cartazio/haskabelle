@@ -330,7 +330,7 @@ generateRecordAux pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs conde
                         let binds = map (mkAFunBind fname) constrs
                             fname' = Isa.Name fname
                             funTy = Isa.Func dty (Env.toIsa fty)
-                        in Isa.Primrec [Isa.TypeSign fname' vs funTy] binds
+                        in Isa.Function (Isa.Function_Stmt Isa.Primrec [Isa.TypeSign fname' vs funTy] binds)
                     mkAFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
                             con = Isa.Const $ Isa.Name cname
@@ -346,7 +346,7 @@ generateRecordAux pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs conde
                             binds = map (mkUFunBind fname uname) constrs
                             uname' = Isa.Name uname
                             funTy = Isa.Func (Env.toIsa fty) (Isa.Func dty dty)
-                        in Isa.Primrec [Isa.TypeSign uname' vs funTy] binds
+                        in Isa.Function (Isa.Function_Stmt Isa.Primrec [Isa.TypeSign uname' vs funTy] binds)
                     mkUFunBind fname uname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
                         let uname' = Isa.Name uname
                             con = Isa.Const $ Isa.Name cname
@@ -432,8 +432,9 @@ convertDependentDecls pragmas (HskDependentDecls [d]) = do
 convertDependentDecls pragmas (HskDependentDecls decls@(decl:_))
   | isFunBind decl = assert (all isFunBind decls)
       $ do funcmds <- mapsM (convertDecl pragmas) decls
-           let (sigs, permissive, eqs) = unzip3 (map splitFunCmd funcmds)
-           return [Isa.Fun sigs (or permissive) (flat eqs)]
+           let (kinds, sigs, eqs) = unzip3 (map splitFunCmd funcmds)
+           let kind = if any (== Isa.Function_Sorry) kinds then Isa.Function_Sorry else Isa.Fun
+           return [Isa.Function (Isa.Function_Stmt kind sigs (flat eqs))]
   | isDataDecl decl = assert (all isDataDecl decls)
       $ do dataDefs <- mapM (convertDataDecl pragmas) decls
            auxCmds <- mapM (generateRecordAux pragmas) decls
@@ -443,7 +444,7 @@ convertDependentDecls pragmas (HskDependentDecls decls@(decl:_))
     isFunBind _ = False
     isDataDecl (Hsx.DataDecl _ _ _ _ _ _ _) = True
     isDataDecl _ = False
-    splitFunCmd (Isa.Fun [sig] permissive eqs) = (sig, permissive, eqs)
+    splitFunCmd (Isa.Function (Isa.Function_Stmt kind [sig] eqs)) = (kind, sig, eqs)
 
 instance Convert Hsx.Module Isa.Stmt where
     convert' pragmas (Hsx.Module loc modul _ _ _exports _imports decls)
@@ -543,7 +544,8 @@ convertDecl pragmas (Hsx.FunBind matchs)
              let name = names !! 0
              name' <- convert' pragmas name
              let n = name_of name
-             let permissive = n `elem` these (lookup permissive_pragma pragmas)
+             let kind = if n `elem` these (lookup permissive_pragma pragmas)
+                  then Isa.Function_Sorry else Isa.Fun
              let fsig' = case ftype of { 
                Nothing -> Isa.TypeSign name' [] Isa.NoType;
                Just typ -> convert_type_sign name typ }
@@ -555,7 +557,8 @@ convertDecl pragmas (Hsx.FunBind matchs)
                                 mapM (convert pragmas) bodies
              let bodies'' = zipWith mkSimpleLet aliases bodies'
              thy        <- queryContext theory
-             return [Isa.Fun [fsig'] permissive (zip3 (repeat (Isa.nameOfTypeSign fsig')) patterns' bodies'')]
+             return [Isa.Function (Isa.Function_Stmt kind [fsig']
+               (zip3 (repeat (Isa.nameOfTypeSign fsig')) patterns' bodies''))]
        where splitMatch (Hsx.Match _loc name patterns (Hsx.UnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of Hsx.BDecls [] -> True; _ -> False
@@ -573,7 +576,7 @@ convertDecl pragmas (Hsx.PatBind loc pattern rhs _wherebinds)
                       let sig' = case ftype of { 
                         Nothing -> Isa.TypeSign name' [] Isa.NoType;
                         Just typ -> convert_type_sign name typ }
-                      return [Isa.Definition sig' (name', rhs'')]
+                      return [Isa.Function (Isa.Function_Stmt Isa.Definition [sig'] [(name', [], rhs'')])]
             _   -> dieWithLoc loc (Msg.complex_toplevel_patbinding)
     
 convertDecl pragmas decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
@@ -614,8 +617,9 @@ convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
                  let inst_envtype  = Env.fromHsk (head tys)
                  let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
                  withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
-                   do decls' <- mapsM (convertDecl pragmas) (map toHsDecl inst_decls)
-                      return [Isa.Instance classqN' tyco' [] decls'] {- FIXME -}
+                   do stmts' <- mapsM (convertDecl pragmas) (map toHsDecl inst_decls)
+                      let fun_stmts' = map (\(Isa.Function fun_stmt) -> fun_stmt) stmts'
+                      return [Isa.Instance classqN' tyco' [] fun_stmts'] {- FIXME -}
         where 
           isType t = case t of { Hsx.TyCon _ -> True; _ -> False }
           toHsDecl (Hsx.InsDecl decl) = decl
