@@ -33,6 +33,7 @@ module Importer.Utilities.Hsk
       moduleFileLocation,
       namesFromDecl,
       string2Name,
+      dest_typcontext,
       extractSuperclassNs,
       extractMethodSigs,
       hskPNil,
@@ -55,7 +56,9 @@ module Importer.Utilities.Hsk
       unBang,
       getSrcLoc
     ) where
-  
+
+import Importer.Library
+import qualified Importer.AList as AList
 import Maybe
 import List (sort, sortBy)
 import Data.Map (Map)
@@ -70,8 +73,6 @@ import Data.Generics.Basics
 import Data.Generics.PlateData
 
 import Control.Monad.Reader
-
-import Importer.Library
 
 import Language.Haskell.Exts as Hsx
 
@@ -250,6 +251,11 @@ isHaskellSourceFile fp = map toLower (last (slice (== '.') fp)) == "hs"
 extractSuperclassNs :: Hsx.Context -> [Hsx.QName]
 extractSuperclassNs ctx = map extract ctx
     where extract (Hsx.ClassA qn _) = qn
+
+dest_typcontext :: Hsx.Context -> [(Hsx.Name, [Hsx.QName])]
+dest_typcontext ctx = AList.group (maps dest_entry ctx) where
+  dest_entry (Hsx.ClassA cls typs) = [ (v, cls) | v <- map dest_tyvar typs ]
+  dest_tyvar (Hsx.TyVar v) = v
 
 {-|
   This function extracts the type declarations of the given list of

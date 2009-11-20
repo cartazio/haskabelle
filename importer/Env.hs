@@ -554,18 +554,14 @@ instance Hsk2Env Hsx.Type Type where
           in foldl Hsx.TyApp (Hsx.TyApp tycon' tyvar') tyvars'
 
 typscheme_of_hsk_typ :: Hsx.Type -> ([(Name, [Name])], Type)
-typscheme_of_hsk_typ (Hsx.TyForall _ ctx typ) = (vs, fromHsk typ)
-  where
-    dest_entry (Hsx.ClassA classqN typs) =
-      [ (fromHsk tyvarN, fromHsk classqN) | tyvarN <- map dest_tyvar typs ]
-    dest_tyvar (Hsx.TyVar tyvarN) = tyvarN
-    vs = if null ctx then [] else AList.group (concatMap dest_entry ctx)
+typscheme_of_hsk_typ (Hsx.TyForall _ ctx typ) =
+  (map (map_pair fromHsk (map fromHsk)) (dest_typcontext ctx), fromHsk typ)
 typscheme_of_hsk_typ typ = ([], fromHsk typ)
 
 hsk_typ_of_typscheme :: ([(Name, [Name])], Type) -> Hsx.Type
-hsk_typ_of_typscheme (vs, typ) = Hsx.TyForall Nothing vs' (toHsk typ) where
-  vs_aux = AList.group $ concat [ map (flip (,) tyvarN) classNs | (tyvarN, classNs) <- vs ]
-  vs' = [ Hsx.ClassA (toHsk classN) (map (Hsx.TyVar . toHsk) tyvarNs) | (classN, tyvarNs) <- vs_aux ]
+hsk_typ_of_typscheme (vs, typ) = Hsx.TyForall Nothing ctx (toHsk typ) where
+  aux = AList.group $ concat [ map (flip (,) tyvarN) classNs | (tyvarN, classNs) <- vs ]
+  ctx = [ Hsx.ClassA (toHsk classN) (map (Hsx.TyVar . toHsk) tyvarNs) | (classN, tyvarNs) <- aux ]
 
 {-    toHsk (TyScheme alist t) = Hsx.TyForall Nothing ctx (toHsk t)
         where

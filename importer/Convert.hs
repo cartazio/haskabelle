@@ -600,37 +600,47 @@ convertDecl pragmas decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
                        typ'   <- convert pragmas typ {-FIXME-}
                        return (map (\name' -> Isa.TypeSign name' [] typ') names')
 
-convertDecl pragmas (Hsx.InstDecl loc ctx classqN tys inst_decls)
-        | length tys /= 1 = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
-        | not (isType (head tys)) = dieWithLoc loc (Msg.only_specializing_on_tycon_allowed)
-        | otherwise
-            = do classqN'   <- convert pragmas classqN
-                 type'      <- convert pragmas (head tys)
-                 let (tyco', _) = Isa.dest_Type type'
-                 identifier <- lookupIdentifier_Type classqN
-                 let classinfo
-                                   = case fromJust identifier of
-                                       Env.TypeDecl (Env.Class _ classinfo) -> classinfo
-                                       t -> error $ "found:\n" ++ show t
-                 let methods       = Env.methodsOf classinfo
-                 let classVarN     = Env.classVarOf classinfo
-                 let inst_envtype  = Env.fromHsk (head tys)
-                 let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
-                 withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
-                   do stmts' <- mapsM (convertDecl pragmas) (map toHsDecl inst_decls)
-                      let fun_stmts' = map (\(Isa.Function fun_stmt) -> fun_stmt) stmts'
-                      return [Isa.Instance classqN' tyco' [] fun_stmts'] {- FIXME -}
-        where 
-          isType t = case t of { Hsx.TyCon _ -> True; _ -> False }
-          toHsDecl (Hsx.InsDecl decl) = decl
+convertDecl pragmas (Hsx.InstDecl loc ctx cls [typ] stmts) = do
+    cls' <- convert pragmas cls
+    typ' <- convert pragmas typ
+    case dest_typ_tvars typ' of
+      Nothing -> dieWithLoc loc Msg.only_simple_instantiations
+      Just (tyco', vs') -> do
+        raw_arities <- mapM (convert_arity) (dest_typcontext ctx)
+        let arities' = AList.make (the . AList.lookup raw_arities) vs';
+        identifier <- lookupIdentifier_Type cls
+        let classinfo = case fromJust identifier of
+                              Env.TypeDecl (Env.Class _ classinfo) -> classinfo
+                              t -> error $ "found:\n" ++ show t
+        let methods = Env.methodsOf classinfo
+        let classVarN = Env.classVarOf classinfo
+        let inst_envtype = Env.fromHsk typ
+        let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
+        withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
+          do stmts' <- mapsM (convertDecl pragmas) (map toHsDecl stmts)
+             let fun_stmts' = map (\(Isa.Function fun_stmt) -> fun_stmt) stmts'
+             return [Isa.Instance cls' tyco' arities' fun_stmts']
+  where
+    dest_typ_tvars (Isa.Type tyco typs) = case perhaps_map dest_tvar typs of
+      Nothing -> Nothing
+      Just vs -> Just (tyco, vs)
+    dest_typ_tvars _ = Nothing
+    dest_tvar (Isa.TVar v) = Just v
+    dest_tvar _ = Nothing
+    convert_arity (v, sort) = do
+      v' <- convert pragmas v
+      sort' <- mapM (convert pragmas) sort
+      return (v', sort')
+    toHsDecl (Hsx.InsDecl decl) = decl
+    mk_method_annotation :: Env.Name -> Env.Type -> Env.Identifier -> Env.Identifier
+    mk_method_annotation tyvarN tycon class_method_annot
+        = assert (Env.isTypeAnnotation class_method_annot)
+            $ let lexinfo = Env.lexInfoOf class_method_annot
+                  (_, typ)     = Env.typschemeOf lexinfo
+                  typ'    = Env.substituteTyVars [(Env.TyVar tyvarN, tycon)] typ
+              in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typschemeOf = ([], typ') }))
+convertDecl pragmas (Hsx.InstDecl loc ctx cls _ stmts) = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
 
-          mk_method_annotation :: Env.Name -> Env.Type -> Env.Identifier -> Env.Identifier
-          mk_method_annotation tyvarN tycon class_method_annot
-              = assert (Env.isTypeAnnotation class_method_annot)
-                  $ let lexinfo = Env.lexInfoOf class_method_annot
-                        (_, typ)     = Env.typschemeOf lexinfo
-                        typ'    = Env.substituteTyVars [(Env.TyVar tyvarN, tycon)] typ
-                    in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typschemeOf = ([], typ') }))
 
 convertDecl pragmas junk = pattern_match_exhausted "Hsx.Decl -> Isa.Stmt" junk
 

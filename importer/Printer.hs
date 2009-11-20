@@ -10,7 +10,7 @@ module Importer.Printer (pprint) where
 import Importer.Library
 
 import Maybe
-import Control.Monad
+import Control.Monad (liftM2)
 
 import qualified Text.PrettyPrint as P
 
@@ -319,18 +319,18 @@ instance Printer Isa.Stmt where
         where ppSig (Isa.TypeSign n arities t)
                   = pprint' adapt reserved n <+> text "::" <+> withTyScheme arities (pprint' adapt reserved t)
           
-    pprint' adapt reserved (Isa.Instance classN tycoN arities stmts)
-        = do thy <- queryPP currentTheory
-             let stmts' = map (\stmt -> renameFunctionStmt thy
-                    [ (n, mk_InstanceCmd_name n (Isa.Type tycoN (map (Isa.TVar . fst) arities)))
-                      | n <- namesFromIsaCmd (Isa.Function stmt) ] stmt) stmts
-             blankline $ {- FIMXE arguments -}
-               text "instantiation" <+> pprint' adapt reserved tycoN <+> text "::" <+> pprint' adapt reserved classN $$
-               text "begin" $$
-               space <> space <> vcat (map (pprint' adapt reserved) stmts') $$
-               (blankline $
-                text "instance sorry\n" $$
-                text "end")
+    pprint' adapt reserved (Isa.Instance classN tycoN arities stmts) = do
+      thy <- queryPP currentTheory
+      let stmts' = map (\stmt -> renameFunctionStmt thy
+            [ (n, mk_InstanceCmd_name n (Isa.Type tycoN (map (Isa.TVar . fst) arities)))
+              | n <- namesFromIsaCmd (Isa.Function stmt) ] stmt) stmts
+      blankline $ {- FIMXE arguments -}
+        text "instantiation" <+> pprint' adapt reserved tycoN <+> text "::"
+          <+> (if null arities then pprint' adapt reserved classN
+            else parcommas (map (pprint_sort adapt reserved . snd) arities) <+> pprint' adapt reserved classN) $$
+          text "begin" $$
+          space <> space <> vcat (map (pprint' adapt reserved) stmts') $$
+          (blankline $ text "instance sorry\n" $$ text "end")
  
     pprint' adapt reserved (Isa.TypeSynonym aliases) = blankline $ text "types" <+> vcat (map pp aliases)
         where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
@@ -367,6 +367,10 @@ pprintName reserved str = withinHOL_if (isReservedKeyword str)
         isReservedKeyword :: String -> Bool
         isReservedKeyword str = str `elem` reserved
 
+pprint_sort :: AdaptionTable -> [String] -> [Isa.Name] -> DocM P.Doc
+pprint_sort adapt reserved [cls] = pprint' adapt reserved cls
+pprint_sort adapt reserved sort = brcommas $ map (pprint' adapt reserved) sort
+
 instance Printer Isa.Type where
     pprint' adapt reserved (Isa.NoType)      = text ""
     pprint' adapt reserved (Isa.TVar vname) 
@@ -374,10 +378,8 @@ instance Printer Isa.Type where
              let tyvar_doc = apostroph <> pprint' adapt reserved vname
              case lookup vname alist of
                Nothing -> tyvar_doc
-               Just [classN] -> parens (tyvar_doc <+> text "::"
-                 <+> pprint' adapt reserved classN)
-               Just classNs -> parens (tyvar_doc <+> text "::"
-                 <+> (brcommas $ map (pprint' adapt reserved) classNs))
+               Just sort -> parens (tyvar_doc <+> text "::"
+                 <+> pprint_sort adapt reserved sort)
 
     pprint' adapt reserved (Isa.Type cname []) = pprint' adapt reserved cname 
     pprint' adapt reserved (Isa.Type cname [typ]) =
