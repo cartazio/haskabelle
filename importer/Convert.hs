@@ -24,10 +24,8 @@ import Control.Monad.Writer (WriterT, MonadWriter, runWriterT, tell)
 import Control.Monad.Reader (ask, ReaderT, MonadReader, lift, runReaderT, local)
 import Control.Monad.State (StateT, MonadState, runStateT, get, put)
 
-import qualified Importer.Gensym as Gensym
-
 import qualified Importer.Msg as Msg
-
+import qualified Importer.Gensym as Gensym
 import Importer.Configuration hiding (getMonadInstance)
 import qualified Importer.Configuration as Config (getMonadInstance)
 import Importer.Adapt (makeAdaptionTable_FromHsModule, extractHskEntries,
@@ -38,7 +36,7 @@ import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
 import qualified Importer.DeclDependencyGraph as DeclDependencyGraph
 
 import qualified Language.Haskell.Exts as Hsx
-import qualified Importer.Utilities.Hsk as Hsx
+import qualified Importer.Hsx as Hsx
 import qualified Importer.Isa as Isa
 
 

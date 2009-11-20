@@ -9,7 +9,7 @@ import List (intersperse)
 import Maybe (fromMaybe)
 
 import qualified Language.Haskell.Exts as Hsx
-import qualified Importer.Utilities.Hsk as Hsx (srcloc2string, module2FilePath)
+import qualified Importer.Hsx as Hsx
 
 
 spacify x = x ++ " "

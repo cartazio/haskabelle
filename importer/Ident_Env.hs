@@ -75,7 +75,7 @@ import Importer.Configuration hiding (getCustomTheory)
 import qualified Importer.Configuration as Conf (getCustomTheory)
 
 import qualified Language.Haskell.Exts as Hsx
-import qualified Importer.Utilities.Hsk as Hsx
+import qualified Importer.Hsx as Hsx
 import qualified Importer.Isa as Isa
 
 

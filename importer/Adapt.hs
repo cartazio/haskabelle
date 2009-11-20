@@ -12,17 +12,17 @@ import Importer.Library
 import qualified Importer.AList as AList
 import Data.Maybe (mapMaybe, fromMaybe, catMaybes, isJust)
 import List (partition, sort, group)
+
 import Control.Monad.State (State, get, put, foldM, evalState, runState, liftM2)
 
 import System.FilePath (combine)
 
 import qualified Importer.Msg as Msg
-
 import qualified Importer.Ident_Env as Ident_Env
 import Importer.ConversionUnit (IsaUnit(IsaUnit))
 
 import qualified Language.Haskell.Exts as Hsx
-import qualified Importer.Utilities.Hsk as Hsx (extractBindingNs)
+import qualified Importer.Hsx as Hsx
 import qualified Importer.Isa as Isa
 
 

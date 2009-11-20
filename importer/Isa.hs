@@ -10,12 +10,9 @@ module Importer.Isa (ThyName(..), Name(..), Type(..), Literal(..), Term(..), Pat
   Function_Kind(..), Function_Stmt(..), Stmt(..), TypeSpec(..), TypeSign(..), Module(..),
   dest_Type, dest_TVar, base_name_of, name_of_type_sign, retopologize) where
 
-import Data.Graph as Graph
-
-import Data.Generics.Basics
-import Data.Generics.Instances
-
 import Importer.Library
+import Data.Graph as Graph
+import Data.Generics.Basics
 
 
 {- Names -}

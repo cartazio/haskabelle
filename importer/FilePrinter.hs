@@ -1,24 +1,27 @@
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 
-Importing and writing whole bunches of files.
+Importing whole bunches of files.
 -}
 
 module Importer.FilePrinter (importFiles, importProject) where
 
-import Control.Monad.Error
+import Importer.Library
+
+import Text.PrettyPrint (render)
+
 import System.FilePath
 import System.Directory
 import System.IO
-import Text.PrettyPrint (render)
 
-import Importer.ConversionUnit
-import Importer.Convert
 import Importer.Adapt (Adaption (..), AdaptionTable, readAdapt, preludeFile)
 import Importer.Configuration
+import Importer.ConversionUnit
+import Importer.Convert
 import Importer.Printer (pprint)
+
 import qualified Importer.Ident_Env as Ident_Env (GlobalE)
 import qualified Importer.Isa as Isa (Module(..), ThyName(..))
-import Importer.Utilities.Hsk
+import qualified Importer.Hsx as Hsx
 
 {-|
   Converts a Haskell unit identified by the given file path (i.e., the module defined
@@ -38,7 +41,7 @@ importProject' adapt = do
   outDir <- getOutputDir
   exists <- liftIO $ doesDirectoryExist outDir
   when (not exists) $ liftIO $ createDirectory outDir
-  (adaptTable, convertedUnits) <- convertFiles adapt (filter isHaskellSourceFile inFiles)
+  (adaptTable, convertedUnits) <- convertFiles adapt (filter Hsx.isHaskellSourceFile inFiles)
   liftIO $ copyFile (preludeFile adapt) (combine outDir (takeFileName (preludeFile adapt)))
   sequence_ (map (writeIsaUnit adaptTable (reservedKeywords adapt)) convertedUnits)
 

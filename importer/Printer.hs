@@ -13,7 +13,7 @@ import Control.Monad (liftM2)
 
 import qualified Text.PrettyPrint as P
 
-import qualified Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
+import qualified Language.Haskell.Exts as Hsx (SpecialCon(..), QName(..))
 
 import Importer.Adapt as Adapt (AdaptionTable(AdaptionTable))
 import qualified Importer.Ident_Env as Ident_Env

@@ -34,24 +34,25 @@ module Importer.Configuration
       getMonadLift
     ) where
 
+import Importer.Library
 import Data.Maybe
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)
-import Data.Generics
+
+import Control.Monad.Error (catchError)
 
 import Text.XML.Light hiding (findAttr)
 import qualified Text.XML.Light as XML
 
-import Control.Monad
-import Control.Monad.Error
+import Data.Generics
 
 import System.FilePath
 import System.Directory
 
-import qualified Importer.Isa as Isa (ThyName (..))
-import qualified Language.Haskell.Exts as Hsx
-  (ModuleName (..), Type(..), QName(..))
+import qualified Importer.Isa as Isa (ThyName(..))
+import qualified Language.Haskell.Exts as Hsx (ModuleName (..), Type(..), QName(..))
+import qualified Importer.Hsx as Hsx
 
 
 ---------------------

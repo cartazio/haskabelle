@@ -5,57 +5,10 @@
 
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 
-Auxiliary function to work on Haskell ASTs.
+Haskell ASTs.
 -}
 
-module Importer.Utilities.Hsk
-    (
-     -- * Types
-     Renaming,
-     HskNames,
-     -- * Functions
-      srcloc2string,
-      extractBindingNs,
-      freshIdentifiers,
-      bindingsFromDecls,
-      renameFreeVars,
-      bindingsFromPats,
-      extractFieldNs,
-      extractFreeVarNs,
-      extractVarNs,
-      extractDataConNs,
-      extractTypeConNs,
-      extractImplDeclNs,
-      orderDeclsBySourceLine,
-      renamePat,
-      renameDecl,
-      module2FilePath,
-      moduleFileLocation,
-      namesFromDecl,
-      string2Name,
-      dest_typcontext,
-      extractSuperclassNs,
-      extractMethodSigs,
-      hskPNil,
-      hskPCons,
-      hsk_nil,
-      hsk_cons,
-      hsk_pair,
-      hskPPair,
-      hsk_negate,
-      isHaskellSourceFile,
-      isOperator,
-      moduleHierarchyDepth,
-      showModuleName,
-      typeConName,
-      returnType,
-      boundNames,
-      boundNamesEnv,
-      applySubst,
-      flattenRecFields,
-      unBang,
-      getSrcLoc
-    ) where
+module Importer.Hsx where
 
 import Importer.Library
 import qualified Importer.AList as AList
@@ -65,8 +18,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)
 import Data.Set (Set)
 import qualified Data.Set as Set hiding (Set)
-import Array (inRange)
-import Char (toLower)
+import qualified Array (inRange)
+import qualified Char (toLower)
 
 import Data.Generics
 import Data.Generics.Basics
@@ -74,10 +27,10 @@ import Data.Generics.PlateData
 
 import Control.Monad.Reader
 
-import Language.Haskell.Exts as Hsx
-
 import qualified Importer.Gensym as Gensym
-import Importer.Env
+import qualified Importer.Env as Env
+
+import qualified Language.Haskell.Exts as Hsx
 
 
 {-|
@@ -144,7 +97,7 @@ hskPNil = Hsx.PList []
   the list constructor @(:)@ to it.
 -}
 hskPCons :: Hsx.Pat -> Hsx.Pat -> Hsx.Pat
-hskPCons x y = Hsx.PApp (Special Hsx.Cons) [x, y]
+hskPCons x y = Hsx.PApp (Hsx.Special Hsx.Cons) [x, y]
 
 {-|
   The Haskell empty list.
@@ -157,21 +110,21 @@ hsk_nil             = Hsx.List []
   the list constructor @(:)@ to it.
 -}
 hsk_cons :: Hsx.Exp -> Hsx.Exp -> Hsx.Exp
-hsk_cons x y        = Hsx.App (Hsx.App (Hsx.Con (Special Hsx.Cons)) x) y
+hsk_cons x y        = Hsx.App (Hsx.App (Hsx.Con (Hsx.Special Hsx.Cons)) x) y
 
 {-|
   The Haskell pair constructor. This function takes two Haskell expressions and applies
   the pair constructor @(,)@ to them.
 -}
 hskPPair :: Hsx.Pat -> Hsx.Pat -> Hsx.Pat
-hskPPair x y = Hsx.PApp (Special (Hsx.TupleCon 2)) [x, y]
+hskPPair x y = Hsx.PApp (Hsx.Special (Hsx.TupleCon 2)) [x, y]
 
 {-|
   The Haskell pair constructor. This function takes two Haskell expressions and applies
   the pair constructor @(,)@ to them.
 -}
 hsk_pair :: Hsx.Exp -> Hsx.Exp -> Hsx.Exp
-hsk_pair x y        = Hsx.App (Hsx.App (Hsx.Con (Special (Hsx.TupleCon 2))) x) y
+hsk_pair x y        = Hsx.App (Hsx.App (Hsx.Con (Hsx.Special (Hsx.TupleCon 2))) x) y
 
 {-|
   The Haskell logical negation. This function takes a Haskell expression and applies
@@ -190,13 +143,13 @@ hsk_if = Hsx.If
 {-|
   The Haskell lambda abstraction.
 -}
-hsk_lambda :: SrcLoc -> [Hsx.Pat] -> Hsx.Exp -> Hsx.Exp
+hsk_lambda :: Hsx.SrcLoc -> [Hsx.Pat] -> Hsx.Exp -> Hsx.Exp
 hsk_lambda = Hsx.Lambda
 
 {-|
   The Haskell (ungarded!) case expression.
 -}
-hsk_case :: SrcLoc -> Hsx.Exp -> [(Hsx.Pat, Hsx.Exp)] -> Hsx.Exp
+hsk_case :: Hsx.SrcLoc -> Hsx.Exp -> [(Hsx.Pat, Hsx.Exp)] -> Hsx.Exp
 hsk_case loc e cases
     = Hsx.Case e [ Hsx.Alt loc pat (Hsx.UnGuardedAlt exp) (Hsx.BDecls []) | (pat, exp) <- cases ]
 
@@ -215,8 +168,8 @@ string2Name string = case isSymbol string of
 {-|
   This function turns a source location into a human readable string.
 -}
-srcloc2string :: SrcLoc -> String
-srcloc2string (SrcLoc { srcFilename=filename, srcLine=line, srcColumn=column })
+srcloc2string :: Hsx.SrcLoc -> String
+srcloc2string (Hsx.SrcLoc { Hsx.srcFilename=filename, Hsx.srcLine=line, Hsx.srcColumn=column })
     = filename ++ ":" ++ (show line) ++ ":" ++ (show column)
 
 {-|
@@ -228,7 +181,7 @@ module2FilePath (Hsx.ModuleName name)
     = map (\c -> if c == '.' then '/' else c) name ++ ".hs"
 
 moduleFileLocation :: Hsx.Module -> FilePath
-moduleFileLocation (Hsx.Module SrcLoc{srcFilename = file} _ _ _ _ _ _) = file
+moduleFileLocation (Hsx.Module Hsx.SrcLoc{Hsx.srcFilename = file} _ _ _ _ _ _) = file
 
 moduleHierarchyDepth :: Hsx.ModuleName -> Int
 moduleHierarchyDepth (Hsx.ModuleName name) = length $ filter (== '.') name
@@ -238,7 +191,7 @@ moduleHierarchyDepth (Hsx.ModuleName name) = length $ filter (== '.') name
   source file.
 -}
 isHaskellSourceFile :: FilePath -> Bool
-isHaskellSourceFile fp = map toLower (last (slice (== '.') fp)) == "hs"
+isHaskellSourceFile fp = map Char.toLower (last (slice (== '.') fp)) == "hs"
 
 {-|
   This function takes a context (from a class definition) and extracts
@@ -364,26 +317,26 @@ type Subst = Map Hsx.QName Hsx.Exp
   the given piece of Haskell Syntax.
 -}
 
-boundNamesEnv :: (Monad m) => EnvDef m HskNames
-boundNamesEnv = mkE fromExp
-             `extE` fromAlt
-             `extE` fromDecl
-             `extE` fromMatch
-             `extE` fromStmts
-    where fromExp :: Hsx.Exp -> Envs HskNames
+boundNamesEnv :: (Monad m) => Env.EnvDef m HskNames
+boundNamesEnv = Env.mkE fromExp
+             `Env.extE` fromAlt
+             `Env.extE` fromDecl
+             `Env.extE` fromMatch
+             `Env.extE` fromStmts
+    where fromExp :: Hsx.Exp -> Env.Envs HskNames
           fromExp (Hsx.Let binds _)
               = let bound = Set.fromList $ extractBindingNs binds
-                in Envs [bound,bound]
+                in Env.Envs [bound,bound]
           fromExp (Hsx.Lambda _ pats _)
               = let bound = Set.fromList $ extractBindingNs pats
-                in Envs [Set.empty,bound, bound]
+                in Env.Envs [Set.empty,bound, bound]
           fromExp (Hsx.MDo stmts)
               = let bound = Set.fromList $ extractBindingNs stmts
-                in Envs [bound]
+                in Env.Envs [bound]
           fromExp (Hsx.ListComp _ stmts)
               = let bound = Set.fromList $ extractBindingNs stmts
-                in Envs [bound, Set.empty]
-          fromExp exp = uniEloc exp Set.empty
+                in Env.Envs [bound, Set.empty]
+          fromExp exp = Env.uniEloc exp Set.empty
                             
           fromAlt :: Hsx.Alt -> HskNames
           fromAlt (Hsx.Alt _ pat _ _) = Set.fromList $ extractBindingNs pat
@@ -398,16 +351,16 @@ boundNamesEnv = mkE fromExp
               = Set.fromList $ 
                 extractBindingNs whereBinds ++ extractBindingNs pats
 
-          fromStmts :: [Hsx.Stmt] -> Envs HskNames
-          fromStmts [] = Envs []
+          fromStmts :: [Hsx.Stmt] -> Env.Envs HskNames
+          fromStmts [] = Env.Envs []
           fromStmts (Hsx.Generator loc pat exp : _)
               = let bound = Set.fromList $ extractBindingNs pat
-                in Envs [Set.empty, bound]
+                in Env.Envs [Set.empty, bound]
           fromStmts (Hsx.Qualifier _ : _)
-              = Envs [Set.empty, Set.empty]
+              = Env.Envs [Set.empty, Set.empty]
           fromStmts (Hsx.LetStmt binds : _)
               = let bound = Set.fromList $ extractBindingNs binds
-                in Envs [bound, bound]
+                in Env.Envs [bound, bound]
 
 {-|
   This is a monadic query function that returns
@@ -479,7 +432,7 @@ extractTypeConNs node = everything Set.union (mkQ Set.empty fromType) node where
   in the given piece of Haskell syntax.
 -}
 extractFreeVarNs :: Data a => a -> HskNames
-extractFreeVarNs node = runBindingM $ everythingEnv boundNamesEnv (Set.union) freeNamesLocal node
+extractFreeVarNs node = runBindingM $ Env.everythingEnv boundNamesEnv (Set.union) freeNamesLocal node
 
 {-|
   This function extracts all used field labels
@@ -492,7 +445,7 @@ extractFieldNs node = everything Set.union (mkQ Set.empty fromPat `extQ` fromExp
           fromExp (Hsx.FieldUpdate field _) = Set.singleton field
 
 applySubst :: Subst -> GenericT
-applySubst subst node = runBindingM $ everywhereEnv boundNamesEnv (applySubstLocal subst) node
+applySubst subst node = runBindingM $ Env.everywhereEnv boundNamesEnv (applySubstLocal subst) node
 
 applySubstLocal :: Subst -> GenericM BindingM
 applySubstLocal subst node =
@@ -551,7 +504,7 @@ renameFreeVarsLocal renamings node =
        return (apply node)
 
 renameFreeVars :: Data a => [Renaming] -> a -> a
-renameFreeVars renamings node = runBindingM $ everywhereEnv boundNamesEnv (renameFreeVarsLocal renamings) node
+renameFreeVars renamings node = runBindingM $ Env.everywhereEnv boundNamesEnv (renameFreeVarsLocal renamings) node
 
 {-|
   This type is used to describe renamings of variables.
@@ -647,11 +600,11 @@ orderDeclsBySourceLine :: Hsx.Decl -> Hsx.Decl -> Ordering
 orderDeclsBySourceLine decl1 decl2
     = compare (getSourceLine decl1) (getSourceLine decl2) 
 
-getSrcLoc :: Hsx.Decl -> SrcLoc
+getSrcLoc :: Hsx.Decl -> Hsx.SrcLoc
 getSrcLoc decl
-    = head . sortBy compareLines $ (childrenBi decl :: [SrcLoc])
+    = head . sortBy compareLines $ (childrenBi decl :: [Hsx.SrcLoc])
     where compareLines loc1 loc2 
-              = compare (srcLine loc1) (srcLine loc2)
+              = compare (Hsx.srcLine loc1) (Hsx.srcLine loc2)
 
 
 {-|
@@ -660,8 +613,8 @@ getSrcLoc decl
 -}
 getSourceLine :: Hsx.Decl -> Int
 getSourceLine decl
-    = let srclocs = childrenBi decl :: [SrcLoc]
-          lines   = map srcLine srclocs
+    = let srclocs = childrenBi decl :: [Hsx.SrcLoc]
+          lines   = map Hsx.srcLine srclocs
       in head (sort lines)
 
 showModuleName :: Hsx.ModuleName -> String

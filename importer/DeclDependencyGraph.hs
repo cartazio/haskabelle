@@ -4,23 +4,22 @@
 module Importer.DeclDependencyGraph 
     (arrangeDecls) where
 
+import Importer.Library
+
 import Maybe
 import List (groupBy, sortBy, intersect)
-import Data.Graph
+import Data.Graph as Graph
 import Data.Set (Set)
 import qualified Data.Set as Set hiding (Set)
-import Data.Tree
+import qualified Data.Tree as Tree
 
 import Monad
 
-import Importer.Library
+import qualified Importer.Msg as Msg
+import qualified Importer.Ident_Env as Ident_Env
 
 import qualified Language.Haskell.Exts as Hsx
-
-import Importer.Utilities.Hsk
-
-import qualified Importer.Ident_Env as Ident_Env
-import qualified Importer.Msg as Msg
+import qualified Importer.Hsx as Hsx
 
 
 -- We have to canonicalize the names in our graph, as there may appear
@@ -54,9 +53,9 @@ makeEdgesFromDecl :: Ident_Env.GlobalE -> Hsx.ModuleName -> Hsx.Decl -> [(Hsx.De
 makeEdgesFromDecl globalEnv modul decl =
   let
     canonicalize hsqname = Ident_Env.resolveName_OrLose globalEnv (Ident_Env.fromHsk modul) (Ident_Env.fromHsk hsqname)
-    names = map canonicalize $ namesFromDecl decl
-    used_names = Set.map canonicalize $ Set.unions [extractFreeVarNs decl, extractDataConNs decl, extractFieldNs decl]
-    used_types = Set.map canonicalize $ extractTypeConNs decl
+    names = map canonicalize $ Hsx.namesFromDecl decl
+    used_names = Set.map canonicalize $ Set.unions [Hsx.extractFreeVarNs decl, Hsx.extractDataConNs decl, Hsx.extractFieldNs decl]
+    used_types = Set.map canonicalize $ Hsx.extractTypeConNs decl
     impl_types = catMaybes $ Set.toList $ Set.map (Ident_Env.getDepDataType globalEnv (Ident_Env.fromHsk modul)) used_names
   in
     [ (decl, name, Set.toList (Set.union used_names used_types) ++ impl_types) | name <- names ]
@@ -107,12 +106,12 @@ flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
     = let declFromVertex v = (let (decl,_,_) = fromVertex v in decl)
       in map (map declFromVertex)
              $ sortBy orderComponents_ByDependencies
-                 (map (sortBy orderVertices_BySourceLine . flatten) $ scc graph)
+                 (map (sortBy orderVertices_BySourceLine . Tree.flatten) $ scc graph)
     where
       orderVertices_BySourceLine v1 v2
           = let (decl1,_,_) = fromVertex v1
                 (decl2,_,_) = fromVertex v2
-            in orderDeclsBySourceLine decl1 decl2
+            in Hsx.orderDeclsBySourceLine decl1 decl2
 
       orderComponents_ByDependencies vs1 vs2
           = let used_vs_in_1 = concatMap (reachable graph) vs1
@@ -124,7 +123,7 @@ flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
                     else                              -- vs1 and vs2 are independant.
                         let (decl1,_,_) = fromVertex (head vs1)
                             (decl2,_,_) = fromVertex (head vs2)
-                        in orderDeclsBySourceLine decl1 decl2
+                        in Hsx.orderDeclsBySourceLine decl1 decl2
             where 
               isContained xs ys = not (null (intersect xs ys))
 

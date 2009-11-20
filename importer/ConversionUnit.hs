@@ -22,27 +22,25 @@ import qualified Data.Set as Set hiding (Set)
 import Data.Set (Set)
 import qualified Data.Map as Map hiding (Map)
 import Data.Map (Map)
-import Data.Graph
 import Data.Tree
+import Data.Graph
 
 import Control.Monad.Reader (ReaderT, MonadReader, MonadIO, ask, liftIO, runReaderT, lift)
 import Control.Monad.State (StateT, MonadState, get, put, modify, execStateT)
 import Control.Monad.Error (MonadError)
 
-import IO
 import System.FilePath
 import System.Directory
+import IO
 
-import qualified Language.Haskell.Exts as Hsx
-
-import Importer.Utilities.Hsk
-
-import qualified Importer.Isa as Isa
 import qualified Importer.Msg as Msg
 import qualified Importer.Ident_Env as Ident_Env
-
 import qualified Importer.Configuration as Config (getCustomTheory)
 import Importer.Configuration hiding (getCustomTheory)
+
+import qualified Language.Haskell.Exts as Hsx
+import qualified Importer.Hsx as Hsx
+import qualified Importer.Isa as Isa
 
 
 -- A Conversion Unit
@@ -262,8 +260,8 @@ grovelModule hsmodule@(Hsx.Module loc baseMod _ _ _ imports _) =
           mkModImp mod = (computeSrcPath baseMod baseLoc mod, Just mod)
           checkImp (file,Just mod) =
               do ext <- doesFileExist file
-                 when (not ext) $ fail $ "The module \"" ++ showModuleName mod
-                          ++ "\" imported from module \"" ++ showModuleName baseMod 
+                 when (not ext) $ fail $ "The module \"" ++ Hsx.showModuleName mod
+                          ++ "\" imported from module \"" ++ Hsx.showModuleName baseMod 
                                  ++ "\" cannot be found at \"" ++ file ++ "\"!"
 
 {-|
@@ -276,8 +274,8 @@ computeSrcPath :: Hsx.ModuleName      -- ^the module that is importing
                -> FilePath     -- ^the assumed path to the module to be imported
 computeSrcPath importingMod basePath m
     = let curDir = takeDirectory basePath
-          baseDir = shrinkPath . joinPath $ (splitPath curDir) ++ replicate (moduleHierarchyDepth importingMod) ".."
-      in combine baseDir (module2FilePath m)   
+          baseDir = shrinkPath . joinPath $ (splitPath curDir) ++ replicate (Hsx.moduleHierarchyDepth importingMod) ".."
+      in combine baseDir (Hsx.module2FilePath m)   
 
 shrinkPath :: FilePath -> FilePath
 shrinkPath = joinPath . shrinkPath' . splitPath
@@ -301,6 +299,6 @@ parseHskFile (file, mbMod)  =
                    if mName == expMod
                    then return m
                    else fail $ "Name mismatch: Name of imported module in \"" 
-                            ++ file ++"\" is " ++ showModuleName mName
-                                   ++ ", expected was " ++ showModuleName expMod
+                            ++ file ++"\" is " ++ Hsx.showModuleName mName
+                                   ++ ", expected was " ++ Hsx.showModuleName expMod
 

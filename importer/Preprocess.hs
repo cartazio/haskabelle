@@ -7,7 +7,6 @@
 module Importer.Preprocess (preprocessModule) where
 
 import Importer.Library
-
 import Maybe
 import List
 import Data.Map (Map)
@@ -24,13 +23,13 @@ import Data.Generics.Str
 import Control.Monad.Reader (ReaderT, MonadReader, ask, runReaderT, runReader, Reader)
 import Control.Monad.Writer (WriterT, MonadWriter, tell, runWriterT, lift, MonadFix)
 
-import Language.Haskell.Exts as Hsx
-
 import Importer.Env
-import Importer.Utilities.Hsk
-import qualified Importer.Gensym as Gensym
 
+import qualified Importer.Gensym as Gensym
 import qualified Importer.Msg as Msg
+
+import qualified Language.Haskell.Exts as Hsx
+import qualified Importer.Hsx as Hsx
 
 
 -- import Importer.Test.Generators
@@ -68,8 +67,8 @@ preprocessModule reserved (Hsx.Module loc modul pragmas warning exports imports 
   We keep track of the names that are directly bound by a declaration,
   as functions must not close over them. See below for an explanation.
  -}
-newtype DelocaliserM a = DelocaliserM (ReaderT HskNames (WriterT [Hsx.Decl] Gensym.GensymM) a)
-    deriving (Monad, Functor, MonadFix, MonadReader HskNames, MonadWriter [Hsx.Decl])
+newtype DelocaliserM a = DelocaliserM (ReaderT Hsx.HskNames (WriterT [Hsx.Decl] Gensym.GensymM) a)
+    deriving (Monad, Functor, MonadFix, MonadReader Hsx.HskNames, MonadWriter [Hsx.Decl])
 
 {-instance MonadWriter [Hsx.Decl] DelocaliserM where
     tell _ = error ""
@@ -94,13 +93,13 @@ liftGensym = DelocaliserM . lift . lift
   This function executes the given delocaliser monad starting with an
   empty list of bound variables.
 -}
-evalDelocaliser :: HskNames -> DelocaliserM a -> Gensym.GensymM (a,[Hsx.Decl]) 
+evalDelocaliser :: Hsx.HskNames -> DelocaliserM a -> Gensym.GensymM (a,[Hsx.Decl]) 
 evalDelocaliser state (DelocaliserM sm) =
     let wm = runReaderT sm state in
     runWriterT wm
 
 delocaliseAll :: GenericM DelocaliserM
-delocaliseAll = everywhereEnv boundNamesEnv delocalise
+delocaliseAll = everywhereEnv Hsx.boundNamesEnv delocalise
 
 delocalise :: GenericM DelocaliserM
 delocalise = mkM delocaliseLet
@@ -116,7 +115,7 @@ delocaliseClsDecl clsDecl@(Hsx.ClsDecl decl) =
   This data structure is supposed to comprise the definition
   of a function and possibly its type signature declaration.
 -}
-data FunDef = FunDef { funBind :: Hsx.Decl, funSig :: Maybe Hsx.Decl, funFreeNames :: HskNames}
+data FunDef = FunDef { funBind :: Hsx.Decl, funSig :: Maybe Hsx.Decl, funFreeNames :: Hsx.HskNames}
 
 funName :: FunDef -> Hsx.Name
 funName FunDef{funBind = Hsx.FunBind(Hsx.Match _ name _ _ _  : _)} = name
@@ -124,10 +123,10 @@ funName FunDef{funBind = Hsx.FunBind(Hsx.Match _ name _ _ _  : _)} = name
 {-|
   This function renames the function name of the given function definition.
 -}
-renameFunDef :: [Renaming] -> FunDef -> FunDef
+renameFunDef :: [Hsx.Renaming] -> FunDef -> FunDef
 renameFunDef ren def@(FunDef{ funBind = bind, funSig = sig})
-    = let bind' = renameDecl ren bind
-          sig' = liftM (renameDecl ren) sig
+    = let bind' = Hsx.renameDecl ren bind
+          sig' = liftM (Hsx.renameDecl ren) sig
       in def{ funBind = bind', funSig = sig'}
 
 {-|
@@ -139,7 +138,7 @@ groupFunDefs decls =
         funSigs' = concatMap flattenTypeSig funSigs
         sigMap = Map.fromList $ map sigName funSigs'
         mkFunDef bind@(Hsx.FunBind (Hsx.Match _ name _ _ _  : _))
-            = FunDef bind (Map.lookup name sigMap) (extractFreeVarNs bind)
+            = FunDef bind (Map.lookup name sigMap) (Hsx.extractFreeVarNs bind)
     in map mkFunDef funBinds
     where isFunBind (Hsx.FunBind _) = True
           isFunBind _ = False
@@ -164,7 +163,7 @@ addEnvArgToMatch :: Hsx.Name  -- ^the name of the environment variable
           -> Hsx.Match  -- ^the match that should be enriched by an environment argument
           -> Hsx.Match  -- ^the resulting match
 addEnvArgToMatch envName closureNames match@(Hsx.Match loc name pats rhs binds)
-    = let boundNames = map uname (extractBindingNs pats)
+    = let boundNames = map uname (Hsx.extractBindingNs pats)
           toPat name = if name `elem` boundNames
                        then Hsx.PWildCard
                        else Hsx.PVar name
@@ -172,7 +171,7 @@ addEnvArgToMatch envName closureNames match@(Hsx.Match loc name pats rhs binds)
           tuple = case closureNames of
                     [closureName] -> toPat closureName
                     _ -> Hsx.PTuple (map toPat closureNames)
-          passing = (Hsx.UnQual envName) `Set.member` extractFreeVarNs match
+          passing = (Hsx.UnQual envName) `Set.member` Hsx.extractFreeVarNs match
           envArg = if passing then if allBound
                                    then Hsx.PVar envName
                                    else Hsx.PAsPat envName tuple
@@ -204,9 +203,9 @@ addPatBindsToMatch patBinds match@(Hsx.Match loc name pats (Hsx.UnGuardedRhs exp
          then match
          else Hsx.Match loc name pats rhs' binds
     where patBindNeeded patBind
-              = not (Set.null ( Set.fromList (extractBindingNs patBind)
-                                `Set.intersection` extractFreeVarNs exp ))
-          boundNames = Set.fromList (extractBindingNs pats)
+              = not (Set.null ( Set.fromList (Hsx.extractBindingNs patBind)
+                                `Set.intersection` Hsx.extractFreeVarNs exp ))
+          boundNames = Set.fromList (Hsx.extractBindingNs pats)
           shadowPatBind :: Hsx.Decl -> Hsx.Decl
           shadowPatBind (Hsx.PatBind loc pat rhs binds) 
               = (Hsx.PatBind loc (shadow pat) rhs binds) 
@@ -224,18 +223,18 @@ addPatBindsToDecl patBinds (Hsx.FunBind matches) =
     let matches' = map (addPatBindsToMatch patBinds) matches
     in Hsx.FunBind matches'
 addPatBindsToDecl _ decl@(Hsx.TypeSig _ _ _) = decl
-addPatBindsToDecl patBinds decl = error $ "Function binding expected but found:\n" ++ prettyPrint decl
+addPatBindsToDecl patBinds decl = error $ "Function binding expected but found:\n" ++ Hsx.prettyPrint decl
      
 
 delocaliseFunDefs :: [FunDef] -> DelocaliserM [Hsx.Decl]
 delocaliseFunDefs funDefs = 
-    do envNames <- boundNames
+    do envNames <- Hsx.boundNames
        let freeNames = Set.unions (map funFreeNames funDefs)
            closureNames = freeNames `Set.intersection` envNames
            closureNameList = Set.toList closureNames
            closureUNameList = map uname closureNameList
            funNames = map (Hsx.UnQual . funName) funDefs
-       renamings <- liftGensym $ freshIdentifiers funNames
+       renamings <- liftGensym $ Hsx.freshIdentifiers funNames
        envUName <- liftGensym $ Gensym.genHsName (Hsx.Ident "env")
        let envName = Hsx.UnQual envUName
            addEnv (orig,ren) = (orig, Hsx.App (Hsx.Var ren) (Hsx.Var envName))
@@ -243,20 +242,20 @@ delocaliseFunDefs funDefs =
                         [closureName] -> Hsx.Var closureName
                         _ -> Hsx.Tuple (map Hsx.Var closureNameList)
            addEnvTuple (orig,ren) = Hsx.PatBind
-                                    (SrcLoc "" 0 0)
+                                    (Hsx.SrcLoc "" 0 0)
                                     (Hsx.PVar $ uname orig)
                                     (Hsx.UnGuardedRhs (Hsx.App (Hsx.Var ren) envTuple))
                                     (Hsx.BDecls [])
            withoutEnvTuple (orig,ren) = Hsx.PatBind
-                                        (SrcLoc "" 0 0)
+                                        (Hsx.SrcLoc "" 0 0)
                                         (Hsx.PVar $ uname orig)
                                         (Hsx.UnGuardedRhs (Hsx.Var ren))
                                         (Hsx.BDecls [])
            subst = Map.fromList $ map addEnv renamings
            funs = map funBind funDefs
-           funsRenamed = map (renameDecl renamings) funs
-           funsNoEnvPassing = map (renameFreeVars renamings) funsRenamed
-           funsEnvPassing = applySubst subst funsRenamed
+           funsRenamed = map (Hsx.renameDecl renamings) funs
+           funsNoEnvPassing = map (Hsx.renameFreeVars renamings) funsRenamed
+           funsEnvPassing = Hsx.applySubst subst funsRenamed
            funsDeloc = if null closureNameList 
                        then funsNoEnvPassing
                        else map (addEnvArgToDecl envUName closureUNameList) funsEnvPassing
@@ -298,8 +297,8 @@ splitPatBinds (Hsx.BDecls decls)
                                                  concatMap flattenTypeSig (catMaybes typeSigs), 
                                                  catMaybes otherDecls)
           (patTypeSigs, otherTypeSigs) 
-              = partition (let patNs = concatMap namesFromDecl patDecls'
-                           in \sig -> head (namesFromDecl sig) `elem` patNs)
+              = partition (let patNs = concatMap Hsx.namesFromDecl patDecls'
+                           in \sig -> head (Hsx.namesFromDecl sig) `elem` patNs)
                           typeSigs'
       in (Hsx.BDecls (patTypeSigs ++ patDecls'), Hsx.BDecls (otherTypeSigs ++ otherDecls'))
 
@@ -337,11 +336,11 @@ normalizeNames_Decl reserved (Hsx.FunBind matchs)
          return (Hsx.FunBind matchs')
     where
       normalizePatterns_Match (Hsx.Match loc name pats (Hsx.UnGuardedRhs body) where_binds)
-          = let bound_var_ns = bindingsFromPats pats
+          = let bound_var_ns = Hsx.bindingsFromPats pats
                 clashes      = filter (should_be_renamed reserved) bound_var_ns
-            in do renames <- freshIdentifiers clashes
-                  pats'   <- return (map (renamePat renames) pats)
-                  body'   <- return (renameFreeVars renames body)
+            in do renames <- Hsx.freshIdentifiers clashes
+                  pats'   <- return (map (Hsx.renamePat renames) pats)
+                  body'   <- return (Hsx.renameFreeVars renames body)
                   binds'  <- normalizeNames_Binds where_binds
                   return (Hsx.Match loc name pats' (Hsx.UnGuardedRhs body') binds') 
 
@@ -490,12 +489,12 @@ checkBindings bindings
 checkForForwardRefs bindings
     = let vardecls = getPatDecls bindings
       in case filter (\(decl, forwardNss) 
-                          -> any (`elem` concat forwardNss) $ Set.toList (extractFreeVarNs decl))
+                          -> any (`elem` concat forwardNss) $ Set.toList (Hsx.extractFreeVarNs decl))
                 $ zip vardecls
                       -- These are the consecutively following binding names:
-                      (tails (map extractBindingNs vardecls))
+                      (tails (map Hsx.extractBindingNs vardecls))
       of []          -> bindings
-         (decl, _):_ -> error (Msg.forward_bindings_disallowed (getSrcLoc decl))
+         (decl, _):_ -> error (Msg.forward_bindings_disallowed (Hsx.getSrcLoc decl))
 
 -- Check for recursive binding attempts, e.g. prohibit
 --
@@ -505,8 +504,8 @@ checkForForwardRefs bindings
 -- local function definitions.
 --
 checkForRecursiveBinds bindings
-    = let find_recursive_binds = filter (\d -> any (`elem` extractBindingNs d) 
-                                                 $ extractVarNs d)
+    = let find_recursive_binds = filter (\d -> any (`elem` Hsx.extractBindingNs d) 
+                                                 $ Hsx.extractVarNs d)
       in case find_recursive_binds (getPatDecls bindings) of
         []  -> bindings
-        d:_ -> error (Msg.recursive_bindings_disallowed (getSrcLoc d))
+        d:_ -> error (Msg.recursive_bindings_disallowed (Hsx.getSrcLoc d))
