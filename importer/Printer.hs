@@ -320,15 +320,17 @@ instance Printer Isa.Stmt where
       thy <- queryPP currentTheory
       let stmts' = map (renameFunctionStmt thy) stmts
       blankline $
-        text "instantiation" <+> pprint' adapt reserved tycoN <+> text "::"
+        text "instantiation" <+> (if is_prod then text ['"', '*', '"'] else pprint' adapt reserved tycoN) <+> text "::"
           <+> (if null arities then pprint' adapt reserved classN
             else parcommas (map (pprint_sort adapt reserved . snd) arities) <+> pprint' adapt reserved classN) $$
           text "begin" $$
           space <> space <> vcat (map (pprint' adapt reserved) stmts') $$
           (blankline $ text "instance sorry\n" $$ text "end")
       where
-        suffix_tyco (Isa.QName t n) = Isa.QName t (concat [n, "_", Isa.base_name_of tycoN])
-        suffix_tyco (Isa.Name n) = Isa.Name (concat [n, "_", Isa.base_name_of tycoN])
+        is_prod = Isa.base_name_of tycoN == "*"
+        suffix = if is_prod then "prod" else Isa.base_name_of tycoN
+        suffix_tyco (Isa.QName t n) = Isa.QName t (concat [n, "_", suffix])
+        suffix_tyco (Isa.Name n) = Isa.Name (concat [n, "_", suffix])
         renameTypeSign (Isa.TypeSign name vs ty) = Isa.TypeSign (suffix_tyco name) vs ty
         renameClause (name, pats, body) = (suffix_tyco name, pats, body)
         renameFunctionStmt thy (Isa.Function_Stmt kind tysigs clauses) =
@@ -388,6 +390,9 @@ instance Printer Isa.Type where
       maybeWithinHOL $
         parensIf (isCompoundType typ) (pprint' adapt reserved typ)
         <+> pprint' adapt reserved cname
+    pprint' adapt reserved (Isa.Type (Isa.QName (Isa.ThyName "Prelude") "*") [typ1, typ2]) =
+      maybeWithinHOL $ parensIf (isCompoundType typ1) (pprint' adapt reserved typ1)
+        <+> text "*" <+> parensIf (isCompoundType typ2) (pprint' adapt reserved typ2)
     pprint' adapt reserved (Isa.Type cname typs) =
       maybeWithinHOL $
         parcommas (map (pprint' adapt reserved) typs)
@@ -397,10 +402,6 @@ instance Printer Isa.Type where
         = maybeWithinHOL $
             case t1 of Isa.Func _ _ -> parens (pprint' adapt reserved t1) <+> rightarrow <+> pprint' adapt reserved t2
                        _             -> pprint' adapt reserved t1          <+> rightarrow <+> pprint' adapt reserved t2
-
-    pprint' adapt reserved (Isa.Prod types)
-        = maybeWithinHOL $
-            hsep (punctuate (space<>prod) (map (pprint' adapt reserved) types))
 
 
 instance Printer Isa.TypeSign where
@@ -517,12 +518,12 @@ isPairCon adapt = mk_isFoo adapt (Hsx.TupleCon 2)
 pprintAsList :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
 pprintAsList adapt reserved ts = brackets (hsep (punctuate comma (map (pprint' adapt reserved) ts)))
 
-pprintAsTuple :: AdaptionTable -> [String] -> [Isa.Term] -> DocM P.Doc
-pprintAsTuple adapt reserved = parens . hsep . punctuate comma . map (pprint' adapt reserved)
+pprintAsTuple :: AdaptionTable -> [String] -> (Isa.Term, Isa.Term) -> DocM P.Doc
+pprintAsTuple adapt reserved (t1, t2) = (parens . hsep . punctuate comma . map (pprint' adapt reserved)) [t1, t2]
 
 
 data AppFlavor = ListApp [Isa.Term] 
-               | TupleApp [Isa.Term] 
+               | TupleApp (Isa.Term, Isa.Term)
                | InfixApp Isa.Term Isa.Term Isa.Term 
                | UnaryOpApp
                | FunApp
@@ -537,7 +538,7 @@ data AppFlavor = ListApp [Isa.Term]
 categorizeApp :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Ident_Env.Identifier) -> AppFlavor
 categorizeApp adapt app@(Isa.App (Isa.App (Isa.Const opN) t1) t2) lookupFn
     | isCons adapt opN, Just list <- flattenListApp adapt app = ListApp list
-    | isPairCon adapt opN, Just list <- flattenTupleApp adapt app = TupleApp list
+    | isPairCon adapt opN, Just list <- destTupleApp adapt app = TupleApp list
     | isInfixOp lookupFn opN = InfixApp t1 (Isa.Const opN) t2
 categorizeApp _ (Isa.App (Isa.Const opN) _) lookupFn
     | isUnaryOp lookupFn opN = UnaryOpApp
@@ -552,13 +553,9 @@ flattenListApp adapt t = case uncombr dest_cons t of
     dest_cons (Isa.App (Isa.App (Isa.Const c) t1) t2) | isCons adapt c = Just (t1, t2)
     dest_cons _ = Nothing
 
-flattenTupleApp :: AdaptionTable -> Isa.Term -> Maybe [Isa.Term]
-flattenTupleApp adapt t = case uncombr dest_pair t of
-    (ts, t) | not (null ts) -> Just (ts ++ [t])
-    _ -> Nothing
-  where
-    dest_pair (Isa.App (Isa.App (Isa.Const c) t1) t2) | isPairCon adapt c = Just (t1, t2)
-    dest_pair _ = Nothing
+destTupleApp :: AdaptionTable -> Isa.Term -> Maybe (Isa.Term, Isa.Term)
+destTupleApp adapt (Isa.App (Isa.App (Isa.Const c) t1) t2) | isPairCon adapt c = Just (t1, t2)
+destTupleApp _ _ = Nothing
 
 -- flattenLambdas ``%x . %y . %z . foo'' => ([x,y,z], foo)
 --

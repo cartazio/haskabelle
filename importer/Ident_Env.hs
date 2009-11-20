@@ -112,7 +112,6 @@ type IdentifierID = String
 data Type = TyVar Name
              | TyCon Name [Type]
              | TyFun Type Type
-             | TyTuple [Type]
              | TyNone
   deriving (Eq, Ord, Show)
 
@@ -183,9 +182,6 @@ substituteTyVars alist typ
                                Just t' -> t'
                                Nothing -> TyFun (substituteTyVars alist t1)
                                                     (substituteTyVars alist t2)
-        t@(TyTuple ts)  -> case lookup' t alist of
-                               Just t' -> t'
-                               Nothing -> TyTuple (map (substituteTyVars alist) ts)
         t@(TyNone)      -> case lookup' t alist of { Just t' -> t'; Nothing -> t }
 
 {-|
@@ -516,7 +512,11 @@ instance Hsk2Env Hsx.Type Type where
                             where translate (Hsx.Special s) = translateSpecialCon TypeCon s
                                   translate etc = etc
 
-    fromHsk (Hsx.TyTuple Hsx.Boxed types) = TyTuple (map fromHsk types)
+    fromHsk (Hsx.TyTuple Hsx.Boxed []) = TyCon (fromHsk unit_tyco) []
+    fromHsk (Hsx.TyTuple Hsx.Boxed [typ]) = fromHsk typ
+    fromHsk (Hsx.TyTuple Hsx.Boxed (typ1 : typ2 : typs)) = combl
+      (\typ1 -> \typ2 -> TyCon (fromHsk pair_tyco) [typ1, fromHsk typ2])
+      (TyCon (fromHsk pair_tyco) [fromHsk typ1, fromHsk typ2]) typs
 
     fromHsk (Hsx.TyFun type1 type2) = let
         type1' = fromHsk type1
@@ -542,7 +542,6 @@ instance Hsk2Env Hsx.Type Type where
     fromHsk junk = error ("Hsx.Type -> Ident_Env.Type: Fall Through: " ++ Msg.prettyShow' "thing" junk)
 
     toHsk (TyVar n)          = Hsx.TyVar (toHsk n)
-    toHsk (TyTuple types)    = Hsx.TyTuple Hsx.Boxed (map toHsk types)
     toHsk (TyFun t1 t2)      = Hsx.TyFun (toHsk t1) (toHsk t2)
     toHsk (TyCon qn [])      = Hsx.TyCon (toHsk qn)
     toHsk (TyCon qn tyvars)
@@ -614,17 +613,15 @@ instance Isa2Env Assoc Assoc where
     toIsa AssocNone     = AssocNone
 
 instance Isa2Env Isa.Type Type where
-    fromIsa (Isa.NoType)          = TyNone
-    fromIsa (Isa.TVar n)         = TyVar (fromIsa n)
-    fromIsa (Isa.Prod types)   = TyTuple (map fromIsa types)
-    fromIsa (Isa.Func t1 t2)     = TyFun (fromIsa t1) (fromIsa t2)
+    fromIsa Isa.NoType = TyNone
+    fromIsa (Isa.TVar n) = TyVar (fromIsa n)
+    fromIsa (Isa.Func t1 t2) = TyFun (fromIsa t1) (fromIsa t2)
     fromIsa (Isa.Type qn tyvars) = TyCon (fromIsa qn) (map fromIsa tyvars)
     
-    toIsa (TyNone)             = Isa.NoType
-    toIsa (TyVar n)            = Isa.TVar (toIsa n)
-    toIsa (TyTuple types)      = Isa.Prod (map toIsa types)
-    toIsa (TyFun t1 t2)        = Isa.Func (toIsa t1) (toIsa t2)
-    toIsa (TyCon qn tyvars)    = Isa.Type (toIsa qn) (map toIsa tyvars)
+    toIsa TyNone = Isa.NoType
+    toIsa (TyVar n) = Isa.TVar (toIsa n)
+    toIsa (TyFun t1 t2) = Isa.Func (toIsa t1) (toIsa t2)
+    toIsa (TyCon qn tyvars) = Isa.Type (toIsa qn) (map toIsa tyvars)
 
 isa_of_sort :: [Name] -> [Isa.Name]
 isa_of_sort = map toIsa
@@ -660,12 +657,15 @@ retranslateSpecialCon DataCon qname
 retranslateSpecialCon TypeCon qname 
     = Prelude.lookup qname [ (y,x) | (x,y) <- primitive_tycon_table ]
 
+unit_tyco = Hsx.Ident "UnitTyCon"
+pair_tyco = Hsx.Ident "PairTyCon"
+
 primitive_tycon_table, primitive_datacon_table :: [(Hsx.SpecialCon, Hsx.QName)]
 
 primitive_tycon_table 
     = [(Hsx.ListCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "ListTyCon")),
-       (Hsx.UnitCon,    Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "UnitTyCon")),
-       (Hsx.TupleCon 2, Hsx.Qual (Hsx.ModuleName "Prelude") (Hsx.Ident "PairTyCon"))
+       (Hsx.UnitCon,    Hsx.Qual (Hsx.ModuleName "Prelude") unit_tyco),
+       (Hsx.TupleCon 2, Hsx.Qual (Hsx.ModuleName "Prelude") pair_tyco)
       ]
 
 primitive_datacon_table 

@@ -15,7 +15,7 @@ module Importer.Library (
   insert, remove, has_duplicates, accumulate, 
   separate, slice,
   perhaps, perhaps_map, ultimately,
-  uncombl, uncombr,
+  combl, combr, uncombl, uncombr,
   liftM, filterM, mapsM, when
 ) where
 

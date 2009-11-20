@@ -468,8 +468,6 @@ translateEnvType (AdaptionTable mappings) qualify typ = let
       Ident_Env.TyFun t1 t2 -> do t1' <- translate t1
                                   t2' <- translate t2
                                   return (Ident_Env.TyFun t1' t2')
-      Ident_Env.TyTuple ts  -> do ts' <- mapM translate ts
-                                  return (Ident_Env.TyTuple ts')
   in case runState (translate typ) False of
     (_, False) -> Nothing        -- no match found in AdaptionTable. 
     (new_type, True) -> Just new_type

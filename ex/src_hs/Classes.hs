@@ -63,6 +63,6 @@ instance (Order a) => Order [a] where
   less xs [] = False
   less [] (x : xs) = True
 
-{-instance (Order a, Order b) => Order (a, b) where
+instance (Order a, Order b) => Order (a, b) where
   less_eq (x, y) (w, z) = less x w || not (less w x) && less_eq y z
-  less (x, y) (w, z) = less x w || not (less w x) && less y z-}
+  less (x, y) (w, z) = less x w || not (less w x) && less y z

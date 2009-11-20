@@ -39,7 +39,6 @@ type Sort = [Name]
 data Type =
     Type Name [Type]
   | Func Type Type
-  | Prod [Type]
   | TVar Name
   | NoType
   deriving Show
@@ -123,8 +122,6 @@ add_idents_type (Type n tys) =
   insert (TycoI n) *> fold add_idents_type tys
 add_idents_type (Func ty1 ty2) =
   add_idents_type ty1 *> add_idents_type ty2
-add_idents_type (Prod tys) =
-  fold add_idents_type tys
 add_idents_type (TVar _) =
   id
 add_idents_type NoType =
