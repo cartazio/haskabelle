@@ -3,7 +3,7 @@
 module TreeMapping where {
 
 
-data Nat = Zero_nat | Suc Nat;
+data Nat = Zero | Suc Nat;
 
 class Orda a where {
   less_eq :: a -> a -> Bool;
@@ -16,7 +16,7 @@ mapa f (x : xs) = f x : mapa f xs;
 
 nth :: forall a. [a] -> Nat -> a;
 nth (x : xs) (Suc n) = nth xs n;
-nth (x : xs) Zero_nat = x;
+nth (x : xs) Zero = x;
 
 insert :: forall a. (Eq a) => a -> (a -> Bool) -> a -> Bool;
 insert y a x = y == x || a x;
@@ -54,7 +54,7 @@ data Tree a b = Empty | Branch b a (Tree a b) (Tree a b);
 dropa :: forall a. Nat -> [a] -> [a];
 dropa n [] = [];
 dropa n (x : xs) = case n of {
-                     Zero_nat -> x : xs;
+                     Zero -> x : xs;
                      Suc m -> dropa m xs;
                    };
 
@@ -75,7 +75,7 @@ sort (x : xs) = insort x (sort xs);
 takea :: forall a. Nat -> [a] -> [a];
 takea n [] = [];
 takea n (x : xs) = case n of {
-                     Zero_nat -> [];
+                     Zero -> [];
                      Suc m -> x : takea m xs;
                    };
 
@@ -114,11 +114,11 @@ filtera p (x : xs) = (if p x then x : filtera p xs else filtera p xs);
 
 plus_nat :: Nat -> Nat -> Nat;
 plus_nat (Suc m) n = plus_nat m (Suc n);
-plus_nat Zero_nat n = n;
+plus_nat Zero n = n;
 
 size_list :: forall a. [a] -> Nat;
-size_list [] = Zero_nat;
-size_list (a : list) = plus_nat (size_list list) (Suc Zero_nat);
+size_list [] = Zero;
+size_list (a : list) = plus_nat (size_list list) (Suc Zero);
 
 sizea :: forall a b. (Eq a, Linorder a) => Tree a b -> Nat;
 sizea t =
@@ -132,10 +132,10 @@ foldla f a (x : xs) = foldla f (f a x) xs;
 newtype (Linorder a) => Map a b = Tree (Tree a b);
 
 eq_nat :: Nat -> Nat -> Bool;
-eq_nat (Suc nat') Zero_nat = False;
-eq_nat Zero_nat (Suc nat') = False;
+eq_nat (Suc nat') Zero = False;
+eq_nat Zero (Suc nat') = False;
 eq_nat (Suc nat) (Suc nat') = eq_nat nat nat';
-eq_nat Zero_nat Zero_nat = True;
+eq_nat Zero Zero = True;
 
 updatea :: forall a b. (Eq a, Linorder a) => a -> b -> Tree a b -> Tree a b;
 updatea k v Empty = Branch v k Empty Empty;
@@ -153,11 +153,11 @@ size (Tree t) = sizea t;
 
 less_eq_nat :: Nat -> Nat -> Bool;
 less_eq_nat (Suc m) n = less_nat m n;
-less_eq_nat Zero_nat n = True;
+less_eq_nat Zero n = True;
 
 less_nat :: Nat -> Nat -> Bool;
 less_nat m (Suc n) = less_eq_nat m n;
-less_nat n Zero_nat = False;
+less_nat n Zero = False;
 
 eq_tree :: forall a b. (Eq a, Eq b) => Tree a b -> Tree a b -> Bool;
 eq_tree (Branch b' a' tree1' tree2') Empty = False;
@@ -171,8 +171,8 @@ empty = Tree Empty;
 
 minus_nat :: Nat -> Nat -> Nat;
 minus_nat (Suc m) (Suc n) = minus_nat m n;
-minus_nat Zero_nat n = Zero_nat;
-minus_nat m Zero_nat = m;
+minus_nat Zero n = Zero;
+minus_nat m Zero = m;
 
 lookupa :: forall a b. (Eq a, Linorder a) => Map a b -> a -> Maybe b;
 lookupa (Tree t) = lookupb t;

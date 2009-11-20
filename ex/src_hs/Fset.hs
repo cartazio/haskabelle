@@ -3,7 +3,7 @@
 module Fset where {
 
 
-data Nat = Zero_nat | Suc Nat;
+data Nat = Zero | Suc Nat;
 
 newtype Fset a = Set [a];
 
@@ -23,7 +23,7 @@ mapa :: forall b a. (Eq a) => (b -> a) -> Fset b -> Fset a;
 mapa f (Set xs) = Set (remdups (mapb f xs));
 
 length_unique :: forall a. (Eq a) => [a] -> Nat;
-length_unique [] = Zero_nat;
+length_unique [] = Zero;
 length_unique (x : xs) =
   (if membera x xs then length_unique xs else Suc (length_unique xs));
 

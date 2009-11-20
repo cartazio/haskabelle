@@ -1,7 +1,7 @@
 module AVL where {
 
 
-data Nat = Suc Nat | Zero_nat;
+data Nat = Suc Nat | Zero;
 
 data Set a = Insert a (Set a) | Empty;
 
@@ -9,7 +9,7 @@ data Tree a = Mkt a (Tree a) (Tree a) Nat | Et;
 
 ht :: forall a. Tree a -> Nat;
 ht (Mkt x l r h) = h;
-ht Et = Zero_nat;
+ht Et = Zero;
 
 bex :: forall a. Set a -> (a -> Bool) -> Bool;
 bex Empty p = False;
@@ -23,31 +23,31 @@ erase Et = ET_isub_0;
 
 less_eq_nat :: Nat -> Nat -> Bool;
 less_eq_nat (Suc m) n = less_nat m n;
-less_eq_nat Zero_nat n = True;
+less_eq_nat Zero n = True;
 
 less_nat :: Nat -> Nat -> Bool;
 less_nat m (Suc n) = less_eq_nat m n;
-less_nat n Zero_nat = False;
+less_nat n Zero = False;
 
 maxa :: Nat -> Nat -> Nat;
 maxa a b = (if less_eq_nat a b then b else a);
 
 one_nat :: Nat;
-one_nat = Suc Zero_nat;
+one_nat = Suc Zero;
 
 plus_nat :: Nat -> Nat -> Nat;
 plus_nat (Suc m) n = plus_nat m (Suc n);
-plus_nat Zero_nat n = n;
+plus_nat Zero n = n;
 
 height :: forall a. Tree_isub_0 a -> Nat;
 height (MKT_isub_0 n l r) = plus_nat one_nat (maxa (height l) (height r));
-height ET_isub_0 = Zero_nat;
+height ET_isub_0 = Zero;
 
 eq_nat :: Nat -> Nat -> Bool;
-eq_nat Zero_nat Zero_nat = True;
+eq_nat Zero Zero = True;
 eq_nat (Suc m) (Suc n) = eq_nat m n;
-eq_nat Zero_nat (Suc a) = False;
-eq_nat (Suc a) Zero_nat = False;
+eq_nat Zero (Suc a) = False;
+eq_nat (Suc a) Zero = False;
 
 hinv :: forall a. Tree a -> Bool;
 hinv (Mkt x l r h) =
@@ -116,7 +116,7 @@ insrt x (Mkt n l r h) =
                   hl' = ht l';
                   hr = ht r;
                 } in (if eq_nat hl'
-                           (plus_nat (Suc (Suc Zero_nat)) hr)
+                           (plus_nat (Suc (Suc Zero)) hr)
                        then l_bal (n, (l', r))
                        else Mkt n l' r (plus_nat one_nat (maxa hl' hr)))
            else let {
@@ -124,7 +124,7 @@ insrt x (Mkt n l r h) =
                   hl = ht l;
                   hr' = ht r';
                 } in (if eq_nat hr'
-                           (plus_nat (Suc (Suc Zero_nat)) hl)
+                           (plus_nat (Suc (Suc Zero)) hl)
                        then r_bal (n, (l, r'))
                        else Mkt n l r' (plus_nat one_nat (maxa hl hr')))));
 insrt x Et = Mkt x Et Et one_nat;
@@ -160,15 +160,15 @@ tree_rec f1 f2 Et = f1;
 
 size_tree :: forall a. Tree a -> Nat;
 size_tree (Mkt a tree1 tree2 n) =
-  plus_nat (plus_nat (size_tree tree1) (size_tree tree2)) (Suc Zero_nat);
-size_tree Et = Zero_nat;
+  plus_nat (plus_nat (size_tree tree1) (size_tree tree2)) (Suc Zero);
+size_tree Et = Zero;
 
 tree_size :: forall a. (a -> Nat) -> Tree a -> Nat;
 tree_size fa (Mkt a tree1 tree2 n) =
   plus_nat
     (plus_nat (plus_nat (fa a) (tree_size fa tree1)) (tree_size fa tree2))
-    (Suc Zero_nat);
-tree_size fa Et = Zero_nat;
+    (Suc Zero);
+tree_size fa Et = Zero;
 
 tree_isub_0_case ::
   forall t a.
@@ -204,13 +204,13 @@ insrt_isub_0 x (MKT_isub_0 n l r) =
            then let {
                   l' = insrt_isub_0 x l;
                 } in (if eq_nat (height l')
-                           (plus_nat (Suc (Suc Zero_nat))
+                           (plus_nat (Suc (Suc Zero))
                              (height r))
                        then l_bal_isub_0 (n, (l', r)) else MKT_isub_0 n l' r)
            else let {
                   r' = insrt_isub_0 x r;
                 } in (if eq_nat (height r')
-                           (plus_nat (Suc (Suc Zero_nat))
+                           (plus_nat (Suc (Suc Zero))
                              (height l))
                        then r_bal_isub_0 (n, (l, r')) else MKT_isub_0 n l r')));
 insrt_isub_0 x ET_isub_0 = MKT_isub_0 x ET_isub_0 ET_isub_0;
@@ -244,15 +244,15 @@ size_tree_isub_0 :: forall a. Tree_isub_0 a -> Nat;
 size_tree_isub_0 (MKT_isub_0 a tree_isub_01 tree_isub_02) =
   plus_nat
     (plus_nat (size_tree_isub_0 tree_isub_01) (size_tree_isub_0 tree_isub_02))
-    (Suc Zero_nat);
-size_tree_isub_0 ET_isub_0 = Zero_nat;
+    (Suc Zero);
+size_tree_isub_0 ET_isub_0 = Zero;
 
 tree_isub_0_size :: forall a. (a -> Nat) -> Tree_isub_0 a -> Nat;
 tree_isub_0_size fa (MKT_isub_0 a tree_isub_01 tree_isub_02) =
   plus_nat
     (plus_nat (plus_nat (fa a) (tree_isub_0_size fa tree_isub_01))
       (tree_isub_0_size fa tree_isub_02))
-    (Suc Zero_nat);
-tree_isub_0_size fa ET_isub_0 = Zero_nat;
+    (Suc Zero);
+tree_isub_0_size fa ET_isub_0 = Zero;
 
 }

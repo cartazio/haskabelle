@@ -5,7 +5,7 @@ module Lists where {
 
 data Inta = Number_of_int Inta | Bit1 Inta | Bit0 Inta | Min | Pls;
 
-data Nat = Suc Nat | Zero_nat;
+data Nat = Suc Nat | Zero;
 
 leta :: forall b a. b -> (b -> a) -> a;
 leta s f = f s;
@@ -54,11 +54,11 @@ mapa f (x : xs) = f x : mapa f xs;
 
 nat_case :: forall t. t -> (Nat -> t) -> Nat -> t;
 nat_case f1 f2 (Suc nat) = f2 nat;
-nat_case f1 f2 Zero_nat = f1;
+nat_case f1 f2 Zero = f1;
 
 nth :: forall a. [a] -> Nat -> a;
 nth (x : xs) n = (case n of {
-                   Zero_nat -> x;
+                   Zero -> x;
                    Suc a -> nth xs a;
                  });
 
@@ -81,11 +81,11 @@ set (x : xs) = insert x (set xs);
 
 less_eq_nat :: Nat -> Nat -> Bool;
 less_eq_nat (Suc m) n = less_nat m n;
-less_eq_nat Zero_nat n = True;
+less_eq_nat Zero n = True;
 
 less_nat :: Nat -> Nat -> Bool;
 less_nat m (Suc n) = less_eq_nat m n;
-less_nat n Zero_nat = False;
+less_nat n Zero = False;
 
 list_case :: forall t a. t -> (a -> [a] -> t) -> [a] -> t;
 list_case f1 f2 (a : list) = f2 a list;
@@ -103,7 +103,7 @@ dropa :: forall a. Nat -> [a] -> [a];
 dropa n [] = [];
 dropa n (x : xs) =
   (case n of {
-    Zero_nat -> x : xs;
+    Zero -> x : xs;
     Suc m -> dropa m xs;
   });
 
@@ -136,7 +136,7 @@ takea :: forall a. Nat -> [a] -> [a];
 takea n [] = [];
 takea n (x : xs) =
   (case n of {
-    Zero_nat -> [];
+    Zero -> [];
     Suc m -> x : takea m xs;
   });
 
@@ -176,7 +176,7 @@ rotate1 xs = (case xs of {
              });
 
 fun_pow :: forall a. Nat -> (a -> a) -> a -> a;
-fun_pow Zero_nat f = id;
+fun_pow Zero f = id;
 fun_pow (Suc n) f = f . fun_pow n f;
 
 rotate :: forall a. Nat -> [a] -> [a];
@@ -231,11 +231,11 @@ remove1 x (y : xs) = (if x == y then xs else y : remove1 x xs);
 
 plus_nat :: Nat -> Nat -> Nat;
 plus_nat (Suc m) n = plus_nat m (Suc n);
-plus_nat Zero_nat n = n;
+plus_nat Zero n = n;
 
 size_list :: forall a. [a] -> Nat;
-size_list [] = Zero_nat;
-size_list (a : list) = plus_nat (size_list list) (Suc Zero_nat);
+size_list [] = Zero;
+size_list (a : list) = plus_nat (size_list list) (Suc Zero);
 
 split :: forall b c a. (b -> c -> a) -> (b, c) -> a;
 split f (a, b) = f a b;
@@ -253,7 +253,7 @@ list_rec f1 f2 [] = f1;
 list_rec f1 f2 (a : list) = f2 a list (list_rec f1 f2 list);
 
 char_size :: Chara -> Nat;
-char_size c = Zero_nat;
+char_size c = Zero;
 
 dropWhilea :: forall a. (a -> Bool) -> [a] -> [a];
 dropWhilea p [] = [];
@@ -277,9 +277,9 @@ list_all2 p xs [] = nulla xs;
 list_all2 p [] ys = nulla ys;
 
 list_size :: forall a. (a -> Nat) -> [a] -> Nat;
-list_size fa [] = Zero_nat;
+list_size fa [] = Zero;
 list_size fa (a : list) =
-  plus_nat (plus_nat (fa a) (list_size fa list)) (Suc Zero_nat);
+  plus_nat (plus_nat (fa a) (list_size fa list)) (Suc Zero);
 
 partition :: forall a. (a -> Bool) -> [a] -> ([a], [a]);
 partition p [] = ([], []);
@@ -295,11 +295,11 @@ removeAll x (y : xs) =
   (if x == y then removeAll x xs else y : removeAll x xs);
 
 replicatea :: forall a. Nat -> a -> [a];
-replicatea Zero_nat x = [];
+replicatea Zero x = [];
 replicatea (Suc n) x = x : replicatea n x;
 
 size_char :: Chara -> Nat;
-size_char c = Zero_nat;
+size_char c = Zero;
 
 takeWhilea :: forall a. (a -> Bool) -> [a] -> [a];
 takeWhilea p [] = [];
@@ -362,7 +362,7 @@ list_update :: forall a. [a] -> Nat -> a -> [a];
 list_update [] i v = [];
 list_update (x : xs) i v =
   (case i of {
-    Zero_nat -> v : xs;
+    Zero -> v : xs;
     Suc j -> x : list_update xs j v;
   });
 
@@ -404,46 +404,46 @@ nibble_case f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16
   Nibble0 = f1;
 
 nibble_size :: Nibble -> Nat;
-nibble_size Nibble0 = Zero_nat;
-nibble_size Nibble1 = Zero_nat;
-nibble_size Nibble2 = Zero_nat;
-nibble_size Nibble3 = Zero_nat;
-nibble_size Nibble4 = Zero_nat;
-nibble_size Nibble5 = Zero_nat;
-nibble_size Nibble6 = Zero_nat;
-nibble_size Nibble7 = Zero_nat;
-nibble_size Nibble8 = Zero_nat;
-nibble_size Nibble9 = Zero_nat;
-nibble_size NibbleA = Zero_nat;
-nibble_size NibbleB = Zero_nat;
-nibble_size NibbleC = Zero_nat;
-nibble_size NibbleD = Zero_nat;
-nibble_size NibbleE = Zero_nat;
-nibble_size NibbleF = Zero_nat;
+nibble_size Nibble0 = Zero;
+nibble_size Nibble1 = Zero;
+nibble_size Nibble2 = Zero;
+nibble_size Nibble3 = Zero;
+nibble_size Nibble4 = Zero;
+nibble_size Nibble5 = Zero;
+nibble_size Nibble6 = Zero;
+nibble_size Nibble7 = Zero;
+nibble_size Nibble8 = Zero;
+nibble_size Nibble9 = Zero;
+nibble_size NibbleA = Zero;
+nibble_size NibbleB = Zero;
+nibble_size NibbleC = Zero;
+nibble_size NibbleD = Zero;
+nibble_size NibbleE = Zero;
+nibble_size NibbleF = Zero;
 
 size_nibble :: Nibble -> Nat;
-size_nibble Nibble0 = Zero_nat;
-size_nibble Nibble1 = Zero_nat;
-size_nibble Nibble2 = Zero_nat;
-size_nibble Nibble3 = Zero_nat;
-size_nibble Nibble4 = Zero_nat;
-size_nibble Nibble5 = Zero_nat;
-size_nibble Nibble6 = Zero_nat;
-size_nibble Nibble7 = Zero_nat;
-size_nibble Nibble8 = Zero_nat;
-size_nibble Nibble9 = Zero_nat;
-size_nibble NibbleA = Zero_nat;
-size_nibble NibbleB = Zero_nat;
-size_nibble NibbleC = Zero_nat;
-size_nibble NibbleD = Zero_nat;
-size_nibble NibbleE = Zero_nat;
-size_nibble NibbleF = Zero_nat;
+size_nibble Nibble0 = Zero;
+size_nibble Nibble1 = Zero;
+size_nibble Nibble2 = Zero;
+size_nibble Nibble3 = Zero;
+size_nibble Nibble4 = Zero;
+size_nibble Nibble5 = Zero;
+size_nibble Nibble6 = Zero;
+size_nibble Nibble7 = Zero;
+size_nibble Nibble8 = Zero;
+size_nibble Nibble9 = Zero;
+size_nibble NibbleA = Zero;
+size_nibble NibbleB = Zero;
+size_nibble NibbleC = Zero;
+size_nibble NibbleD = Zero;
+size_nibble NibbleE = Zero;
+size_nibble NibbleF = Zero;
 
 itself_nibble :: Itself Nibble;
 itself_nibble = Type;
 
 length_unique :: forall a. (Eq a) => [a] -> Nat;
-length_unique [] = Zero_nat;
+length_unique [] = Zero;
 length_unique (x : xs) =
   (if member x xs then length_unique xs else Suc (length_unique xs));
 

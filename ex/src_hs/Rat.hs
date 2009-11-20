@@ -3,7 +3,7 @@
 module Rat where {
 
 
-data Nat = Zero_nat | Suc Nat;
+data Nat = Zero | Suc Nat;
 
 leta :: forall b a. b -> (b -> a) -> a;
 leta s f = f s;
@@ -21,7 +21,7 @@ nat_aux :: Integer -> Nat -> Nat;
 nat_aux i n = (if i <= 0 then n else nat_aux (i - 1) (Suc n));
 
 nat :: Integer -> Nat;
-nat i = nat_aux i Zero_nat;
+nat i = nat_aux i Zero;
 
 class Plus a where {
   plus :: a -> a -> a;
@@ -166,13 +166,13 @@ instance One Integer where {
 };
 
 eq_nat :: Nat -> Nat -> Bool;
-eq_nat (Suc nat') Zero_nat = False;
-eq_nat Zero_nat (Suc nat') = False;
+eq_nat (Suc nat') Zero = False;
+eq_nat Zero (Suc nat') = False;
 eq_nat (Suc nat) (Suc nat') = eq_nat nat nat';
-eq_nat Zero_nat Zero_nat = True;
+eq_nat Zero Zero = True;
 
 of_nat_aux :: forall a. (Semiring_1 a) => (a -> a) -> Nat -> a -> a;
-of_nat_aux inc Zero_nat i = i;
+of_nat_aux inc Zero i = i;
 of_nat_aux inc (Suc n) i = of_nat_aux inc n (inc i);
 
 of_nat :: forall a. (Semiring_1 a) => Nat -> a; {-# HASKABELLE permissive of_nat #-};
@@ -191,20 +191,20 @@ class (Dvd a) => Div a where {
 
 minus_nat :: Nat -> Nat -> Nat;
 minus_nat (Suc m) (Suc n) = minus_nat m n;
-minus_nat Zero_nat n = Zero_nat;
-minus_nat m Zero_nat = m;
+minus_nat Zero n = Zero;
+minus_nat m Zero = m;
 
 less_eq_nat :: Nat -> Nat -> Bool;
 less_eq_nat (Suc m) n = less_nat m n;
-less_eq_nat Zero_nat n = True;
+less_eq_nat Zero n = True;
 
 less_nat :: Nat -> Nat -> Bool;
 less_nat m (Suc n) = less_eq_nat m n;
-less_nat n Zero_nat = False;
+less_nat n Zero = False;
 
 divmod :: Nat -> Nat -> (Nat, Nat); {-# HASKABELLE permissive divmod #-};
 divmod m n =
-  (if eq_nat n Zero_nat || less_nat m n then (Zero_nat, m)
+  (if eq_nat n Zero || less_nat m n then (Zero, m)
     else let {
            (q, a) = divmod (minus_nat m n) n;
          } in (Suc q, a));
@@ -213,7 +213,7 @@ mod_nat :: Nat -> Nat -> Nat;
 mod_nat m n = snd (divmod m n);
 
 gcd_nat :: Nat -> Nat -> Nat; {-# HASKABELLE permissive gcd_nat #-};
-gcd_nat x y = (if eq_nat y Zero_nat then x else gcd_nat y (mod_nat x y));
+gcd_nat x y = (if eq_nat y Zero then x else gcd_nat y (mod_nat x y));
 
 instance Zero Integer where {
   zero = 1;

@@ -3,7 +3,7 @@
 module Enum where {
 
 
-data Nat = Zero_nat | Suc Nat;
+data Nat = Zero | Suc Nat;
 
 mapa :: forall b a. (b -> a) -> [b] -> [a];
 mapa f [] = [];
@@ -62,16 +62,16 @@ concata [] = [];
 concata (x : xs) = append x (concata xs);
 
 n_lists :: forall a. Nat -> [a] -> [[a]];
-n_lists Zero_nat xs = [[]];
+n_lists Zero xs = [[]];
 n_lists (Suc n) xs =
   concata (mapa (\ ys -> mapa (\ y -> y : ys) xs) (n_lists n xs));
 
 plus_nat :: Nat -> Nat -> Nat;
 plus_nat (Suc m) n = plus_nat m (Suc n);
-plus_nat Zero_nat n = n;
+plus_nat Zero n = n;
 
 len :: [a] -> Nat;
-len [] = Zero_nat;
+len [] = Zero;
 len (_ : xs) = Suc (len xs);
 
 enum_fun :: forall a b. (Eq a, Enuma a, Enuma b) => [(a -> b)];

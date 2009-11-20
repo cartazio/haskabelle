@@ -1,7 +1,7 @@
 module Sets where {
 
 
-data Nat = Suc Nat | Zero_nat;
+data Nat = Suc Nat | Zero;
 
 data Set a = Insert a (Set a) | Empty;
 
@@ -47,10 +47,10 @@ inter :: Set (Set Nat) -> Set Nat;
 inter a = intera a (\ x -> x);
 
 eq_nat :: Nat -> Nat -> Bool;
-eq_nat Zero_nat Zero_nat = True;
+eq_nat Zero Zero = True;
 eq_nat (Suc m) (Suc n) = eq_nat m n;
-eq_nat Zero_nat (Suc a) = False;
-eq_nat (Suc a) Zero_nat = False;
+eq_nat Zero (Suc a) = False;
+eq_nat (Suc a) Zero = False;
 
 less_eq_set :: Set Nat -> Set Nat -> Bool;
 less_eq_set a b = ball a (\ x -> member x b);

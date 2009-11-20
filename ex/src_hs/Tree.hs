@@ -5,7 +5,7 @@ import Nats
 data Tree a = Tip a | Branch (Tree a) (Tree a)
 
 size :: Tree a -> Nat
-size (Tip a) = Suc Zero_nat
+size (Tip a) = Suc Zero
 size (Branch x y) = plus_nat (size x) (size y)
 
 insert :: a -> Tree a -> Tree a
