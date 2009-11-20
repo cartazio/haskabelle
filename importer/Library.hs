@@ -6,7 +6,7 @@ A collection of generic functions.
 module Importer.Library (
   assert, asserting, tracing,
   (|>), (*>),
-  pair, rpair, map_fst, map_snd, map_both,
+  pair, rpair, map_fst, map_snd, map_both, map_pair,
   the, these, the_default,
   split_list,
   filter_out, fold, fold_rev, map_filter, flat, maps,
@@ -14,7 +14,7 @@ module Importer.Library (
   nth_map, map_index, fold_index, burrow_indices,
   insert, remove, has_duplicates, accumulate, 
   separate, slice,
-  ultimately,
+  perhaps_map, ultimately,
   uncombl, uncombr,
   liftM, filterM, mapsM, when
 ) where
@@ -66,6 +66,9 @@ map_snd f (x, y) = (x, f y)
 
 map_both :: (a -> b) -> (a, a) -> (b, b)
 map_both f (x, y) = (f x, f y)
+
+map_pair :: (a -> b) -> (c -> d) -> (a, c) -> (b, d)
+map_pair f g (x, y) = (f x, g y)
 
 
 {- options -}
@@ -181,6 +184,14 @@ slice f [] = []
 slice f xs = let (ys, zs) = List.break f xs
   in ys : if null zs then [] else slice f (List.tail zs)
 
+
+perhaps_map :: (a -> Maybe b) -> [a] -> Maybe [b]
+perhaps_map f [] = Just []
+perhaps_map f (x : xs) = case f x of
+  Nothing -> Nothing
+  Just y -> case perhaps_map f xs of
+    Nothing -> Nothing
+    Just ys -> Just (y : ys)
 
 ultimately :: (a -> Maybe (b, a)) -> a -> ([b], a)
 ultimately f x = case f x of
