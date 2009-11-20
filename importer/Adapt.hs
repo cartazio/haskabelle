@@ -5,7 +5,7 @@ Adaption tables and their application.
 
 module Importer.Adapt (Adaption(..), AdaptionTable(AdaptionTable),
   readAdapt, makeAdaptionTable_FromHsModule, extractHskEntries,
-  adaptGlobalEnv, adaptIsaUnit
+  adaptGlobalEnv, adaptModules
 ) where
 
 import Importer.Library
@@ -19,7 +19,6 @@ import System.FilePath (combine)
 
 import qualified Importer.Msg as Msg
 import qualified Importer.Ident_Env as Ident_Env
-import Importer.ConversionUnit (IsaUnit(IsaUnit))
 
 import qualified Language.Haskell.Exts as Hsx
 import qualified Importer.Hsx as Hsx
@@ -520,10 +519,6 @@ adaptClass classN = do
 adaptModules ::  AdaptionTable  -> Ident_Env.GlobalE -> Ident_Env.GlobalE -> [Isa.Module] -> [Isa.Module]
 adaptModules adaptionTable adaptedGlobalEnv globalEnv modules =
   runAdaption globalEnv adaptedGlobalEnv adaptionTable (mapM adapt modules)
-
-adaptIsaUnit :: AdaptionTable -> Ident_Env.GlobalE -> IsaUnit -> IsaUnit
-adaptIsaUnit adaptionTable globalEnv (IsaUnit modules custThys adaptedGlobalEnv) =
-  IsaUnit (adaptModules adaptionTable adaptedGlobalEnv globalEnv modules) custThys adaptedGlobalEnv
 
 
 not_implemented x = error ("Adaption not implemented yet for\n  " ++ Msg.prettyShow' "thing" x) 
