@@ -8,20 +8,17 @@ Pretty printing of abstract Isar/HOL theory.
 module Importer.Printer (pprint) where
 
 import Importer.Library
-
-import Maybe
+import qualified Importer.AList as AList
 import Control.Monad (liftM2)
 
 import qualified Text.PrettyPrint as P
 
-import Importer.Utilities.Isa (renameFunctionStmt, namesFromIsaCmd, mk_InstanceCmd_name)
+import qualified Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
 
-import Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
-
-import qualified Importer.Isa as Isa
+import Importer.Adapt as Adapt (AdaptionTable(AdaptionTable))
 import qualified Importer.Env as Env
 
-import Importer.Adapt (AdaptionTable(AdaptionTable))
+import qualified Importer.Isa as Isa
 
 
 data PPState = PPState { globalEnv        :: Env.GlobalE,
@@ -321,17 +318,22 @@ instance Printer Isa.Stmt where
           
     pprint' adapt reserved (Isa.Instance classN tycoN arities stmts) = do
       thy <- queryPP currentTheory
-      let stmts' = map (\stmt -> renameFunctionStmt thy
-            [ (n, mk_InstanceCmd_name n (Isa.Type tycoN (map (Isa.TVar . fst) arities)))
-              | n <- namesFromIsaCmd (Isa.Function stmt) ] stmt) stmts
-      blankline $ {- FIMXE arguments -}
+      let stmts' = map (renameFunctionStmt thy) stmts
+      blankline $
         text "instantiation" <+> pprint' adapt reserved tycoN <+> text "::"
           <+> (if null arities then pprint' adapt reserved classN
             else parcommas (map (pprint_sort adapt reserved . snd) arities) <+> pprint' adapt reserved classN) $$
           text "begin" $$
           space <> space <> vcat (map (pprint' adapt reserved) stmts') $$
           (blankline $ text "instance sorry\n" $$ text "end")
- 
+      where
+        suffix_tyco (Isa.QName t n) = Isa.QName t (concat [n, "_", Isa.base_name_of tycoN])
+        suffix_tyco (Isa.Name n) = Isa.Name (concat [n, "_", Isa.base_name_of tycoN])
+        renameTypeSign (Isa.TypeSign name vs ty) = Isa.TypeSign (suffix_tyco name) vs ty
+        renameClause (name, pats, body) = (suffix_tyco name, pats, body)
+        renameFunctionStmt thy (Isa.Function_Stmt kind tysigs clauses) =
+          Isa.Function_Stmt kind (map renameTypeSign tysigs) (map renameClause clauses)
+
     pprint' adapt reserved (Isa.TypeSynonym aliases) = blankline $ text "types" <+> vcat (map pp aliases)
         where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
 
@@ -505,7 +507,7 @@ isNil, isCons, isPairCon :: AdaptionTable -> Isa.Name -> Bool
 mk_isFoo adapt foo n = case reAdaptEnvName adapt (Env.fromIsa n) of
   Nothing -> False
   Just x -> case Env.toHsk x of
-    Special con -> con == foo
+    Hsx.Special con -> con == foo
     _ -> False
 
 isNil adapt = mk_isFoo adapt Hsx.ListCon
