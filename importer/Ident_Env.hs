@@ -6,7 +6,7 @@ Definition of a Global Environment for identifier resolution and information
 retrieval.
 -}
 
-module Importer.Env
+module Importer.Ident_Env
     ( GlobalE,
       Assoc(..),
       Identifier(..),
@@ -499,7 +499,7 @@ instance Hsk2Env Hsx.QName Name where
 instance Hsk2Env Hsx.Name Name where
     fromHsk hsname           = UnqualName (fromHsk hsname)
     toHsk (UnqualName id) = toHsk id
-    toHsk junk = error ("toHsk Env.Name -> Hsx.Name: " ++ show junk)
+    toHsk junk = error ("toHsk Ident_Env.Name -> Hsx.Name: " ++ show junk)
 
 instance Hsk2Env Hsx.Assoc Assoc where
     fromHsk Hsx.AssocRight = AssocRight
@@ -537,9 +537,9 @@ instance Hsk2Env Hsx.Type Type where
           in case tycon' of TyCon n [] -> TyCon n tyvars'
           where dest (Hsx.TyApp typ1 typ2) = Just (typ1, typ2)
                 dest (Hsx.TyCon _) = Nothing
-                dest junk = error ("Hsx.Type -> Env.Type (dest Hsx.TyApp): " ++ show junk)
+                dest junk = error ("Hsx.Type -> Ident_Env.Type (dest Hsx.TyApp): " ++ show junk)
 
-    fromHsk junk = error ("Hsx.Type -> Env.Type: Fall Through: " ++ Msg.prettyShow' "thing" junk)
+    fromHsk junk = error ("Hsx.Type -> Ident_Env.Type: Fall Through: " ++ Msg.prettyShow' "thing" junk)
 
     toHsk (TyVar n)          = Hsx.TyVar (toHsk n)
     toHsk (TyTuple types)    = Hsx.TyTuple Hsx.Boxed (map toHsk types)
@@ -978,7 +978,7 @@ isImportedModule moduleID moduleEnv
   This data structure represents a global environment.
 -}
 data GlobalE = GlobalEnv (Map.Map ModuleID Module)
-  deriving (Show)
+  deriving Show
 
 {-|
   Name of the prelude module.

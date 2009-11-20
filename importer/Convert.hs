@@ -32,7 +32,7 @@ import Importer.Configuration hiding (getMonadInstance)
 import qualified Importer.Configuration as Config (getMonadInstance)
 import Importer.Adapt (makeAdaptionTable_FromHsModule, extractHskEntries,
   AdaptionTable, adaptGlobalEnv, adaptIsaUnit, Adaption(..))
-import qualified Importer.Env as Env
+import qualified Importer.Ident_Env as Ident_Env
 import qualified Importer.Preprocess as Preprocess
 import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
 import qualified Importer.DeclDependencyGraph as DeclDependencyGraph
@@ -50,10 +50,10 @@ convertHskUnit :: Customisations -> Adaption -> HskUnit -> (AdaptionTable, IsaUn
 convertHskUnit custs adapt (HskUnit hsmodules custMods initialGlobalEnv)
     = let pragmass       = map (accumulate (fold add_pragmas) . decls_of) hsmodules
           hsmodules'     = map (Preprocess.preprocessModule (usedConstNames adapt)) hsmodules
-          env            = Env.environmentOf custs hsmodules' custMods
+          env            = Ident_Env.environmentOf custs hsmodules' custMods
           adaptionTable  = makeAdaptionTable_FromHsModule adapt env hsmodules'
-          initial_env    = Env.augmentGlobalEnv initialGlobalEnv $ extractHskEntries adaptionTable
-          global_env_hsk = Env.unionGlobalEnvs env initial_env
+          initial_env    = Ident_Env.augmentGlobalEnv initialGlobalEnv $ extractHskEntries adaptionTable
+          global_env_hsk = Ident_Env.unionGlobalEnvs env initial_env
                              
           hskmodules = map (toHskModule global_env_hsk) hsmodules'
           
@@ -67,7 +67,7 @@ convertHskUnit custs adapt (HskUnit hsmodules custMods initialGlobalEnv)
     where 
       decls_of :: Hsx.Module -> [Hsx.Decl]
       decls_of (Hsx.Module _ _ _ _ _ _ decls) = decls
-      toHskModule :: Env.GlobalE -> Hsx.Module -> HskModule
+      toHskModule :: Ident_Env.GlobalE -> Hsx.Module -> HskModule
       toHskModule globalEnv (Hsx.Module loc modul _ _ _ _ decls) =
         HskModule loc modul ((map HskDependentDecls . DeclDependencyGraph.arrangeDecls globalEnv modul) decls)
 
@@ -111,7 +111,7 @@ newtype HskDependentDecls = HskDependentDecls [Hsx.Decl]
 -}
 data Context = Context {
   _theory :: Isa.ThyName,
-  _globalEnv :: Env.GlobalE,
+  _globalEnv :: Ident_Env.GlobalE,
   _warnings :: [Warning],
   _backtrace :: [String],
   _adapt :: Adaption,
@@ -136,7 +136,7 @@ type FieldSurrogate field = (Context -> field, Context -> field -> Context)
 
 theory :: FieldSurrogate Isa.ThyName
 theory      = (_theory,      \c f -> c { _theory      = f })
-globalEnv :: FieldSurrogate Env.GlobalE
+globalEnv :: FieldSurrogate Ident_Env.GlobalE
 globalEnv   = (_globalEnv,   \c f -> c { _globalEnv   = f })
 warnings :: FieldSurrogate [Warning]
 warnings    = (_warnings,    \c f -> c { _warnings    = f })
@@ -227,7 +227,7 @@ liftGensym = ContextM . lift . lift
   This function executes the given conversion with the given environment as
   the context.
 -}
-runConversion :: Customisations -> Adaption -> Env.GlobalE -> ContextM v -> (v, Context)
+runConversion :: Customisations -> Adaption -> Ident_Env.GlobalE -> ContextM v -> (v, Context)
 runConversion custs adapt env (ContextM m) =
   Gensym.evalGensym 0 $ runStateT (runReaderT m custs) (initContext adapt env)
 
@@ -322,34 +322,34 @@ generateRecordAux pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs conde
                 return funBinds
               where extrFieldNames (Hsx.RecDecl conName fields) = map fst $ Hsx.flattenRecFields fields
                     extrFieldNames _ = []
-                    mkAFunBinds numCon vs dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typschemeOf=(_, fty)} constrs)) =
+                    mkAFunBinds numCon vs dty (Ident_Env.Constant (Ident_Env.Field Ident_Env.LexInfo{Ident_Env.nameOf=fname, Ident_Env.typschemeOf=(_, fty)} constrs)) =
                         let binds = map (mkAFunBind fname) constrs
                             fname' = Isa.Name fname
-                            funTy = Isa.Func dty (Env.toIsa fty)
+                            funTy = Isa.Func dty (Ident_Env.toIsa fty)
                         in Isa.Function (Isa.Function_Stmt Isa.Primrec [Isa.TypeSign fname' vs funTy] binds)
-                    mkAFunBind fname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
+                    mkAFunBind fname (Ident_Env.RecordConstr _ Ident_Env.LexInfo{Ident_Env.nameOf=cname} fields) =
                         let fname' = Isa.Name fname
                             con = Isa.Const $ Isa.Name cname
-                            genArg (Env.RecordField n _)
+                            genArg (Ident_Env.RecordField n _)
                                 | n == fname = Isa.Const (Isa.Name "x")
                                 | otherwise = Isa.Const (Isa.Name "_")
                             conArgs = map genArg fields
                             pat = Isa.Parenthesized $ foldl Isa.App con conArgs
                             term = Isa.Const (Isa.Name "x")
                         in (fname', [pat], term)
-                    mkUFunBinds numCon vs dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typschemeOf=(_, fty)} constrs)) =
+                    mkUFunBinds numCon vs dty (Ident_Env.Constant (Ident_Env.Field Ident_Env.LexInfo{Ident_Env.nameOf=fname, Ident_Env.typschemeOf=(_, fty)} constrs)) =
                         let uname = "update_" ++ fname
                             binds = map (mkUFunBind fname uname) constrs
                             uname' = Isa.Name uname
-                            funTy = Isa.Func (Env.toIsa fty) (Isa.Func dty dty)
+                            funTy = Isa.Func (Ident_Env.toIsa fty) (Isa.Func dty dty)
                         in Isa.Function (Isa.Function_Stmt Isa.Primrec [Isa.TypeSign uname' vs funTy] binds)
-                    mkUFunBind fname uname (Env.RecordConstr _ Env.LexInfo{Env.nameOf=cname} fields) =
+                    mkUFunBind fname uname (Ident_Env.RecordConstr _ Ident_Env.LexInfo{Ident_Env.nameOf=cname} fields) =
                         let uname' = Isa.Name uname
                             con = Isa.Const $ Isa.Name cname
-                            genPatArg (i,(Env.RecordField n _))
+                            genPatArg (i,(Ident_Env.RecordField n _))
                                 | n == fname = Isa.Const (Isa.Name "_")
                                 | otherwise = Isa.Const (Isa.Name ("f" ++ show i))
-                            genTermArg (i,(Env.RecordField n _))
+                            genTermArg (i,(Ident_Env.RecordField n _))
                                 | n == fname = Isa.Const (Isa.Name "x")
                                 | otherwise = Isa.Const (Isa.Name ("f" ++ show i))
                             patArgs = map genPatArg (zip [1..] fields)
@@ -411,10 +411,10 @@ convertModule (pragmas, HskModule _loc modul dependentDecls) =
           return (Isa.retopologize (Isa.Module thy imps stmts))
   where isStandardTheory usedThyNames (Isa.ThyName n) = n `elem` usedThyNames
 
-lookupImports :: Isa.ThyName -> Env.GlobalE -> Customisations -> [Isa.ThyName]
+lookupImports :: Isa.ThyName -> Ident_Env.GlobalE -> Customisations -> [Isa.ThyName]
 lookupImports thy globalEnv custs
-    = map (rename .(\(Env.Import name _ _) ->  Env.toIsa name))
-        $ Env.lookupImports_OrLose (Env.fromIsa thy) globalEnv
+    = map (rename .(\(Ident_Env.Import name _ _) ->  Ident_Env.toIsa name))
+        $ Ident_Env.lookupImports_OrLose (Ident_Env.fromIsa thy) globalEnv
     where rename orig@(Isa.ThyName name) = case getCustomTheory custs (Hsx.ModuleName name) of
                                    Nothing -> orig
                                    Just ct -> getCustomTheoryName ct
@@ -450,25 +450,25 @@ instance Convert Hsx.Module Isa.Stmt where
 --- Trivially convertable stuff.
 
 instance Convert Hsx.ModuleName Isa.ThyName where
-    convert' pragmas m = return (Env.toIsa (Env.fromHsk m :: Env.ModuleID))
+    convert' pragmas m = return (Ident_Env.toIsa (Ident_Env.fromHsk m :: Ident_Env.ModuleID))
 
 instance Convert Hsx.Name Isa.Name where
-    convert' pragmas n = return (Env.toIsa (Env.fromHsk n :: Env.Name))
+    convert' pragmas n = return (Ident_Env.toIsa (Ident_Env.fromHsk n :: Ident_Env.Name))
 
 instance Convert Hsx.QName Isa.Name where
-    convert' pragmas qn = return (Env.toIsa (Env.fromHsk qn :: Env.Name))
+    convert' pragmas qn = return (Ident_Env.toIsa (Ident_Env.fromHsk qn :: Ident_Env.Name))
 
 instance Convert Hsx.Type Isa.Type where
     convert' pragmas t @ (Hsx.TyForall _ _ _) = pattern_match_exhausted "Hsx.Type -> Isa.Type" t
-    convert' pragmas t = return (Env.toIsa (Env.fromHsk t :: Env.Type))
+    convert' pragmas t = return (Ident_Env.toIsa (Ident_Env.fromHsk t :: Ident_Env.Type))
 
 convert_type_sign :: Hsx.Name -> Hsx.Type -> Isa.TypeSign
 convert_type_sign n typ =
   let
-    n' = Env.toIsa (Env.fromHsk n :: Env.Name)
-    (e_vs, e_typ) = Env.typscheme_of_hsk_typ typ
-    vs' = map (\(v, sort) -> (Env.toIsa v, Env.isa_of_sort sort)) e_vs
-    typ' = Env.toIsa e_typ
+    n' = Ident_Env.toIsa (Ident_Env.fromHsk n :: Ident_Env.Name)
+    (e_vs, e_typ) = Ident_Env.typscheme_of_hsk_typ typ
+    vs' = map (\(v, sort) -> (Ident_Env.toIsa v, Ident_Env.isa_of_sort sort)) e_vs
+    typ' = Ident_Env.toIsa e_typ
   in Isa.TypeSign n' vs' typ'
 
 instance Convert Hsx.BangType Isa.Type where
@@ -606,13 +606,13 @@ convertDecl pragmas (Hsx.InstDecl loc ctx cls [typ] stmts) = do
         let arities' = AList.make (the . AList.lookup raw_arities) vs';
         identifier <- lookupIdentifier_Type cls
         let classinfo = case fromJust identifier of
-                              Env.TypeDecl (Env.Class _ classinfo) -> classinfo
+                              Ident_Env.TypeDecl (Ident_Env.Class _ classinfo) -> classinfo
                               t -> error $ "found:\n" ++ show t
-        let methods = Env.methodsOf classinfo
-        let classVarN = Env.classVarOf classinfo
-        let inst_envtype = Env.fromHsk typ
+        let methods = Ident_Env.methodsOf classinfo
+        let classVarN = Ident_Env.classVarOf classinfo
+        let inst_envtype = Ident_Env.fromHsk typ
         let tyannots = map (mk_method_annotation classVarN inst_envtype) methods
-        withUpdatedContext globalEnv (\e -> Env.augmentGlobalEnv e tyannots) $
+        withUpdatedContext globalEnv (\e -> Ident_Env.augmentGlobalEnv e tyannots) $
           do stmts' <- mapsM (convertDecl pragmas) (map toHsDecl stmts)
              let fun_stmts' = map (\(Isa.Function fun_stmt) -> fun_stmt) stmts'
              return [Isa.Instance cls' tyco' arities' fun_stmts']
@@ -628,13 +628,13 @@ convertDecl pragmas (Hsx.InstDecl loc ctx cls [typ] stmts) = do
       sort' <- mapM (convert pragmas) sort
       return (v', sort')
     toHsDecl (Hsx.InsDecl decl) = decl
-    mk_method_annotation :: Env.Name -> Env.Type -> Env.Identifier -> Env.Identifier
+    mk_method_annotation :: Ident_Env.Name -> Ident_Env.Type -> Ident_Env.Identifier -> Ident_Env.Identifier
     mk_method_annotation tyvarN tycon class_method_annot
-        = assert (Env.isTypeAnnotation class_method_annot)
-            $ let lexinfo = Env.lexInfoOf class_method_annot
-                  (_, typ)     = Env.typschemeOf lexinfo
-                  typ'    = Env.substituteTyVars [(Env.TyVar tyvarN, tycon)] typ
-              in Env.Constant (Env.TypeAnnotation (lexinfo { Env.typschemeOf = ([], typ') }))
+        = assert (Ident_Env.isTypeAnnotation class_method_annot)
+            $ let lexinfo = Ident_Env.lexInfoOf class_method_annot
+                  (_, typ)     = Ident_Env.typschemeOf lexinfo
+                  typ'    = Ident_Env.substituteTyVars [(Ident_Env.TyVar tyvarN, tycon)] typ
+              in Ident_Env.Constant (Ident_Env.TypeAnnotation (lexinfo { Ident_Env.typschemeOf = ([], typ') }))
 convertDecl pragmas (Hsx.InstDecl loc ctx cls _ stmts) = dieWithLoc loc (Msg.only_one_tyvar_in_class_decl)
 
 
@@ -713,10 +713,10 @@ convertPat pragmas (Hsx.PParen pat) =
 convertPat pragmas (Hsx.PRec qname fields) = 
     do mbConstr <- liftConvert $ lookupIdentifier_Constant qname
        case mbConstr of
-         Just (Env.Constant (Env.Constructor (Env.RecordConstr _ _ recFields))) -> 
+         Just (Ident_Env.Constant (Ident_Env.Constructor (Ident_Env.RecordConstr _ _ recFields))) -> 
              do isAs <- isInsideAsPattern
-                let fields' = map (\(Hsx.PFieldPat name pat) -> (Env.fromHsk name, pat)) fields
-                    toSimplePat (Env.RecordField iden _) = 
+                let fields' = map (\(Hsx.PFieldPat name pat) -> (Ident_Env.fromHsk name, pat)) fields
+                    toSimplePat (Ident_Env.RecordField iden _) = 
                         case lookup iden fields' of
                           Nothing -> if isAs
                                      then liftConvert . liftGensym . liftM Isa.Const . liftM Isa.Name $
@@ -826,9 +826,9 @@ instance Convert Hsx.Exp Isa.Term where
     convert' pragmas (Hsx.RecConstr qname updates) = 
         do mbConstr <- lookupIdentifier_Constant qname
            case mbConstr of
-             Just (Env.Constant (Env.Constructor (Env.RecordConstr _ _ recFields))) -> 
-                 let updates' = map (\(Hsx.FieldUpdate name exp) -> (Env.fromHsk name, exp)) updates
-                     toSimplePat (Env.RecordField iden _) = 
+             Just (Ident_Env.Constant (Ident_Env.Constructor (Ident_Env.RecordConstr _ _ recFields))) -> 
+                 let updates' = map (\(Hsx.FieldUpdate name exp) -> (Ident_Env.fromHsk name, exp)) updates
+                     toSimplePat (Ident_Env.RecordField iden _) = 
                          case lookup iden updates' of
                            Nothing -> Hsx.Var (Hsx.UnQual (Hsx.Ident "undefined"))
                            Just exp -> exp
@@ -1079,30 +1079,30 @@ normalizeAssociativity etc = etc
   This function looks up the lexical information for the
   given constant identifier.
 -}
-lookupIdentifier_Constant :: Hsx.QName -> ContextM (Maybe Env.Identifier)
+lookupIdentifier_Constant :: Hsx.QName -> ContextM (Maybe Ident_Env.Identifier)
 lookupIdentifier_Constant qname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
-         return (Env.lookupConstant (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
+         return (Ident_Env.lookupConstant (Ident_Env.fromHsk modul) (Ident_Env.fromHsk qname) globalEnv)
 
 {-|
   This function looks up the lexical information for the given
   type identifier.
 -}
-lookupIdentifier_Type' :: Env.Name -> ContextM (Maybe Env.Identifier)
+lookupIdentifier_Type' :: Ident_Env.Name -> ContextM (Maybe Ident_Env.Identifier)
 lookupIdentifier_Type' envName
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
-         return (Env.lookupType (Env.fromHsk modul) envName globalEnv)
+         return (Ident_Env.lookupType (Ident_Env.fromHsk modul) envName globalEnv)
 {-|
   This function looks up the lexical information for the given
   type identifier.
 -}
-lookupIdentifier_Type :: Hsx.QName -> ContextM (Maybe Env.Identifier)
+lookupIdentifier_Type :: Hsx.QName -> ContextM (Maybe Ident_Env.Identifier)
 lookupIdentifier_Type qname
     = do globalEnv <- queryContext globalEnv
          modul     <- queryContext currentModule
-         return (Env.lookupType (Env.fromHsk modul) (Env.fromHsk qname) globalEnv)
+         return (Ident_Env.lookupType (Ident_Env.fromHsk modul) (Ident_Env.fromHsk qname) globalEnv)
 
 {-|
   This function looks up the fixity declaration for the given
@@ -1120,8 +1120,8 @@ lookupInfixOpName :: Hsx.QName -> ContextM (Hsx.Assoc, Int)
 lookupInfixOpName qname
     = do identifier <- lookupIdentifier_Constant (qname)
          case identifier of
-           Just (Env.Constant (Env.InfixOp _ envassoc prio)) 
-                   -> return (Env.toHsk envassoc, prio)
+           Just (Ident_Env.Constant (Ident_Env.InfixOp _ envassoc prio)) 
+                   -> return (Ident_Env.toHsk envassoc, prio)
            Nothing -> do globalEnv <- queryContext globalEnv;
                          warn (Msg.missing_infix_decl qname globalEnv)
                          return (Hsx.AssocLeft, 9) -- default values in Haskell98
@@ -1137,6 +1137,6 @@ lookupType fname = do
   identifier <- lookupIdentifier_Constant fname
   case identifier of
     Nothing -> return Nothing
-    Just id -> let typscheme = Env.typschemeOf (Env.lexInfoOf id) 
-               in if snd typscheme == Env.TyNone
-                  then return Nothing else return $ Just (Env.hsk_typ_of_typscheme typscheme)
+    Just id -> let typscheme = Ident_Env.typschemeOf (Ident_Env.lexInfoOf id) 
+               in if snd typscheme == Ident_Env.TyNone
+                  then return Nothing else return $ Just (Ident_Env.hsk_typ_of_typscheme typscheme)

@@ -39,7 +39,7 @@ import Importer.Utilities.Hsk
 
 import qualified Importer.Isa as Isa
 import qualified Importer.Msg as Msg
-import qualified Importer.Env as Env
+import qualified Importer.Ident_Env as Ident_Env
 
 import qualified Importer.Configuration as Config (getCustomTheory)
 import Importer.Configuration hiding (getCustomTheory)
@@ -51,14 +51,14 @@ import Importer.Configuration hiding (getCustomTheory)
   This data structure combines several Haskell modules and the corresponding environment.
   into one coherent unit.
 -}
-data HskUnit = HskUnit [Hsx.Module] CustomTranslations Env.GlobalE
+data HskUnit = HskUnit [Hsx.Module] CustomTranslations Ident_Env.GlobalE
   deriving (Show)
 
 {-|
   This data structure combines several Isabelle theories and the corresponding environment
   into one coherent unit.
 -}
-data IsaUnit = IsaUnit [Isa.Module] [CustomTheory] Env.GlobalE
+data IsaUnit = IsaUnit [Isa.Module] [CustomTheory] Ident_Env.GlobalE
   deriving (Show)
 
 newtype Conversion a = Conversion (ReaderT Config IO a)
@@ -123,7 +123,7 @@ runConversion config (Conversion parser) = runReaderT parser config
 {-|
   This function takes a parsed Haskell module and produces a Haskell unit by parsing
   all module imported by the given module and add including the initial global environment
-  as given by 'Env.initialGlobalEnv'.
+  as given by 'Ident_Env.initialGlobalEnv'.
 -}
 parseHskFiles :: [FilePath] -> Conversion [HskUnit]
 parseHskFiles paths
@@ -138,7 +138,7 @@ parseHskFiles paths
            -- this should not happen
            [] -> fail $ "Internal error: No Haskell module was parsed!"
            modss -> 
-               let mkUnit mods = HskUnit mods custTrans Env.initialGlobalEnv
+               let mkUnit mods = HskUnit mods custTrans Ident_Env.initialGlobalEnv
                in return $ map mkUnit modss 
                
 {-|

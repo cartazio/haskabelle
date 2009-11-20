@@ -19,7 +19,7 @@ import qualified Language.Haskell.Exts as Hsx
 
 import Importer.Utilities.Hsk
 
-import qualified Importer.Env as Env
+import qualified Importer.Ident_Env as Ident_Env
 import qualified Importer.Msg as Msg
 
 
@@ -29,18 +29,18 @@ import qualified Importer.Msg as Msg
 
 {-|
   This data structure represents the dependency graph of Haskell declarations.
-  The nodes of this graph are elements of type 'Hsx.Decl' keys are of type 'Env.Name'.
+  The nodes of this graph are elements of type 'Hsx.Decl' keys are of type 'Ident_Env.Name'.
 -}
 data HskDeclDepGraph = HskDeclDepGraph (Graph, 
-                                        Vertex -> (Hsx.Decl, Env.Name, [Env.Name]), 
-                                        Env.Name -> Maybe Vertex)
+                                        Vertex -> (Hsx.Decl, Ident_Env.Name, [Ident_Env.Name]), 
+                                        Ident_Env.Name -> Maybe Vertex)
 
 {-|
   This function computes the dependency graph of the given Haskell declarations of the
   given module in the given environment. An edge from a declaration A to declaration B
   means the definition of A depends on B.
 -}
-makeDeclDepGraph :: Env.GlobalE -> Hsx.ModuleName -> [Hsx.Decl] -> HskDeclDepGraph
+makeDeclDepGraph :: Ident_Env.GlobalE -> Hsx.ModuleName -> [Hsx.Decl] -> HskDeclDepGraph
 makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
     where declDepGraph = graphFromEdges
                            $ handleDuplicateEdges
@@ -50,21 +50,21 @@ makeDeclDepGraph globalEnv modul decls = HskDeclDepGraph declDepGraph
   This function constructs the outgoing edges of the given declaration in the given environment
   module.
 -}
-makeEdgesFromDecl :: Env.GlobalE -> Hsx.ModuleName -> Hsx.Decl -> [(Hsx.Decl, Env.Name, [Env.Name])]
+makeEdgesFromDecl :: Ident_Env.GlobalE -> Hsx.ModuleName -> Hsx.Decl -> [(Hsx.Decl, Ident_Env.Name, [Ident_Env.Name])]
 makeEdgesFromDecl globalEnv modul decl =
   let
-    canonicalize hsqname = Env.resolveName_OrLose globalEnv (Env.fromHsk modul) (Env.fromHsk hsqname)
+    canonicalize hsqname = Ident_Env.resolveName_OrLose globalEnv (Ident_Env.fromHsk modul) (Ident_Env.fromHsk hsqname)
     names = map canonicalize $ namesFromDecl decl
     used_names = Set.map canonicalize $ Set.unions [extractFreeVarNs decl, extractDataConNs decl, extractFieldNs decl]
     used_types = Set.map canonicalize $ extractTypeConNs decl
-    impl_types = catMaybes $ Set.toList $ Set.map (Env.getDepDataType globalEnv (Env.fromHsk modul)) used_names
+    impl_types = catMaybes $ Set.toList $ Set.map (Ident_Env.getDepDataType globalEnv (Ident_Env.fromHsk modul)) used_names
   in
     [ (decl, name, Set.toList (Set.union used_names used_types) ++ impl_types) | name <- names ]
 
 {-|
   ???
 -}
-handleDuplicateEdges :: [(Hsx.Decl, Env.Name, [Env.Name])] -> [(Hsx.Decl, Env.Name, [Env.Name])]
+handleDuplicateEdges :: [(Hsx.Decl, Ident_Env.Name, [Ident_Env.Name])] -> [(Hsx.Decl, Ident_Env.Name, [Ident_Env.Name])]
 handleDuplicateEdges edges
     = concatMap handleGroup (groupBy (\(_,x,_) (_,y,_) -> x == y) edges)
     where handleGroup edges
@@ -128,6 +128,6 @@ flattenDeclDepGraph (HskDeclDepGraph (graph, fromVertex, _))
             where 
               isContained xs ys = not (null (intersect xs ys))
 
-arrangeDecls :: Env.GlobalE -> Hsx.ModuleName -> [Hsx.Decl] -> [[Hsx.Decl]]
+arrangeDecls :: Ident_Env.GlobalE -> Hsx.ModuleName -> [Hsx.Decl] -> [[Hsx.Decl]]
 arrangeDecls globalEnv modul = flattenDeclDepGraph . makeDeclDepGraph globalEnv modul
 

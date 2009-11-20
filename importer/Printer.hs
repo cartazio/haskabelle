@@ -16,12 +16,12 @@ import qualified Text.PrettyPrint as P
 import qualified Language.Haskell.Exts.Syntax as Hsx (SpecialCon(..), QName(..))
 
 import Importer.Adapt as Adapt (AdaptionTable(AdaptionTable))
-import qualified Importer.Env as Env
+import qualified Importer.Ident_Env as Ident_Env
 
 import qualified Importer.Isa as Isa
 
 
-data PPState = PPState { globalEnv        :: Env.GlobalE,
+data PPState = PPState { globalEnv        :: Ident_Env.GlobalE,
                          currentTheory    :: Isa.ThyName,
                          -- Are we in an Infix Application?
                          currentAppFlavor :: Maybe AppFlavor,
@@ -32,7 +32,7 @@ data PPState = PPState { globalEnv        :: Env.GlobalE,
 
 data DocM v = DocM (PPState -> (v, PPState))
 
-emptyPPState = PPState { globalEnv = Env.initialGlobalEnv,
+emptyPPState = PPState { globalEnv = Ident_Env.initialGlobalEnv,
                          currentTheory = Isa.ThyName "Scratch",
                          currentAppFlavor = Nothing,
                          currentTyScheme = [],
@@ -222,7 +222,7 @@ indent = 3
 
 class Printer a where
     pprint' :: AdaptionTable -> [String] -> a -> DocM P.Doc
-    pprint  :: AdaptionTable -> [String] -> Env.GlobalE -> a -> P.Doc
+    pprint  :: AdaptionTable -> [String] -> Ident_Env.GlobalE -> a -> P.Doc
     pprint adapt reserved env obj = let
       DocM sf = pprint' adapt reserved obj
       (doc, _state) = sf (emptyPPState { globalEnv = env })
@@ -232,7 +232,7 @@ instance Printer Isa.Module where
 
     pprint' adapt reserved (Isa.Module thy imps cmds)
         = do env <- queryPP globalEnv
-             let imps' = map (pprint' adapt reserved) (imps ++ [Isa.ThyName Env.prelude])
+             let imps' = map (pprint' adapt reserved) (imps ++ [Isa.ThyName Ident_Env.prelude])
              withCurrentTheory thy $
                text "theory" <+> pprint' adapt reserved thy $+$
                text "imports " <> fsep  imps' $+$
@@ -495,18 +495,18 @@ instance Printer Isa.DoBlockFragment where
     pprint' adapt reserved (Isa.DoQualifier exp) = pprint' adapt reserved exp
 
 
-reAdaptEnvName :: AdaptionTable -> Env.Name -> Maybe Env.Name
+reAdaptEnvName :: AdaptionTable -> Ident_Env.Name -> Maybe Ident_Env.Name
 reAdaptEnvName adapt name
     = let AdaptionTable mappings = adapt
-          mappings' = [ (Env.identifier2name id2, Env.identifier2name id1) 
+          mappings' = [ (Ident_Env.identifier2name id2, Ident_Env.identifier2name id1) 
                             | (id1, id2) <- mappings ]
       in lookup name mappings'
 
 isNil, isCons, isPairCon :: AdaptionTable -> Isa.Name -> Bool
 
-mk_isFoo adapt foo n = case reAdaptEnvName adapt (Env.fromIsa n) of
+mk_isFoo adapt foo n = case reAdaptEnvName adapt (Ident_Env.fromIsa n) of
   Nothing -> False
-  Just x -> case Env.toHsk x of
+  Just x -> case Ident_Env.toHsk x of
     Hsx.Special con -> con == foo
     _ -> False
 
@@ -534,7 +534,7 @@ data AppFlavor = ListApp [Isa.Term]
 -- Cf. http://www.haskell.org/ghc/docs/latest/html/users_guide/syntax-extns.html#pattern-guards
 --
 
-categorizeApp :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> AppFlavor
+categorizeApp :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Ident_Env.Identifier) -> AppFlavor
 categorizeApp adapt app@(Isa.App (Isa.App (Isa.Const opN) t1) t2) lookupFn
     | isCons adapt opN, Just list <- flattenListApp adapt app = ListApp list
     | isPairCon adapt opN, Just list <- flattenTupleApp adapt app = TupleApp list
@@ -569,7 +569,7 @@ flattenLambdas (Isa.Abs arg1 (Isa.Abs arg2 body))
 flattenLambdas (Isa.Abs arg body) = ([arg], body)
 flattenLambdas t = ([], t)
 
-isSelfEvaluating :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
+isSelfEvaluating :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Ident_Env.Identifier) -> Bool
 isSelfEvaluating adapt t lookupFn
     = case t of
         Isa.Const _            -> True
@@ -583,7 +583,7 @@ isSelfEvaluating adapt t lookupFn
                                   InfixApp _ _ _ -> False
         _ -> False
 
-isCompound :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Env.Identifier) -> Bool
+isCompound :: AdaptionTable -> Isa.Term -> (Isa.Name -> Maybe Ident_Env.Identifier) -> Bool
 isCompound adapt t lookupFn
     = case t of
         Isa.Const _            -> False
@@ -603,18 +603,18 @@ isCompoundType t = case t of
                      Isa.Type _ [] -> False
                      _              -> True
                      
-isInfixOp :: (a -> Maybe Env.Identifier) -> a -> Bool
+isInfixOp :: (a -> Maybe Ident_Env.Identifier) -> a -> Bool
 isInfixOp lookupFn name 
     = case lookupFn name of
-        Just id -> Env.isInfixOp id
+        Just id -> Ident_Env.isInfixOp id
         _       -> False
 
-isUnaryOp :: (a -> Maybe Env.Identifier) -> a -> Bool
+isUnaryOp :: (a -> Maybe Ident_Env.Identifier) -> a -> Bool
 isUnaryOp lookupFn name
     = case lookupFn name of
-        Just id -> Env.isUnaryOp id
+        Just id -> Ident_Env.isUnaryOp id
         _       -> False
 
-lookupIdentifier :: Isa.ThyName -> Isa.Name -> Env.GlobalE -> Maybe Env.Identifier
+lookupIdentifier :: Isa.ThyName -> Isa.Name -> Ident_Env.GlobalE -> Maybe Ident_Env.Identifier
 lookupIdentifier thy n globalEnv
-    = Env.lookupConstant (Env.fromIsa thy) (Env.fromIsa n) globalEnv
+    = Ident_Env.lookupConstant (Ident_Env.fromIsa thy) (Ident_Env.fromIsa n) globalEnv
