@@ -1,6 +1,6 @@
 {-  Author: Tobias C. Rittweiler and Florian Haftmann, TU Muenchen
 
-Adaption tables and their application
+Adaption tables and their application.
 -}
 
 module Importer.Adapt (Adaption(..), AdaptionTable(AdaptionTable),
