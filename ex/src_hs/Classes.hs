@@ -55,12 +55,14 @@ instance Order Integer where
   less_eq = (<=)
   less = (<)
 
-{-instance (Order a) => Order [a] where
-  less_eq (x : xs) (y : ys) = less x y || x == y && less_eq xs ys
+instance (Order a) => Order [a] where
+  less_eq (x : xs) (y : ys) = less x y || not (less y x) && less_eq xs ys
   less_eq [] xs = True
   less_eq (x : xs) [] = False
-  less xs ys = less_eq xs ys && not (xs == ys)
+  less (x : xs) (y : ys) = less x y || not (less y x) && less xs ys
+  less xs [] = False
+  less [] (x : xs) = True
 
-instance (Order a, Order b) => Order (a, b) where
-  less_eq (x, y) (w, z) = less x w || x == w && less_eq y z
-  less p q = less_eq p q && not (p == q)-}
+{-instance (Order a, Order b) => Order (a, b) where
+  less_eq (x, y) (w, z) = less x w || not (less w x) && less_eq y z
+  less (x, y) (w, z) = less x w || not (less w x) && less y z-}
