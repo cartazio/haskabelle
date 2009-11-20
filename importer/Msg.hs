@@ -11,8 +11,6 @@ import Maybe (fromMaybe)
 import qualified Language.Haskell.Exts as Hsx
 import qualified Importer.Utilities.Hsk as Hsx (srcloc2string, module2FilePath)
 
-import qualified Importer.Utilities.Isa as Isa (prettyShow')
-
 
 spacify x = x ++ " "
 linify  x = x ++ "\n\n"
@@ -20,8 +18,15 @@ linify  x = x ++ "\n\n"
 quote :: Show a => a -> String
 quote x = "`" ++ (show x) ++ "'"
 
+prettyShow' prefix obj = let str = prefix ++ " = " ++ show obj
+                             (Hsx.ParseOk (Hsx.Module _ _ _ _ _ _ decls)) 
+                                 = Hsx.parseModule str
+                         in concatMap Hsx.prettyPrint decls
+
+prettyShow obj = prettyShow' "foo" obj
+
 printEnv env = "The Global Environment looked like:\n"
-               ++ Isa.prettyShow' "globalenv" env
+               ++ prettyShow' "globalenv" env
 
 assoc_mismatch op1 assoc1 op2 assoc2
     = let { op1' = quote op1; assoc1' = quote assoc1; } in
@@ -72,7 +77,7 @@ found_duplicates str x y
 identifier_collision_in_lookup curModuleName qname foundIdentifiers
     = "Ambiguous occurences found for " ++ quote qname ++ "\n"
       ++ "while trying to look it up in " ++ quote curModuleName ++ ":\n\n" 
-      ++ concatMap (linify . Isa.prettyShow' (show qname)) foundIdentifiers
+      ++ concatMap (linify . prettyShow' (show qname)) foundIdentifiers
 
 failed_lookup lookup_kind_str curModuleName envname globalEnv
     = "No entry for the " ++ lookup_kind_str ++ " " ++ quote envname ++ "\n"
@@ -80,7 +85,7 @@ failed_lookup lookup_kind_str curModuleName envname globalEnv
       ++ printEnv globalEnv
 
 ambiguous_decl_definitions decls
-    = "Ambiguous definitions between\n" ++ concatMap (linify . Isa.prettyShow' "decl") decls
+    = "Ambiguous definitions between\n" ++ concatMap (linify . prettyShow' "decl") decls
 
 complex_toplevel_patbinding
     = "Complex pattern binding on toplevel is not supported by Isar/HOL."

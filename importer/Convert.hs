@@ -15,8 +15,7 @@ module Importer.Convert (convertHskUnit) where
 
 import Importer.Library
 import qualified Importer.AList as AList
-
-import Data.List (nub, unzip4, partition)
+import List (nub, unzip4, partition)
 import Maybe
 import qualified Data.Map as Map
 
@@ -25,25 +24,22 @@ import Control.Monad.Writer (WriterT, MonadWriter, runWriterT, tell)
 import Control.Monad.Reader (ask, ReaderT, MonadReader, lift, runReaderT, local)
 import Control.Monad.State (StateT, MonadState, runStateT, get, put)
 
-import Importer.Utilities.Hsk
 import Importer.Utilities.Gensym
-import Importer.Preprocess
-import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
-import Importer.DeclDependencyGraph
-
-import Importer.Adapt (makeAdaptionTable_FromHsModule, extractHskEntries,
-  AdaptionTable, adaptGlobalEnv, adaptIsaUnit, Adaption(..))
-
-import qualified Language.Haskell.Exts as Hsx
-
-import qualified Importer.Isa as Isa
-import qualified Importer.Utilities.Isa as Isa (prettyShow, prettyShow')
 
 import qualified Importer.Msg as Msg
-import qualified Importer.Env as Env
 
 import Importer.Configuration hiding (getMonadInstance)
 import qualified Importer.Configuration as Config (getMonadInstance)
+import Importer.Adapt (makeAdaptionTable_FromHsModule, extractHskEntries,
+  AdaptionTable, adaptGlobalEnv, adaptIsaUnit, Adaption(..))
+import qualified Importer.Env as Env
+import qualified Importer.Preprocess as Preprocess
+import Importer.ConversionUnit (HskUnit(..), IsaUnit(..))
+import qualified Importer.DeclDependencyGraph as DeclDependencyGraph
+
+import qualified Language.Haskell.Exts as Hsx
+import qualified Importer.Utilities.Hsk as Hsx
+import qualified Importer.Isa as Isa
 
 
 {-|
@@ -53,7 +49,7 @@ import qualified Importer.Configuration as Config (getMonadInstance)
 convertHskUnit :: Customisations -> Adaption -> HskUnit -> (AdaptionTable, IsaUnit)
 convertHskUnit custs adapt (HskUnit hsmodules custMods initialGlobalEnv)
     = let pragmass       = map (accumulate (fold add_pragmas) . decls_of) hsmodules
-          hsmodules'     = map (preprocessModule (usedConstNames adapt)) hsmodules
+          hsmodules'     = map (Preprocess.preprocessModule (usedConstNames adapt)) hsmodules
           env            = Env.environmentOf custs hsmodules' custMods
           adaptionTable  = makeAdaptionTable_FromHsModule adapt env hsmodules'
           initial_env    = Env.augmentGlobalEnv initialGlobalEnv $ extractHskEntries adaptionTable
@@ -73,7 +69,7 @@ convertHskUnit custs adapt (HskUnit hsmodules custMods initialGlobalEnv)
       decls_of (Hsx.Module _ _ _ _ _ _ decls) = decls
       toHskModule :: Env.GlobalE -> Hsx.Module -> HskModule
       toHskModule globalEnv (Hsx.Module loc modul _ _ _ _ decls) =
-        HskModule loc modul ((map HskDependentDecls . arrangeDecls globalEnv modul) decls)
+        HskModule loc modul ((map HskDependentDecls . DeclDependencyGraph.arrangeDecls globalEnv modul) decls)
 
 type Pragma = (String, [String])
 
@@ -84,12 +80,12 @@ pragmas = [permissive_pragma]
 
 add_pragmas :: Hsx.Decl -> [Pragma] -> [Pragma]
 add_pragmas (Hsx.UnknownDeclPragma src "HASKABELLE" pragma) =
-  if null pragma then error ("empty pragma encountered at " ++ srcloc2string src)
+  if null pragma then error ("empty pragma encountered at " ++ Hsx.srcloc2string src)
   else let
     directive : args = words pragma
   in if directive `elem` pragmas
   then AList.map_default (directive, []) (fold insert args)
-  else error ("unknown pragma " ++ directive ++ " encountered at " ++ srcloc2string src)
+  else error ("unknown pragma " ++ directive ++ " encountered at " ++ Hsx.srcloc2string src)
 add_pragmas _ = id
 
 
@@ -159,7 +155,7 @@ getMonadInstance name = ask >>= (return . flip Config.getMonadInstance name)
 
 getMonadInstance' :: Hsx.Type -> ContextM (Maybe MonadInstance)
 getMonadInstance' ty =
-    case typeConName . returnType $ ty of
+    case Hsx.typeConName . Hsx.returnType $ ty of
       Nothing -> return Nothing
       Just name -> getMonadInstance name
 
@@ -293,7 +289,7 @@ die msg
 dieWithLoc :: Hsx.SrcLoc -> String -> ContextM t
 dieWithLoc loc msg 
     = do backtrace <- queryContext backtrace
-         error $ srcloc2string loc ++ ": " ++ msg ++ "\n\n"
+         error $ Hsx.srcloc2string loc ++ ": " ++ msg ++ "\n\n"
                    ++ "Backtrace:\n"
                    ++ concat (map (++ "\n\n") (reverse backtrace))
 {-|
@@ -303,7 +299,7 @@ dieWithLoc loc msg
 -}
 pattern_match_exhausted :: (Show a) => String -> a -> ContextM t
 pattern_match_exhausted str obj 
-    = die (str ++ ": Pattern match exhausted for\n" ++ Isa.prettyShow obj)
+    = die (str ++ ": Pattern match exhausted for\n" ++ Msg.prettyShow obj)
 
 
           
@@ -324,7 +320,7 @@ generateRecordAux pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs conde
                 let funBinds = map (mkAFunBinds (length decls) vs dataTy) fields
                       ++ map (mkUFunBinds (length decls) vs dataTy) fields
                 return funBinds
-              where extrFieldNames (Hsx.RecDecl conName fields) = map fst $ flattenRecFields fields
+              where extrFieldNames (Hsx.RecDecl conName fields) = map fst $ Hsx.flattenRecFields fields
                     extrFieldNames _ = []
                     mkAFunBinds numCon vs dty (Env.Constant (Env.Field Env.LexInfo{Env.nameOf=fname, Env.typschemeOf=(_, fty)} constrs)) =
                         let binds = map (mkAFunBind fname) constrs
@@ -381,7 +377,7 @@ convertDataDecl pragmas (Hsx.DataDecl _loc _kind _context tyconN tyvarNs condecl
                              tyvars <- mapM (convert pragmas) types
                              return $ (name', tyvars)
                     cnvt (Hsx.RecDecl name fields) = 
-                        let types = map snd (flattenRecFields fields)
+                        let types = map snd (Hsx.flattenRecFields fields)
                         in do name'  <- convert pragmas name
                               tyvars <- mapM (convert pragmas) types
                               return $ (name', tyvars)
@@ -398,7 +394,7 @@ class Show a => Convert a b | a -> b where
     convert  :: [Pragma] -> Convert a b => a -> ContextM b
     convert pragmas hsexpr = withUpdatedContext backtrace 
                        (\bt -> let frameName = "frame" ++ show (length bt)
-                               in Isa.prettyShow' frameName hsexpr : bt)
+                               in Msg.prettyShow' frameName hsexpr : bt)
                      $ convert' pragmas hsexpr
 
 convertModule :: ([Pragma], HskModule) -> ContextM Isa.Module
@@ -581,7 +577,7 @@ convertDecl pragmas (Hsx.PatBind loc pattern rhs _wherebinds)
     
 convertDecl pragmas decl@(Hsx.ClassDecl _ ctx classN _ _ class_decls)
         = check_class_decl decl
-            $ do let superclassNs   = extractSuperclassNs ctx
+            $ do let superclassNs   = Hsx.extractSuperclassNs ctx
                  superclassNs' <- mapM (convert pragmas) superclassNs
                  classN'       <- convert pragmas classN
                  typesigs'     <- mapsM convertToTypeSig class_decls
@@ -606,7 +602,7 @@ convertDecl pragmas (Hsx.InstDecl loc ctx cls [typ] stmts) = do
     case dest_typ_tvars typ' of
       Nothing -> dieWithLoc loc Msg.only_simple_instantiations
       Just (tyco', vs') -> do
-        raw_arities <- mapM (convert_arity) (dest_typcontext ctx)
+        raw_arities <- mapM (convert_arity) (Hsx.dest_typcontext ctx)
         let arities' = AList.make (the . AList.lookup raw_arities) vs';
         identifier <- lookupIdentifier_Type cls
         let classinfo = case fromJust identifier of
@@ -701,14 +697,14 @@ convertPat pragmas (Hsx.PApp qname pats) =
        return $ foldl Isa.App (Isa.Const qname') pats'
        
 convertPat pragmas (Hsx.PTuple comps) = 
-    convertPat pragmas (foldr hskPPair (Hsx.PParen (last comps)) (init comps))
+    convertPat pragmas (foldr Hsx.hskPPair (Hsx.PParen (last comps)) (init comps))
 
 convertPat pragmas (Hsx.PList []) =
     do list_datacon_name <- liftConvert $ convert pragmas (Hsx.Special Hsx.ListCon)
        return (Isa.Const list_datacon_name)
 
 convertPat pragmas (Hsx.PList els) =
-    convertPat pragmas $ foldr hskPCons hskPNil els
+    convertPat pragmas $ foldr Hsx.hskPCons Hsx.hskPNil els
 
 convertPat pragmas (Hsx.PParen pat) = 
     do pat' <- convertPat pragmas pat
@@ -779,18 +775,18 @@ instance Convert Hsx.Exp Isa.Term where
     convert' pragmas (Hsx.Con qname)     = convert pragmas qname >>= (\n -> return (Isa.Const n))
     convert' pragmas (Hsx.Paren exp)     = convert pragmas exp   >>= (\e -> return (Isa.Parenthesized e))
     -- convert' (Hsx.WildCard)      = return (Isa.Const (Isa.Name "_"))
-    convert' pragmas (Hsx.NegApp exp)    = convert pragmas (hsk_negate exp)
+    convert' pragmas (Hsx.NegApp exp)    = convert pragmas (Hsx.hsk_negate exp)
 
     convert' pragmas (Hsx.List [])       = do
       list_datacon_name <- convert pragmas (Hsx.Special Hsx.ListCon)
       return (Isa.Const list_datacon_name)
     convert' pragmas (Hsx.List exps)
-        = convert pragmas $ foldr hsk_cons hsk_nil exps
+        = convert pragmas $ foldr Hsx.hsk_cons Hsx.hsk_nil exps
 
     -- We have to wrap the last expression in an explicit HsParen as that last
     -- expression may itself be a pair. If we didn't, we couldn't distinguish
     -- between "((1,2), (3,4))" and "((1,2), 3, 4)" afterwards anymore.
-    convert' pragmas (Hsx.Tuple exps)    = convert pragmas (foldr hsk_pair (Hsx.Paren (last exps)) (init exps))
+    convert' pragmas (Hsx.Tuple exps)    = convert pragmas (foldr Hsx.hsk_pair (Hsx.Paren (last exps)) (init exps))
 
     convert' pragmas (Hsx.App exp1 exp2)
         = do exp1' <- convert pragmas exp1

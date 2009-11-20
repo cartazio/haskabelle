@@ -24,7 +24,6 @@ import Importer.ConversionUnit (IsaUnit(IsaUnit))
 import qualified Language.Haskell.Exts as Hsx
 import qualified Importer.Utilities.Hsk as Hsx (extractBindingNs)
 import qualified Importer.Isa as Isa
-import qualified Importer.Utilities.Isa as Isa (prettyShow')
 
 
 {- Fundamental data structures -}
@@ -527,7 +526,7 @@ adaptIsaUnit adaptionTable globalEnv (IsaUnit modules custThys adaptedGlobalEnv)
   IsaUnit (adaptModules adaptionTable adaptedGlobalEnv globalEnv modules) custThys adaptedGlobalEnv
 
 
-not_implemented x = error ("Adaption not implemented yet for\n  " ++ Isa.prettyShow' "thing" x) 
+not_implemented x = error ("Adaption not implemented yet for\n  " ++ Msg.prettyShow' "thing" x) 
 
 class Adapt a where
     adapt  :: a -> AdaptM a
