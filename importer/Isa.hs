@@ -8,7 +8,7 @@ Abstract representation of Isar/HOL theory.
 module Importer.Isa (ThyName(..), Name(..), Type(..), Literal(..), Term(..), Pat,
   ListComprFragment(..), DoBlockFragment(..),
   Function_Kind(..), Function_Stmt(..), Stmt(..), TypeSpec(..), TypeSign(..), Module(..),
-  dest_Type, dest_TVar, retopologize, base_name_of) where
+  dest_Type, dest_TVar, base_name_of, name_of_type_sign, retopologize) where
 
 import Data.Graph as Graph
 
@@ -92,6 +92,9 @@ data TypeSpec = TypeSpec [Name] Name
 
 data TypeSign = TypeSign Name [(Name, Sort)] Type
   deriving Show
+
+name_of_type_sign :: TypeSign -> Name
+name_of_type_sign (TypeSign name _ _) = name
 
 data Function_Kind = Definition | Primrec | Fun | Function_Sorry
   deriving (Show, Eq)
