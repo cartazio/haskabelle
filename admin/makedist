@@ -44,7 +44,7 @@ if [ -z "$1" ]
 then
   REVISION=tip
   VERSION=""
-  ARCHIVE="haskabelle-$("$HG" tip --template '{date|shortdate}')"
+  ARCHIVE="Haskabelle-$("$HG" tip --template '{date|shortdate}')"
 else
   REVISION="$1"
   VERSION="$REVISION"
