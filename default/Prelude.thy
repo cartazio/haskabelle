@@ -48,6 +48,76 @@ class eq =
   fixes inequal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
   assumes inequal_equal [simp]: "inequal x y \<longleftrightarrow> \<not> equal x y"
 
+instantiation bool :: eq
+begin
+
+definition
+  "equal p q \<longleftrightarrow> (p \<longleftrightarrow> q)"
+
+definition
+  "inequal p q \<longleftrightarrow> \<not> (p \<longleftrightarrow> q)"
+
+instance proof
+qed (simp_all add: equal_bool_def inequal_bool_def)
+
+end
+
+instantiation unit :: eq
+begin
+
+definition
+  "equal (u::unit) v \<longleftrightarrow> True"
+
+definition
+  "inequal (u::unit) v \<longleftrightarrow> False"
+
+instance proof
+qed (simp_all add: equal_unit_def inequal_unit_def)
+
+end
+
+instantiation * :: (eq, eq) eq
+begin
+
+definition
+  "equal x y \<longleftrightarrow> (x :: _ * _) = y"
+
+definition
+  "inequal x y \<longleftrightarrow> (x :: _ * _) \<noteq> y"
+
+instance proof
+qed (simp_all add: equal_prod_def inequal_prod_def)
+
+end
+
+instantiation list :: (eq) eq
+begin
+
+definition
+  "equal x y \<longleftrightarrow> (x :: _ list) = y"
+
+definition
+  "inequal x y \<longleftrightarrow> (x :: _ list) \<noteq> y"
+
+instance proof
+qed (simp_all add: equal_list_def inequal_list_def)
+
+end
+
+instantiation option :: (eq) eq
+begin
+
+definition
+  "equal x y \<longleftrightarrow> (x :: _ option) = y"
+
+definition
+  "inequal x y \<longleftrightarrow> (x :: _ option) \<noteq> y"
+
+instance proof
+qed (simp_all add: equal_option_def inequal_option_def)
+
+end
+
 instantiation int :: eq
 begin 
 
