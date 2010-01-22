@@ -37,4 +37,4 @@ PRELUDE="$DIR/$PRELUDE_NAME"
 ## convert
 
 CMD="(use_thy \"$PRELUDE\"; use \"$CONV\") handle Toplevel.TOPLEVEL_ERROR => (writeln \"ERROR\"; OS.Process.exit OS.Process.failure); Mk_Adapt.run (theory \"$PRELUDE_NAME\") \"$SRC\" \"$DST\";"
-"$HASKABELLE_HOME/bin/isabelle-process" -q -e "$CMD" HOL || fail "Building adaption table failed"
+"$HASKABELLE_HOME/bin/isabelle-process" -r -q -e "$CMD" HOL && echo && echo "Building adaptation table successful" || fail "Building adaptation table failed" 

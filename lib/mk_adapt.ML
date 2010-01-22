@@ -1,6 +1,6 @@
 (*  Author:  Florian Haftmann, TU Muenchen
 
-Decorate importer adaption table with current Isabelle syntax.
+Decorate Haskabelle adaptation table with current Isabelle syntax.
 *)
 
 signature MK_ADAPT =
@@ -22,8 +22,21 @@ fun used_constants thy = []
 
 (* concrete output syntax *)
 
-fun mk_classentry _ (((hs, isa), super), params) =
+fun assert_class thy class = Sign.certify_class thy class
+  handle TYPE _ => error ("Not a class: " ^ quote class);
+fun assert_type thy tyco = if Symtab.defined ((snd o #types o Type.rep_tsig o Sign.tsig_of) thy) tyco
+  then tyco else error ("Not a type constructor: " ^ quote tyco);
+fun assert_const thy const = if Symtab.defined ((snd o #constants o Consts.dest o Sign.consts_of) thy) const
+  then const else error ("Not a constant: " ^ quote const);
+  
+fun check_class thy = assert_class thy o Sign.intern_class thy;
+fun check_type thy = assert_type thy o Sign.intern_type thy;
+fun check_const thy = assert_const thy o Sign.intern_const thy;
+
+fun mk_classentry thy (((hs, raw_isa), raw_super), params) =
   let
+    val isa = check_class thy raw_isa;
+    val super = map (check_class thy) raw_super;
     val s_super = enclose "[" "]" (commas_quote super);
     val s_params = enclose "[" "]" (commas (map (fn (n, t) => "(" ^ quote n ^ ", " ^ quote t ^ ")") params));
     val s_entry = "(Class (RawClassInfo { superclasses = " ^ s_super ^ ", classVar = \"a\", methods = "
@@ -33,14 +46,14 @@ fun mk_classentry _ (((hs, isa), super), params) =
 
 fun mk_typentry thy (hs, raw_isa) =
   let
-    val isa = Sign.intern_type thy raw_isa;
+    val isa = check_type thy raw_isa;
     val s = "(Haskell " ^ quote hs ^ " Type, Isabelle "
       ^ quote isa ^ " Type)";
   in s end;
 
 fun mk_constentry thy (hs, raw_isa) =
   let
-    val isa = Sign.intern_const thy raw_isa;
+    val isa = check_const thy raw_isa;
     val syn = Syntax.guess_infix (Sign.syn_of thy) (Sign.const_syntax_name thy isa);
     fun string_of_syn NONE = (isa, "Function")
       | string_of_syn (SOME (InfixName (s, j))) =
@@ -126,6 +139,7 @@ fun main thy src_loc dst_loc =
   in () end;
 
 fun run thy src_loc dst_loc = main thy src_loc dst_loc
-  handle ERROR e => (writeln ("ERROR: " ^ e); OS.Process.exit OS.Process.failure);
+  handle ERROR e => (writeln ("ERROR: " ^ e); OS.Process.exit OS.Process.failure)
+       | _ => (writeln "ERROR"; OS.Process.exit OS.Process.failure);
 
 end;
