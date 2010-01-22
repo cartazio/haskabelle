@@ -3,7 +3,7 @@
 
 module Generated_Adapt where
 
-raw_adaption_table = [(Haskell "Prelude.Eqa" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(==)", "a -> a -> bool"), ("Prelude.(/=)", "a -> a -> bool")] })), Isabelle "Prelude.eq" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(==)", "a -> a -> bool"), ("Prelude.(/=)", "a -> a -> bool")] }))),
+raw_adaption_table = [(Haskell "Prelude.Eq" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(==)", "a -> a -> bool"), ("Prelude.(/=)", "a -> a -> bool")] })), Isabelle "Prelude.eq" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(==)", "a -> a -> bool"), ("Prelude.(/=)", "a -> a -> bool")] }))),
   (Haskell "Prelude.Ord" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(<=)", "a -> a -> bool"), ("Prelude.(<)", "a -> a -> bool")] })), Isabelle "Prelude.ord" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.(<=)", "a -> a -> bool"), ("Prelude.(<)", "a -> a -> bool")] }))),
   (Haskell "Prelude.Show" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.show", "a -> String")] })), Isabelle "Prelude.print" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [("Prelude.show", "a -> String")] }))),
   (Haskell "Prelude.Num" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [] })), Isabelle "Prelude.num" (Class (RawClassInfo { superclasses = [], classVar = "a", methods = [] }))),
