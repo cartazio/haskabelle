@@ -376,14 +376,14 @@ pprint_sort adapt reserved [cls] = pprint' adapt reserved cls
 pprint_sort adapt reserved sort = brcommas $ map (pprint' adapt reserved) sort
 
 instance Printer Isa.Type where
-    pprint' adapt reserved (Isa.NoType)      = text ""
+    pprint' adapt reserved (Isa.NoType) = text ""
     pprint' adapt reserved (Isa.TVar vname) 
         = do alist <- queryPP currentTyScheme
              let tyvar_doc = apostroph <> pprint' adapt reserved vname
-             case lookup vname alist of
-               Nothing -> tyvar_doc
-               Just sort -> parens (tyvar_doc <+> text "::"
-                 <+> pprint_sort adapt reserved sort)
+             let sort = these (lookup vname alist)
+             if null sort
+               then tyvar_doc
+               else parens (tyvar_doc <+> text "::" <+> pprint_sort adapt reserved sort)
 
     pprint' adapt reserved (Isa.Type cname []) = pprint' adapt reserved cname 
     pprint' adapt reserved (Isa.Type cname [typ]) =
