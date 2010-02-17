@@ -56,11 +56,11 @@ fun mk_constentry thy (hs, raw_isa) =
     val isa = check_const thy raw_isa;
     val syn = Syntax.guess_infix (Sign.syn_of thy) (Sign.const_syntax_name thy isa);
     fun string_of_syn NONE = (isa, "Function")
-      | string_of_syn (SOME (InfixName (s, j))) =
+      | string_of_syn (SOME (Infix (s, j))) =
           (s, enclose "(" ")" ("InfixOp NoneAssoc " ^ string_of_int j))
-      | string_of_syn (SOME (InfixlName (s, j))) = 
+      | string_of_syn (SOME (Infixl (s, j))) = 
           (s, enclose "(" ")" ("InfixOp LeftAssoc " ^ string_of_int j))
-      | string_of_syn (SOME (InfixrName (s, j))) = 
+      | string_of_syn (SOME (Infixr (s, j))) = 
           (s, enclose "(" ")" ("InfixOp RightAssoc " ^ string_of_int j))
       | string_of_syn _ = raise Match;
     val (sym, syn') = string_of_syn syn;
