@@ -54,7 +54,7 @@ fun mk_typentry thy (hs, raw_isa) =
 fun mk_constentry thy (hs, raw_isa) =
   let
     val isa = check_const thy raw_isa;
-    val syn = Syntax.guess_infix (Sign.syn_of thy) (Sign.const_syntax_name thy isa);
+    val syn = Syntax.guess_infix (Sign.syn_of thy) isa;
     fun string_of_syn NONE = (isa, "Function")
       | string_of_syn (SOME (Infix (s, j))) =
           (s, enclose "(" ")" ("InfixOp NoneAssoc " ^ string_of_int j))
