@@ -73,10 +73,10 @@ consts
 
   "Prelude.show"        "Prelude.print"
 
-  "Prelude.(+)"         "Algebras.plus"
-  "Prelude.(*)"         "Algebras.times"
-  "Prelude.negate"      "Algebras.uminus"
-  "Prelude.(-)"         "Algebras.minus"
+  "Prelude.(+)"         "Groups.plus"
+  "Prelude.(*)"         "Groups.times"
+  "Prelude.negate"      "Groups.uminus"
+  "Prelude.(-)"         "Groups.minus"
   "Prelude.(<)"         "Orderings.less"
   "Prelude.(<=)"        "Orderings.less_eq"
   "Prelude.(>)"         "Orderings.greater"
