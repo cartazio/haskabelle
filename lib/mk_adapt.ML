@@ -120,7 +120,7 @@ fun main thy src_loc dst_loc =
     val adaptions = convert thy (Position.file src_loc) src;
     val enumerate_sorted = sort string_ord #> map prep_string #> map single
       #> separate [Pretty.str ",", Pretty.fbrk] #> flat #> Pretty.enclose "[" "]";
-    val keywords = enumerate_sorted (OuterKeyword.dest_commands () @ OuterKeyword.dest_keywords ());
+    val keywords = enumerate_sorted (Keyword.dest_commands () @ Keyword.dest_keywords ());
     val const_names = enumerate_sorted (used_constants thy);
     val thy_names = enumerate_sorted (ThyInfo.get_names ());
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
