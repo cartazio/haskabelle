@@ -97,9 +97,9 @@ fun adapt thy = (
 
 fun convert thy pos = Source.of_string
   #> Symbol.source { do_recover = false }
-  #> OuterLex.source { do_recover = NONE } (fn () => (adapt_lexicon, Scan.empty_lexicon)) pos
-  #> OuterLex.source_proper
-  #> Source.source OuterLex.stopper (Scan.single (Scan.error (Parse.!!! (adapt thy)))) NONE
+  #> Token.source { do_recover = NONE } (fn () => (adapt_lexicon, Scan.empty_lexicon)) pos
+  #> Token.source_proper
+  #> Source.source Token.stopper (Scan.single (Scan.error (Parse.!!! (adapt thy)))) NONE
   #> Source.exhaust
   #> (fn [dst] => dst | _ => error ("Extra input " ^ Position.str_of pos))
 
