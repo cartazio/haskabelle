@@ -6,15 +6,15 @@ An overview how to use it can be found in the manual
     doc/haskabelle.pdf
 
 If this is not present, you have to build it first;  for this you need
-a source (!) distribution of Isabelle2009-1, as available from
+a source (!) distribution of Isabelle2009-2, as available from
 
-    http://isabelle.in.tum.de/repos/isabelle/rev/4328de748fb2
+    http://isabelle.in.tum.de/repos/isabelle/rev/!!!FIXME!!!
 
 See further
 
     http://isabelle.in.tum.de/
 
-for general hints on Isabelle2009-1.
+for general hints on Isabelle2009-2.
 
 Then, invoke
 
