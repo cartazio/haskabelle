@@ -122,7 +122,7 @@ fun main thy src_loc dst_loc =
       #> separate [Pretty.str ",", Pretty.fbrk] #> flat #> Pretty.enclose "[" "]";
     val keywords = enumerate_sorted (Keyword.dest_commands () @ Keyword.dest_keywords ());
     val const_names = enumerate_sorted (used_constants thy);
-    val thy_names = enumerate_sorted (ThyInfo.get_names ());
+    val thy_names = enumerate_sorted (Thy_Info.get_names ());
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
       "-- Haskell syntax is only superficial.",
       "",
