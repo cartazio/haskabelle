@@ -43,12 +43,12 @@ primrec separate :: "'a \<Rightarrow> 'a list \<Rightarrow> 'a list" where
 
 subsection {* Counterparts for fundamental Haskell classes *}
 
-class eq =
+class equal =
   fixes equal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
   fixes inequal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
   assumes inequal_equal [simp]: "inequal x y \<longleftrightarrow> \<not> equal x y"
 
-instantiation bool :: eq
+instantiation bool :: equal
 begin
 
 definition
@@ -62,7 +62,7 @@ qed (simp_all add: equal_bool_def inequal_bool_def)
 
 end
 
-instantiation unit :: eq
+instantiation unit :: equal
 begin
 
 definition
@@ -76,7 +76,7 @@ qed (simp_all add: equal_unit_def inequal_unit_def)
 
 end
 
-instantiation * :: (eq, eq) eq
+instantiation * :: (equal, equal) equal
 begin
 
 definition
@@ -90,7 +90,7 @@ qed (simp_all add: equal_prod_def inequal_prod_def)
 
 end
 
-instantiation list :: (eq) eq
+instantiation list :: (equal) equal
 begin
 
 definition
@@ -104,7 +104,7 @@ qed (simp_all add: equal_list_def inequal_list_def)
 
 end
 
-instantiation option :: (eq) eq
+instantiation option :: (equal) equal
 begin
 
 definition
@@ -118,7 +118,7 @@ qed (simp_all add: equal_option_def inequal_option_def)
 
 end
 
-instantiation int :: eq
+instantiation int :: equal
 begin 
 
 definition
@@ -133,7 +133,7 @@ qed (simp_all add: equal_int_def inequal_int_def)
 end
 
 
-class ord = eq + linorder
+class ord = equal + linorder
 
 instance int :: ord ..
 
@@ -152,9 +152,8 @@ instance ..
 end
 
 
-class num = number_ring + abs + sgn + eq + print
+class num = number_ring + abs + sgn + equal + print
 
 instance int :: num ..
-
 
 end

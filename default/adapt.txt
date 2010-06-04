@@ -4,7 +4,7 @@ Default adaption table.
 *)
 
 classes
-  "Prelude.Eq"          "Prelude.eq"
+  "Prelude.Eq"          "Prelude.equal"
     parameter "Prelude.(==)"    "a -> a -> bool"
     parameter "Prelude.(/=)"    "a -> a -> bool"
   "Prelude.Ord"         "Prelude.ord"
