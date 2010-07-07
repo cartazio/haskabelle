@@ -76,7 +76,7 @@ qed (simp_all add: equal_unit_def inequal_unit_def)
 
 end
 
-instantiation * :: (equal, equal) equal
+instantiation prod :: (equal, equal) equal
 begin
 
 definition

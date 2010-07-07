@@ -17,7 +17,7 @@ classes
 types
   "Prelude.Bool"        "bool"
   "Prelude.UnitTyCon"   "unit"
-  "Prelude.PairTyCon"   "*"
+  "Prelude.PairTyCon"   "prod"
   "Prelude.ListTyCon"   "list"
   "Prelude.Maybe"       "option"
   "Prelude.Char"        "char"
