@@ -567,13 +567,13 @@ convertDecl pragmas (Hsx.FunBind matchs)
              thy        <- queryContext theory
              return [Isa.Function (Isa.Function_Stmt kind [fsig']
                (zip3 (repeat (Isa.name_of_type_sign fsig')) patterns' bodies''))]
-       where splitMatch (Hsx.Match _loc name patterns (Hsx.UnGuardedRhs body) wherebind)
+       where splitMatch (Hsx.Match _loc name patterns _ (Hsx.UnGuardedRhs body) wherebind)
                  = (name, patterns, body, wherebind)
              isEmpty wherebind = case wherebind of Hsx.BDecls [] -> True; _ -> False
              name_of (Hsx.Ident n) = n
              name_of _ = ""
 
-convertDecl pragmas (Hsx.PatBind loc pattern rhs _wherebinds)
+convertDecl pragmas (Hsx.PatBind loc pattern _ rhs _wherebinds)
         = case pattern of
             pat@(Hsx.PVar name) 
                 -> do name' <- convert pragmas name
@@ -886,7 +886,7 @@ instance Convert Hsx.Exp Isa.Term where
     convert' pragmas expr@(Hsx.Let (Hsx.BDecls bindings) body)
         = let (_, patbindings) = partition isTypeSig bindings
           in assert (all isPatBinding patbindings)
-             $ do let (pats, rhss) = unzip (map (\(Hsx.PatBind _ pat rhs _) -> (pat, rhs)) patbindings)
+             $ do let (pats, rhss) = unzip (map (\(Hsx.PatBind _ pat _ rhs _) -> (pat, rhs)) patbindings)
                   patsNames <- mapM (convert pragmas) pats
                   let (pats', aliases) = unzip patsNames
                   rhss' <- mapM (convert pragmas) rhss
@@ -895,7 +895,7 @@ instance Convert Hsx.Exp Isa.Term where
                   return (Isa.Let (zip pats' rhss'') body')
           where isTypeSig (Hsx.TypeSig _ _ _)      = True
                 isTypeSig _                      = False
-                isPatBinding (Hsx.PatBind _ _ _ (Hsx.BDecls [])) = True
+                isPatBinding (Hsx.PatBind _ _ _ _ (Hsx.BDecls [])) = True
                 isPatBinding _                   = False
                 
     convert' pragmas (Hsx.ListComp e stmts) 
@@ -931,7 +931,7 @@ instance Convert Hsx.Stmt [Isa.DoBlockFragment] where
     convert' pragmas (Hsx.Qualifier exp) = liftM ( (:[]) . Isa.DoQualifier) (convert pragmas exp)
     convert' pragmas (Hsx.LetStmt binds) =
         case binds of
-          Hsx.BDecls [Hsx.PatBind _ pat (Hsx.UnGuardedRhs exp) _] ->
+          Hsx.BDecls [Hsx.PatBind _ pat _ (Hsx.UnGuardedRhs exp) _] ->
               do exp' <- convert pragmas exp
                  (pat', aliases) <- convert pragmas pat
                  aliases' <- mkDoLet pragmas aliases

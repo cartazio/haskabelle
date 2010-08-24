@@ -96,7 +96,7 @@ parseAdapt file = do
 
 indexify :: [Hsx.Decl] -> [(String, Hsx.Exp)]
 indexify decls = fold idxify decls [] where
-  idxify (Hsx.PatBind _ (Hsx.PVar (Hsx.Ident name)) (Hsx.UnGuardedRhs rhs) _) xs =
+  idxify (Hsx.PatBind _ (Hsx.PVar (Hsx.Ident name)) _ (Hsx.UnGuardedRhs rhs) _) xs =
       (name, rhs) : xs
   idxify _ xs = xs
 

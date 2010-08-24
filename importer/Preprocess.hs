@@ -118,7 +118,7 @@ delocaliseClsDecl clsDecl@(Hsx.ClsDecl decl) =
 data FunDef = FunDef { funBind :: Hsx.Decl, funSig :: Maybe Hsx.Decl, funFreeNames :: Hsx.HskNames}
 
 funName :: FunDef -> Hsx.Name
-funName FunDef{funBind = Hsx.FunBind(Hsx.Match _ name _ _ _  : _)} = name
+funName FunDef{funBind = Hsx.FunBind(Hsx.Match _ name _ _ _ _  : _)} = name
 
 {-|
   This function renames the function name of the given function definition.
@@ -137,7 +137,7 @@ groupFunDefs decls =
     let (funBinds,funSigs) = partition isFunBind decls
         funSigs' = concatMap flattenTypeSig funSigs
         sigMap = Map.fromList $ map sigName funSigs'
-        mkFunDef bind@(Hsx.FunBind (Hsx.Match _ name _ _ _  : _))
+        mkFunDef bind@(Hsx.FunBind (Hsx.Match _ name _ _ _ _ : _))
             = FunDef bind (Map.lookup name sigMap) (Hsx.extractFreeVarNs bind)
     in map mkFunDef funBinds
     where isFunBind (Hsx.FunBind _) = True
@@ -162,7 +162,7 @@ addEnvArgToMatch :: Hsx.Name  -- ^the name of the environment variable
           -> [Hsx.Name] -- ^the names of the variables in the environment
           -> Hsx.Match  -- ^the match that should be enriched by an environment argument
           -> Hsx.Match  -- ^the resulting match
-addEnvArgToMatch envName closureNames match@(Hsx.Match loc name pats rhs binds)
+addEnvArgToMatch envName closureNames match@(Hsx.Match loc name pats some_typ rhs binds)
     = let boundNames = map uname (Hsx.extractBindingNs pats)
           toPat name = if name `elem` boundNames
                        then Hsx.PWildCard
@@ -178,7 +178,7 @@ addEnvArgToMatch envName closureNames match@(Hsx.Match loc name pats rhs binds)
                    else if allBound
                         then Hsx.PWildCard
                         else tuple
-      in (Hsx.Match loc name (envArg:pats) rhs binds)                       
+      in (Hsx.Match loc name (envArg : pats) some_typ rhs binds)                       
     where uname (Hsx.Qual _ name) = name
           uname (Hsx.UnQual name) = name
 
@@ -195,20 +195,20 @@ addEnvArgToDecl envName closureNames (Hsx.FunBind matches)
       in Hsx.FunBind matches'
 
 addPatBindsToMatch :: [Hsx.Decl] -> Hsx.Match -> Hsx.Match
-addPatBindsToMatch patBinds match@(Hsx.Match loc name pats (Hsx.UnGuardedRhs exp) binds)
+addPatBindsToMatch patBinds match@(Hsx.Match loc name pats some_typ (Hsx.UnGuardedRhs exp) binds)
     = let neededPatBinds = filter patBindNeeded patBinds
           shadowedPatBinds = map shadowPatBind neededPatBinds
           rhs' = Hsx.UnGuardedRhs (Hsx.Let (Hsx.BDecls shadowedPatBinds) exp)
       in if null neededPatBinds
          then match
-         else Hsx.Match loc name pats rhs' binds
+         else Hsx.Match loc name pats some_typ rhs' binds
     where patBindNeeded patBind
               = not (Set.null ( Set.fromList (Hsx.extractBindingNs patBind)
                                 `Set.intersection` Hsx.extractFreeVarNs exp ))
           boundNames = Set.fromList (Hsx.extractBindingNs pats)
           shadowPatBind :: Hsx.Decl -> Hsx.Decl
-          shadowPatBind (Hsx.PatBind loc pat rhs binds) 
-              = (Hsx.PatBind loc (shadow pat) rhs binds) 
+          shadowPatBind (Hsx.PatBind loc pat some_typ rhs binds) 
+              = (Hsx.PatBind loc (shadow pat) some_typ rhs binds) 
           shadowPVar :: Hsx.Pat -> Hsx.Pat
           shadowPVar var@(Hsx.PVar name) 
               | Hsx.UnQual name `Set.member` boundNames = Hsx.PWildCard
@@ -244,11 +244,13 @@ delocaliseFunDefs funDefs =
            addEnvTuple (orig,ren) = Hsx.PatBind
                                     (Hsx.SrcLoc "" 0 0)
                                     (Hsx.PVar $ uname orig)
+                                    Nothing
                                     (Hsx.UnGuardedRhs (Hsx.App (Hsx.Var ren) envTuple))
                                     (Hsx.BDecls [])
            withoutEnvTuple (orig,ren) = Hsx.PatBind
                                         (Hsx.SrcLoc "" 0 0)
                                         (Hsx.PVar $ uname orig)
+                                        Nothing
                                         (Hsx.UnGuardedRhs (Hsx.Var ren))
                                         (Hsx.BDecls [])
            subst = Map.fromList $ map addEnv renamings
@@ -283,7 +285,7 @@ delocaliseLet exp = return exp
   This predicates checks whether the argument is a pattern binding.
 -}
 isPatBind :: Hsx.Decl -> Bool
-isPatBind (Hsx.PatBind _ _ _ _) = True
+isPatBind (Hsx.PatBind _ _ _ _ _) = True
 isPatBind _ = False
 
 
@@ -302,7 +304,7 @@ splitPatBinds (Hsx.BDecls decls)
                           typeSigs'
       in (Hsx.BDecls (patTypeSigs ++ patDecls'), Hsx.BDecls (otherTypeSigs ++ otherDecls'))
 
-    where split decl@(Hsx.PatBind _ _ _ _) = (Just decl, Nothing, Nothing)
+    where split decl@(Hsx.PatBind _ _ _ _ _) = (Just decl, Nothing, Nothing)
           split decl@(Hsx.TypeSig _ _ _) = (Nothing, Just decl, Nothing)
           split decl = (Nothing, Nothing, Just decl)
 splitPatBinds junk = error ("splitPatBinds: Fall through. " ++ show junk)
@@ -335,14 +337,14 @@ normalizeNames_Decl reserved (Hsx.FunBind matchs)
     = do matchs' <- mapM normalizePatterns_Match matchs
          return (Hsx.FunBind matchs')
     where
-      normalizePatterns_Match (Hsx.Match loc name pats (Hsx.UnGuardedRhs body) where_binds)
+      normalizePatterns_Match (Hsx.Match loc name pats some_typ (Hsx.UnGuardedRhs body) where_binds)
           = let bound_var_ns = Hsx.bindingsFromPats pats
                 clashes      = filter (should_be_renamed reserved) bound_var_ns
             in do renames <- Hsx.freshIdentifiers clashes
                   pats'   <- return (map (Hsx.renamePat renames) pats)
                   body'   <- return (Hsx.renameFreeVars renames body)
                   binds'  <- normalizeNames_Binds where_binds
-                  return (Hsx.Match loc name pats' (Hsx.UnGuardedRhs body') binds') 
+                  return (Hsx.Match loc name pats' some_typ (Hsx.UnGuardedRhs body') binds') 
 
       normalizeNames_Binds (Hsx.BDecls decls)
           = do decls' <- mapM (normalizeNames_Decl reserved) decls
@@ -368,24 +370,24 @@ isEmptyBinds (Hsx.IPBinds []) = True
 isEmptyBinds _ = False
 
 whereToLetDecl :: Hsx.Decl -> Hsx.Decl
-whereToLetDecl (Hsx.PatBind loc pat rhs binds)
+whereToLetDecl (Hsx.PatBind loc pat some_typ rhs binds)
     | not $ isEmptyBinds binds = 
         case rhs of
           Hsx.GuardedRhss _ -> assert False undefined
           Hsx.UnGuardedRhs exp -> 
               let rhs' = Hsx.UnGuardedRhs $ Hsx.Let binds exp
-              in Hsx.PatBind loc pat rhs' (Hsx.BDecls [])
+              in Hsx.PatBind loc pat some_typ rhs' (Hsx.BDecls [])
 whereToLetDecl decl = decl
 
 whereToLetMatch :: Hsx.Match -> Hsx.Match
-whereToLetMatch match@(Hsx.Match loc name pat rhs binds)
+whereToLetMatch match@(Hsx.Match loc name pat some_typ rhs binds)
     | isEmptyBinds binds = match
     | otherwise =
         case rhs of
           Hsx.GuardedRhss _ -> assert False undefined
           Hsx.UnGuardedRhs exp -> 
               let rhs' = Hsx.UnGuardedRhs $ Hsx.Let binds exp
-              in Hsx.Match loc name pat rhs' (Hsx.BDecls [])
+              in Hsx.Match loc name pat some_typ rhs' (Hsx.BDecls [])
 
 whereToLetAlt :: Hsx.Alt -> Hsx.Alt
 whereToLetAlt orig@(Hsx.Alt loc pat alt binds) 

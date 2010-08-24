@@ -232,8 +232,8 @@ namesFromDecl (Hsx.ClassDecl _ _ name _ _ _)   = [Hsx.UnQual name]
 namesFromDecl (Hsx.InstDecl _ _ qname _ _)     = [qname]
 namesFromDecl (Hsx.TypeSig _ names _)          = map Hsx.UnQual names
 namesFromDecl (Hsx.InfixDecl _ _ _ ops)        = [Hsx.UnQual n | n <- (universeBi ops :: [Hsx.Name])]
-namesFromDecl (Hsx.PatBind _ pat _ _)          = bindingsFromPats [pat]
-namesFromDecl (Hsx.FunBind (Hsx.Match _ fname _ _ _ : ms ))
+namesFromDecl (Hsx.PatBind _ pat _ _ _)        = bindingsFromPats [pat]
+namesFromDecl (Hsx.FunBind (Hsx.Match _ fname _ _ _ _ : ms ))
                                                = [Hsx.UnQual fname]
 namesFromDecl (Hsx.UnknownDeclPragma _ _ _) = []
 namesFromDecl decl                           = error $ "Internal error: The given declaration " ++ show decl ++ " is not supported!"
@@ -342,12 +342,12 @@ boundNamesEnv = Env.mkE fromExp
           fromAlt (Hsx.Alt _ pat _ _) = Set.fromList $ extractBindingNs pat
 
           fromDecl :: Hsx.Decl -> HskNames
-          fromDecl (Hsx.PatBind _ _ _ whereBinds) = Set.fromList $
+          fromDecl (Hsx.PatBind _ _ _ _ whereBinds) = Set.fromList $
                                                        extractBindingNs whereBinds
           fromDecl _ = Set.empty
 
           fromMatch :: Hsx.Match -> HskNames
-          fromMatch (Hsx.Match _ _ pats _ whereBinds)
+          fromMatch (Hsx.Match _ _ pats _ _ whereBinds)
               = Set.fromList $ 
                 extractBindingNs whereBinds ++ extractBindingNs pats
 
@@ -580,12 +580,12 @@ renameDecl renamings decl =
           -> Hsx.TypeSig loc (map (translate renamings) names) typ
       Hsx.FunBind matches
           -> Hsx.FunBind (map renMatch matches)
-      Hsx.PatBind loc pat rhs binds 
-          -> Hsx.PatBind loc (renamePat renamings pat) rhs binds
+      Hsx.PatBind loc pat some_typ rhs binds 
+          -> Hsx.PatBind loc (renamePat renamings pat) some_typ rhs binds
       _ -> decl
     where renMatch :: Hsx.Match -> Hsx.Match
-          renMatch (Hsx.Match loc name pats rhs binds)
-                   = Hsx.Match loc (translate renamings name) pats rhs binds
+          renMatch (Hsx.Match loc name pats some_typ rhs binds)
+                   = Hsx.Match loc (translate renamings name) pats some_typ rhs binds
 extractVarNs thing
     = let varNs   = [ qn | Hsx.Var qn <- universeBi thing ]
           varopNs = [ qn | Hsx.QVarOp qn <- universeBi thing ] 

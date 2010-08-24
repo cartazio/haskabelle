@@ -884,7 +884,7 @@ computeConstantMappings modul decl
          let moduleID       = fromHsk modul
          let defaultLexInfo = LexInfo { nameOf=nameID, typschemeOf=([], TyNone), moduleOf=moduleID}
          case decl of
-           Hsx.PatBind _ _ _ _           -> [Constant (Variable defaultLexInfo)]
+           Hsx.PatBind _ _ _ _ _         -> [Constant (Variable defaultLexInfo)]
            Hsx.FunBind _                 -> [Constant (Function defaultLexInfo)]
            Hsx.InfixDecl _ a p _         -> [Constant (InfixOp  defaultLexInfo (fromHsk a) p)]
            Hsx.TypeSig _ _ typ           -> [Constant (TypeAnnotation (defaultLexInfo { typschemeOf = typscheme_of_hsk_typ typ }))]
