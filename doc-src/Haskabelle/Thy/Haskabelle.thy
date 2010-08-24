@@ -219,16 +219,16 @@ text {*
        \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/mtl-1.1.0.2}
 
     \item[xml] A simple XML library. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/xml-1.3.3}
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/xml-1.3.5}
 
     \item[uniplate] Uniform type generic traversals. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/uniplate-1.2.0.3}
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/uniplate-1.3}
 
     \item[cpphs] A liberalised re-implementation of cpp, the C pre-processor. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/cpphs-1.6} 
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/cpphs-1.9} 
 
     \item[Happy] Happy is a parser generator for Haskell. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/happy-1.18.4}
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/happy-1.17}
 
        The installation process provides a binary \shell{happy}
        which must be accessible on your \shell{PATH} to
