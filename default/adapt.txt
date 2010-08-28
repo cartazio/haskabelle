@@ -29,8 +29,8 @@ consts
   "Prelude.True"        "True"
   "Prelude.False"       "False"
   "Prelude.not"         "Not"
-  "Prelude.(&&)"        "op &"
-  "Prelude.(||)"        "op |"
+  "Prelude.(&&)"        "conj"
+  "Prelude.(||)"        "disj"
 
   "Prelude._|_"         "HOL.undefined"
   "Prelude.error"       "Prelude.error"
