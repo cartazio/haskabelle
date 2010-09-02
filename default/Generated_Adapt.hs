@@ -57,6 +57,7 @@ raw_adaption_table = [(Haskell "Prelude.Eq" (Class (RawClassInfo { superclasses 
   (Haskell "Prelude.foldr" Function, Isabelle "List.foldr" Function),
   (Haskell "Prelude.Nothing" Function, Isabelle "Option.option.None" Function),
   (Haskell "Prelude.Just" Function, Isabelle "Option.option.Some" Function),
+  (Haskell "Prelude.maybe" Function, Isabelle "Prelude.maybe" Function),
   (Haskell "Prelude.show" Function, Isabelle "Prelude.print_class.print" Function),
   (Haskell "Prelude.(+)" Function, Isabelle "+" (InfixOp LeftAssoc 65)),
   (Haskell "Prelude.(*)" Function, Isabelle "*" (InfixOp LeftAssoc 70)),

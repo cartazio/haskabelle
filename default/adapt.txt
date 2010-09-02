@@ -73,6 +73,7 @@ consts
 
   "Prelude.Nothing"     "Option.None"
   "Prelude.Just"        "Option.Some"
+  "Prelude.maybe"       "Prelude.maybe"
 
   "Prelude.show"        "Prelude.print"
 
