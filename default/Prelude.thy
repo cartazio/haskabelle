@@ -15,18 +15,131 @@ text {*
   with prior modifications.
 *}
 
+subsection {* Equality *}
+
+class eq =
+  fixes eq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+  fixes not_eq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+  assumes not_eq [simp]: "not_eq x y \<longleftrightarrow> \<not> eq x y"
+
+instantiation bool :: eq
+begin
+
+definition
+  "eq p q \<longleftrightarrow> (p \<longleftrightarrow> q)"
+
+definition
+  "not_eq p q \<longleftrightarrow> \<not> (p \<longleftrightarrow> q)"
+
+instance proof
+qed (simp_all add: eq_bool_def not_eq_bool_def)
+
+end
+
+instantiation unit :: eq
+begin
+
+definition
+  "eq (u::unit) v \<longleftrightarrow> True"
+
+definition
+  "not_eq (u::unit) v \<longleftrightarrow> False"
+
+instance proof
+qed (simp_all add: eq_unit_def not_eq_unit_def)
+
+end
+
+instantiation prod :: (eq, eq) eq
+begin
+
+definition
+  "eq x y \<longleftrightarrow> (x :: _ * _) = y"
+
+definition
+  "not_eq x y \<longleftrightarrow> (x :: _ * _) \<noteq> y"
+
+instance proof
+qed (simp_all add: eq_prod_def not_eq_prod_def)
+
+end
+
+instantiation list :: (eq) eq
+begin
+
+definition
+  "eq x y \<longleftrightarrow> (x :: _ list) = y"
+
+definition
+  "not_eq x y \<longleftrightarrow> (x :: _ list) \<noteq> y"
+
+instance proof
+qed (simp_all add: eq_list_def not_eq_list_def)
+
+end
+
+instantiation option :: (eq) eq
+begin
+
+definition
+  "eq x y \<longleftrightarrow> (x :: _ option) = y"
+
+definition
+  "not_eq x y \<longleftrightarrow> (x :: _ option) \<noteq> y"
+
+instance proof
+qed (simp_all add: eq_option_def not_eq_option_def)
+
+end
+
+instantiation int :: eq
+begin 
+
+definition
+  "eq x y \<longleftrightarrow> x = (y::int)"
+
+definition
+  "not_eq x y \<longleftrightarrow> x \<noteq> (y::int)"
+
+instance proof
+qed (simp_all add: eq_int_def not_eq_int_def)
+
+end
+
+
 subsection {* Fundamental prelude ingredients *}
 
 axiomatization error :: "string \<Rightarrow> 'a"
 
-definition rapp :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 60) where
-  "f $ x = f x"
+abbreviation (input) rapp :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" (infixr "$" 60) where
+  "f $ x \<equiv> f x"
+
+abbreviation (input) const :: "'a \<Rightarrow> 'b \<Rightarrow> 'b" where
+  "const x y \<equiv> y"
 
 definition curry :: "('a \<times> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<Rightarrow> 'b \<Rightarrow> 'c" where
   "curry f x y = f (x, y)"
 
 definition uncurry :: "('a \<Rightarrow> 'b \<Rightarrow> 'c) \<Rightarrow> 'a \<times> 'b \<Rightarrow> 'c" where
   "uncurry = split"
+
+
+subsection {* Options *}
+
+definition the_default :: "'a \<Rightarrow> 'a option \<Rightarrow> 'a" where
+  "the_default x y = (case y of Some z \<Rightarrow> z | None \<Rightarrow> x)"
+
+abbreviation (input) maybe :: "'b \<Rightarrow> ('a \<Rightarrow> 'b) \<Rightarrow> 'a option \<Rightarrow> 'b" where
+  "maybe x f y \<equiv> the_default x (Option.map f y)"
+
+
+subsection {* Lists *}
+
+definition member :: "'a\<Colon>eq \<Rightarrow> 'a list \<Rightarrow> bool" where
+  "member x ys \<longleftrightarrow> (\<exists>y\<in>set ys. eq x y)"
+
+abbreviation (input) not_member :: "'a\<Colon>eq \<Rightarrow> 'a list \<Rightarrow> bool" where
+  "not_member x xs \<equiv> \<not> member x xs"
 
 definition nth :: "'a list \<Rightarrow> int \<Rightarrow> 'a" where
   "nth xs k = (if k < 0 then error ''negative index'' else List.nth xs (nat k))"
@@ -41,102 +154,12 @@ primrec separate :: "'a \<Rightarrow> 'a list \<Rightarrow> 'a list" where
     "separate x [] = []"
   | "separate x (y # ys) = (if ys = [] then [y] else y # x # separate x ys)"
 
+
 subsection {* Counterparts for fundamental Haskell classes *}
 
-class equal =
-  fixes equal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
-  fixes inequal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
-  assumes inequal_equal [simp]: "inequal x y \<longleftrightarrow> \<not> equal x y"
-
-instantiation bool :: equal
-begin
-
-definition
-  "equal p q \<longleftrightarrow> (p \<longleftrightarrow> q)"
-
-definition
-  "inequal p q \<longleftrightarrow> \<not> (p \<longleftrightarrow> q)"
-
-instance proof
-qed (simp_all add: equal_bool_def inequal_bool_def)
-
-end
-
-instantiation unit :: equal
-begin
-
-definition
-  "equal (u::unit) v \<longleftrightarrow> True"
-
-definition
-  "inequal (u::unit) v \<longleftrightarrow> False"
-
-instance proof
-qed (simp_all add: equal_unit_def inequal_unit_def)
-
-end
-
-instantiation prod :: (equal, equal) equal
-begin
-
-definition
-  "equal x y \<longleftrightarrow> (x :: _ * _) = y"
-
-definition
-  "inequal x y \<longleftrightarrow> (x :: _ * _) \<noteq> y"
-
-instance proof
-qed (simp_all add: equal_prod_def inequal_prod_def)
-
-end
-
-instantiation list :: (equal) equal
-begin
-
-definition
-  "equal x y \<longleftrightarrow> (x :: _ list) = y"
-
-definition
-  "inequal x y \<longleftrightarrow> (x :: _ list) \<noteq> y"
-
-instance proof
-qed (simp_all add: equal_list_def inequal_list_def)
-
-end
-
-instantiation option :: (equal) equal
-begin
-
-definition
-  "equal x y \<longleftrightarrow> (x :: _ option) = y"
-
-definition
-  "inequal x y \<longleftrightarrow> (x :: _ option) \<noteq> y"
-
-instance proof
-qed (simp_all add: equal_option_def inequal_option_def)
-
-end
-
-instantiation int :: equal
-begin 
-
-definition
-  "equal x y \<longleftrightarrow> x = (y::int)"
-
-definition
-  "inequal x y \<longleftrightarrow> x \<noteq> (y::int)"
-
-instance proof
-qed (simp_all add: equal_int_def inequal_int_def)
-
-end
-
-
-class ord = equal + linorder
+class ord = eq + linorder
 
 instance int :: ord ..
-
 
 class print =
   fixes print :: "'a \<Rightarrow> string"
@@ -151,8 +174,7 @@ instance ..
 
 end
 
-
-class num = number_ring + abs + sgn + equal + print
+class num = number_ring + abs + sgn + eq + print
 
 instance int :: num ..
 
