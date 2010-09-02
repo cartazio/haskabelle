@@ -320,15 +320,14 @@ instance Printer Isa.Stmt where
       thy <- queryPP currentTheory
       let stmts' = map (renameFunctionStmt thy) stmts
       blankline $
-        text "instantiation" <+> (if is_prod then text ['"', '*', '"'] else pprint' adapt reserved tycoN) <+> text "::"
+        text "instantiation" <+> pprint' adapt reserved tycoN <+> text "::"
           <+> (if null arities then pprint' adapt reserved classN
             else parcommas (map (pprint_sort adapt reserved . snd) arities) <+> pprint' adapt reserved classN) $$
           text "begin" $$
           space <> space <> vcat (map (pprint' adapt reserved) stmts') $$
           (blankline $ text "instance sorry\n" $$ text "end")
       where
-        is_prod = Isa.base_name_of tycoN == "*" {- FIXME hardwired syntax -}
-        suffix = if is_prod then "prod" else Isa.base_name_of tycoN
+        suffix = Isa.base_name_of tycoN
         suffix_tyco (Isa.QName t n) = Isa.QName t (concat [n, "_", suffix])
         suffix_tyco (Isa.Name n) = Isa.Name (concat [n, "_", suffix])
         renameTypeSign (Isa.TypeSign name vs ty) = Isa.TypeSign (suffix_tyco name) vs ty
@@ -390,7 +389,7 @@ instance Printer Isa.Type where
       maybeWithinHOL $
         parensIf (isCompoundType typ) (pprint' adapt reserved typ)
         <+> pprint' adapt reserved cname
-    pprint' adapt reserved (Isa.Type (Isa.QName (Isa.ThyName "Product_Type") "*") [typ1, typ2]) =
+    pprint' adapt reserved (Isa.Type (Isa.QName (Isa.ThyName "Product_Type") "prod") [typ1, typ2]) =
         {- FIXME hardwired syntax -}
       maybeWithinHOL $ parensIf (isCompoundType typ1) (pprint' adapt reserved typ1)
         <+> text "*" <+> parensIf (isCompoundType typ2) (pprint' adapt reserved typ2)
