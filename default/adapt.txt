@@ -4,7 +4,7 @@ Default adaption table.
 *)
 
 classes
-  "Prelude.Eq"          "Prelude.equal"
+  "Prelude.Eq"          "Prelude.eq"
     parameter "Prelude.(==)"    "a -> a -> bool"
     parameter "Prelude.(/=)"    "a -> a -> bool"
   "Prelude.Ord"         "Prelude.ord"
@@ -36,13 +36,14 @@ consts
   "Prelude.error"       "Prelude.error"
 
   "Prelude.($)"         "Prelude.rapp"
-  "Prelude.curry"       "Prelude.curry"
-  "Prelude.uncurry"     "Prelude.uncurry"
+  "Prelude.const"       "Prelude.const"
   "Prelude.id"          "Fun.id"
   "Prelude.(.)"         "Fun.comp"
+  "Prelude.curry"       "Prelude.curry"
+  "Prelude.uncurry"     "Prelude.uncurry"
 
-  "Prelude.(==)"        "Prelude.equal"
-  "Prelude.(/=)"        "Prelude.inequal"
+  "Prelude.(==)"        "Prelude.eq"
+  "Prelude.(/=)"        "Prelude.not_eq"
 
   "Prelude.(())"        "Unity"
   "Prelude.PairDataCon" "Pair"
@@ -59,7 +60,8 @@ consts
   "Prelude.(++)"        "List.append"
   "Prelude.concat"      "List.concat"
   "Prelude.reverse"     "List.rev"
-  "Prelude.elem"        "List.member"
+  "Prelude.elem"        "Prelude.member"
+  "Prelude.notElem"     "Prelude.not_member"
   "Prelude.replicate"   "Prelude.replicate"
   "Prelude.(!!)"        "Prelude.nth"
   "Prelude.length"      "Prelude.length"
@@ -67,6 +69,7 @@ consts
   "Prelude.all"         "List.list_all"
   "Prelude.zip"         "List.zip"
   "Prelude.foldl"       "List.foldl"
+  "Prelude.foldr"       "List.foldr"
 
   "Prelude.Nothing"     "Option.None"
   "Prelude.Just"        "Option.Some"
@@ -85,3 +88,5 @@ consts
   "Prelude.sgn"         "Groups.sgn"
   "Prelude.fromInteger" "Int.of_int"
   "Prelude.divMod"      "Divides.divmod_int"
+  "Prelude.min"         "Orderings.min"
+  "Prelude.max"         "Orderings.max"
