@@ -135,6 +135,9 @@ abbreviation (input) maybe :: "'b \<Rightarrow> ('a \<Rightarrow> 'b) \<Rightarr
 
 subsection {* Lists *}
 
+abbreviation (input) null :: "'a list \<Rightarrow> bool" where
+  "null xs \<equiv> xs = []"
+
 definition member :: "'a\<Colon>eq \<Rightarrow> 'a list \<Rightarrow> bool" where
   "member x ys \<longleftrightarrow> (\<exists>y\<in>set ys. eq x y)"
 

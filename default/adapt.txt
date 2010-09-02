@@ -52,7 +52,7 @@ consts
 
   "Prelude.([])"        "List.Nil"
   "Prelude.(:)"         "List.Cons"
-  "Prelude.null"        "List.null"
+  "Prelude.null"        "Prelude.null"
   "Prelude.head"        "List.hd"
   "Prelude.tail"        "List.tl"
   "Prelude.map"         "List.map"

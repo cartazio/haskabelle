@@ -37,7 +37,7 @@ raw_adaption_table = [(Haskell "Prelude.Eq" (Class (RawClassInfo { superclasses 
   (Haskell "Prelude.snd" Function, Isabelle "Product_Type.snd" Function),
   (Haskell "Prelude.([])" Function, Isabelle "List.list.Nil" Function),
   (Haskell "Prelude.(:)" Function, Isabelle "#" (InfixOp RightAssoc 65)),
-  (Haskell "Prelude.null" Function, Isabelle "List.null" Function),
+  (Haskell "Prelude.null" Function, Isabelle "Prelude.null" Function),
   (Haskell "Prelude.head" Function, Isabelle "List.hd" Function),
   (Haskell "Prelude.tail" Function, Isabelle "List.tl" Function),
   (Haskell "Prelude.map" Function, Isabelle "List.map" Function),
