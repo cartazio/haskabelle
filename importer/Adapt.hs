@@ -62,21 +62,36 @@ data AdaptionTable = AdaptionTable [(Ident_Env.Identifier, Ident_Env.Identifier)
 hsk_infix_ops :: [(String, OpKind)]
 hsk_infix_ops = [
   ("Prelude.(.)",  InfixOp RightAssoc 9),
-  ("Prelude.(&&)", InfixOp LeftAssoc 3),
-  ("Prelude.(||)", InfixOp LeftAssoc 2),
+  ("Prelude.(!!)", InfixOp LeftAssoc 9),
+  ("Prelude.(^)",  InfixOp RightAssoc 8),
+  ("Prelude.(^^)",  InfixOp RightAssoc 8),
+  ("Prelude.(**)",  InfixOp RightAssoc 8),
+  ("Prelude.(*)",  InfixOp LeftAssoc 7),
+  ("Prelude.(/)",  InfixOp LeftAssoc 7),
+  ("Prelude.quot",  InfixOp LeftAssoc 7),
+  ("Prelude.rem",  InfixOp LeftAssoc 7),
+  ("Prelude.div",  InfixOp LeftAssoc 7),
+  ("Prelude.mod",  InfixOp LeftAssoc 7),
+  ("Prelude.(+)",  InfixOp LeftAssoc 6),
+  ("Prelude.(-)",  InfixOp LeftAssoc 6),
   ("Prelude.(:)",  InfixOp RightAssoc 5),
   ("Prelude.(++)", InfixOp RightAssoc 5),
-  ("Prelude.(+)",  InfixOp LeftAssoc 6),
-  ("Prelude.(*)",  InfixOp LeftAssoc 7),
-  ("Prelude.(-)",  InfixOp LeftAssoc 6),
   ("Prelude.(==)", InfixOp NoneAssoc 4),
+  ("Prelude.(/=)", InfixOp NoneAssoc 4),
+  ("Prelude.(<)",  InfixOp NoneAssoc 4),
   ("Prelude.(<=)", InfixOp NoneAssoc 4),
   ("Prelude.(>=)", InfixOp NoneAssoc 4),
-  ("Prelude.(<)",  InfixOp NoneAssoc 4),
   ("Prelude.(>)",  InfixOp NoneAssoc 4),
-  ("Prelude.(!!)", InfixOp LeftAssoc 9)
-  ]
-
+  ("Prelude.elem",  InfixOp NoneAssoc 4),
+  ("Prelude.notElem",  InfixOp NoneAssoc 4),
+  ("Prelude.(&&)", InfixOp LeftAssoc 3),
+  ("Prelude.(||)", InfixOp LeftAssoc 2),
+  ("Prelude.(>>)", InfixOp LeftAssoc 1),
+  ("Prelude.(>>=)", InfixOp LeftAssoc 1),
+  ("Prelude.(=<<)", InfixOp RightAssoc 1),
+  ("Prelude.($)", InfixOp RightAssoc 0),
+  ("Prelude.($!)", InfixOp RightAssoc 0),
+  ("Prelude.seq", InfixOp RightAssoc 0)]
 
 {- Reading adaption file -}
 
