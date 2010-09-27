@@ -344,7 +344,7 @@ text {*
 
 *}
 
-text %quote %typewriter {* 
+text %quotetypewriter {* 
 module Example where
 \\
 \\
@@ -380,7 +380,7 @@ text {*
 
 *}
 
-text %quote %typewriter {*
+text %quotetypewriter {*
 theory Example\\
 imports Prelude\\
 begin\\
@@ -457,7 +457,7 @@ text {*
  
 *}
 
-text %quote %typewriter {*
+text %quotetypewriter {*
 module Classes where
 
 class Monoid a where\\
@@ -495,7 +495,7 @@ text {*
 
 *}
 
-text %quote %typewriter{*
+text %quotetypewriter {*
 theory Classes\\
 imports Nats Prelude\\
 begin
