@@ -28,13 +28,24 @@ fi
 
 ## file names
 
-CONV="$HASKABELLE_HOME/lib/mk_adapt.ML"
-SRC="$DIR/adapt.txt"
-DST="$DIR/Generated_Adapt.hs"
+MK_ADAPT_LOC="$HASKABELLE_HOME/lib/mk_adapt.ML"
+SRC_LOC="$DIR/adapt.txt"
+DST_LOC="$DIR/Generated_Adapt.hs"
 PRELUDE_NAME="Prelude"
-PRELUDE="$DIR/$PRELUDE_NAME"
+PRELUDE_LOC="$DIR/$PRELUDE_NAME"
 
 ## convert
 
-CMD="(use \"$CONV\"; use_thy \"$PRELUDE\") handle Toplevel.TOPLEVEL_ERROR => (writeln \"ERROR\"; OS.Process.exit OS.Process.failure); Mk_Adapt.run (Thy_Info.get_theory \"$PRELUDE_NAME\") \"$SRC\" \"$DST\";"
-"$HASKABELLE_HOME/bin/isabelle-process" -r -q -e "$CMD" HOL 2> /dev/zero || fail "Building adaptation table failed." 
+FORMAL_CMD="Toplevel.program (fn () => (use_thy prelude_loc; ML_Context.eval_text_in \
+  (SOME (ProofContext.init_global (Thy_Info.get_theory prelude_name))) false Position.none ml_cmd)) \
+  handle _ => OS.Process.exit OS.Process.failure;"
+
+ACTUAL_CMD="val prelude_loc = \"$PRELUDE_LOC\"; \
+  val prelude_name = \"$PRELUDE_NAME\"; \
+  val src_loc = \"$SRC_LOC\"; \
+  val dst_loc = \"$DST_LOC\"; \
+  val mk_adapt_path = Path.explode \"$MK_ADAPT_LOC\"; \
+  val ml_cmd = \"ML_Context.eval_file mk_adapt_path; Mk_Adapt.run prelude_name src_loc dst_loc\"; \
+  $FORMAL_CMD"
+
+"$HASKABELLE_HOME/bin/isabelle-process" -r -q -e "$ACTUAL_CMD" HOL || fail "Building adaptation table FAILED." 

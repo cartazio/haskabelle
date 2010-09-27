@@ -5,7 +5,7 @@ Decorate Haskabelle adaptation table with current Isabelle syntax.
 
 signature MK_ADAPT =
 sig
-  val run: theory -> string -> string -> unit;
+  val run: string -> string -> string -> unit
 end;
 
 structure Mk_Adapt : MK_ADAPT =
@@ -111,8 +111,9 @@ val prep_string =
   #> quote
   #> Pretty.str;
 
-fun main thy src_loc dst_loc =
+fun run thy_name src_loc dst_loc =
   let
+    val thy = Thy_Info.get_theory thy_name;
     val _ = writeln ("Reading from " ^ src_loc);
     val src = File.read (Path.explode src_loc);
     val dst_path = Path.explode dst_loc;
@@ -134,9 +135,5 @@ fun main thy src_loc dst_loc =
     val _ = File.write dst_path (cat_lines dsts);
     val _ = writeln ("Written to " ^ dst_loc);
   in () end;
-
-fun run thy src_loc dst_loc = main thy src_loc dst_loc
-  handle ERROR e => (writeln ("ERROR: " ^ e); OS.Process.exit OS.Process.failure)
-       | _ => (writeln "ERROR"; OS.Process.exit OS.Process.failure);
 
 end;
