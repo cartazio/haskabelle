@@ -344,35 +344,33 @@ text {*
 
 *}
 
-text %quote {* 
-  \isatypewriter
-  
-  module Example where
-  \\
-  \\
-  evalExp :: Exp -> Int
+text %quote %typewriter {* 
+module Example where
+\\
+\\
+evalExp :: Exp -> Int
 
-  evalExp (Plus e1 e2) ~= evalExp e1 + evalExp e2 \\
-  evalExp (Times e1 e2) = evalExp e1 * evalExp e2 \\
-  evalExp (Cond b e1 e2) \\
-  \hspace*{0pt}  ~~| evalBexp b = evalExp e1 \\ 
-  \hspace*{0pt}  ~~| otherwise ~= evalExp e2 \\
-  evalExp (Val i) = i
-  \\
-  \\
-  evalBexp :: Bexp -> Bool
+evalExp (Plus e1 e2) ~= evalExp e1 + evalExp e2 \\
+evalExp (Times e1 e2) = evalExp e1 * evalExp e2 \\
+evalExp (Cond b e1 e2) \\
+\hspace*{0pt}  ~~| evalBexp b = evalExp e1 \\ 
+\hspace*{0pt}  ~~| otherwise ~= evalExp e2 \\
+evalExp (Val i) = i
+\\
+\\
+evalBexp :: Bexp -> Bool
 
-  evalBexp (Equal e1 e2) ~~= evalExp e1 == evalExp e2\\
-  evalBexp (Greater e1 e2) = evalExp e1 > evalExp e2
-  \\
-  \\
-  data Exp ~= Plus Exp Exp\\
-  \hspace*{0pt}  ~~~~~~~~~| Times Exp Exp\\
-  \hspace*{0pt}  ~~~~~~~~~| Cond Bexp Exp Exp\\
-  \hspace*{0pt}  ~~~~~~~~~| Val Int\\
-  
-  data Bexp = Equal Exp Exp\\
-  \hspace*{0pt}  ~~~~~~~~~| Greater Exp Exp
+evalBexp (Equal e1 e2) ~~= evalExp e1 == evalExp e2\\
+evalBexp (Greater e1 e2) = evalExp e1 > evalExp e2
+\\
+\\
+data Exp ~= Plus Exp Exp\\
+\hspace*{0pt}  ~~~~~~~~~| Times Exp Exp\\
+\hspace*{0pt}  ~~~~~~~~~| Cond Bexp Exp Exp\\
+\hspace*{0pt}  ~~~~~~~~~| Val Int\\
+
+data Bexp = Equal Exp Exp\\
+\hspace*{0pt}  ~~~~~~~~~| Greater Exp Exp
  
 *}
 
@@ -382,36 +380,34 @@ text {*
 
 *}
 
-text %quote {*
-  \isatypewriter
-
-  theory Example\\
-  imports Prelude\\
-  begin\\
-  \\
-  datatype Exp = Plus Exp Exp\\
-  \hspace*{0pt}  ~~~~~~~~~| Times Exp Exp\\
-  \hspace*{0pt}  ~~~~~~~~~| Cond Bexp Exp Exp\\
-  \hspace*{0pt}  ~~~~~~~~~| Val int\\
-  and      Bexp = Equal Exp Exp\\
-  \hspace*{0pt}  ~~~~~~~~~| Greater Exp Exp\\
-  \\
-  \\
-  \\
-  \\
-  \\
-  fun evalExp ~:: "Exp => int" and\\
-  \hspace*{0pt}  ~~~evalBexp :: "Bexp => bool"\\
-  where\\
-  \hspace*{0pt}  ~"evalExp (Plus e1 e2) = (evalExp e1 + evalExp e2)"\\
-  | "evalExp (Times e1 e2) = (evalExp e1 * evalExp e2)"\\
-  | "evalExp (Cond b e1 e2) = (if evalBexp b then evalExp e1\\
-  \hspace*{0pt}  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~else evalExp e2)"\\
-  | "evalExp (Val i) = i"\\
-  | "evalBexp (Equal e1 e2) = heq (evalExp e1) (evalExp e2)"\\
-  | "evalBexp (Greater e1 e2) = (evalExp e1 > evalExp e2)"\\
-  \\
-  end
+text %quote %typewriter {*
+theory Example\\
+imports Prelude\\
+begin\\
+\\
+datatype Exp = Plus Exp Exp\\
+\hspace*{0pt}  ~~~~~~~~~| Times Exp Exp\\
+\hspace*{0pt}  ~~~~~~~~~| Cond Bexp Exp Exp\\
+\hspace*{0pt}  ~~~~~~~~~| Val int\\
+and      Bexp = Equal Exp Exp\\
+\hspace*{0pt}  ~~~~~~~~~| Greater Exp Exp\\
+\\
+\\
+\\
+\\
+\\
+fun evalExp ~:: "Exp => int" and\\
+\hspace*{0pt}  ~~~evalBexp :: "Bexp => bool"\\
+where\\
+\hspace*{0pt}  ~"evalExp (Plus e1 e2) = (evalExp e1 + evalExp e2)"\\
+| "evalExp (Times e1 e2) = (evalExp e1 * evalExp e2)"\\
+| "evalExp (Cond b e1 e2) = (if evalBexp b then evalExp e1\\
+\hspace*{0pt}  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~else evalExp e2)"\\
+| "evalExp (Val i) = i"\\
+| "evalBexp (Equal e1 e2) = heq (evalExp e1) (evalExp e2)"\\
+| "evalBexp (Greater e1 e2) = (evalExp e1 > evalExp e2)"\\
+\\
+end
 *}
 
 text {*
@@ -424,32 +420,32 @@ text {*
     }
 
   \item{ The two data type definitions have been chained together by
-    an explicit {\isatypewriter and} keyword. Likewise the function
+    an explicit {\tt and} keyword. Likewise the function
     definitions have been grouped together. This stems from the mutual
     recursion inherent in the definitions.  }
 
   \item We use @{text Isabelle}'s function package.
     % (FIXME: Add reference.)
 
-  \item{ The pattern guards in {\isatypewriter evalExp} have been
-    transformed to an {\isatypewriter if} expression.  }
+  \item{ The pattern guards in {\tt evalExp} have been
+    transformed to an {\tt if} expression.  }
 
   \item{ Preexisting @{text Haskell} functions and operators have been mapped
     to @{text "Isabelle/HOL"} counterparts.  }
 
   \item{ @{text Haskell} modules inherit from an implicit module
-    {\isatypewriter Prelude}; @{text Haskabelle} comes with a
-    {\isatypewriter Prelude.thy} which provides necessary context to
+    {\tt Prelude}; @{text Haskabelle} comes with a
+    {\tt Prelude.thy} which provides necessary context to
     cope with some @{text Haskell} features. We can see that an import of
-    this the {\isatypewriter Prelude} module is explicitly added by
+    this the {\tt Prelude} module is explicitly added by
     @{text Haskabelle}.  }
 
-  \item{ The @{text Haskell} comparison operator {\isatypewriter ==} has been
+  \item{ The @{text Haskell} comparison operator {\tt ==} has been
     transformed to {isatypewriter heq} which is not defined by with
-    @{text "Isabelle/HOL"} itself but within the {\isatypewriter
+    @{text "Isabelle/HOL"} itself but within the {\tt
     Prelude.thy} file. It names both an operator and a type class
-    which has been constructed to match {\isatypewriter ==}, and
-    @{text Haskell}'s type class {\isatypewriter Eq}.  }
+    which has been constructed to match {\tt ==}, and
+    @{text Haskell}'s type class {\tt Eq}.  }
 
   \end{itemize}
 
@@ -461,37 +457,35 @@ text {*
  
 *}
 
-text %quote {*
-  \isatypewriter
+text %quote %typewriter {*
+module Classes where
 
-  module Classes where
-  
-  class Monoid a where\\
-  \hspace*{0pt}  ~~nothing :: a\\
-  \hspace*{0pt}  ~~plus :: a -> a -> a
-  \\
-  \\  
-  instance Monoid Integer where\\
-  \hspace*{0pt}  ~~nothing = 0\\
-  \hspace*{0pt}  ~~plus    = (+)
-  \\
-  \\
-  -- prevent name clash with Prelude.sum\\
-  summ :: (Monoid a) => [a] -> a\\
-  summ [] = nothing\\
-  summ (x:xs) = plus x (summ xs)
-  \\
-  \\
-  class (Monoid a) => Group a where\\
-  \hspace*{0pt}  ~~inverse :: a -> a
-  \\
-  \\
-  instance Group Integer where\\
-  \hspace*{0pt}  ~~inverse = negate
-  \\
-  \\
-  sub :: (Group a) => a -> a -> a\\
-  sub a b = plus a (inverse b)  
+class Monoid a where\\
+\hspace*{0pt}  ~~nothing :: a\\
+\hspace*{0pt}  ~~plus :: a -> a -> a
+\\
+\\  
+instance Monoid Integer where\\
+\hspace*{0pt}  ~~nothing = 0\\
+\hspace*{0pt}  ~~plus    = (+)
+\\
+\\
+-- prevent name clash with Prelude.sum\\
+summ :: (Monoid a) => [a] -> a\\
+summ [] = nothing\\
+summ (x:xs) = plus x (summ xs)
+\\
+\\
+class (Monoid a) => Group a where\\
+\hspace*{0pt}  ~~inverse :: a -> a
+\\
+\\
+instance Group Integer where\\
+\hspace*{0pt}  ~~inverse = negate
+\\
+\\
+sub :: (Group a) => a -> a -> a\\
+sub a b = plus a (inverse b)  
 
 *}
 
@@ -501,54 +495,52 @@ text {*
 
 *}
 
-text %quote {*
-  \isatypewriter
-
-  theory Classes\\
-  imports Nats Prelude\\
-  begin
-  \\ 
-  class Monoid = type +\\
-  \hspace*{0pt}  ~~fixes nothing :: 'a\\
-  \hspace*{0pt}  ~~fixes plus :: "'a => 'a => 'a"
-  \\
-  \\
-  instantiation int :: Monoid\\
-  begin\\
-  \hspace*{0pt}  ~~definition nothing\_int :: "int"\\
-  \hspace*{0pt}  ~~where\\
-  \hspace*{0pt}  ~~~~"nothing\_int = 0"     \\
-  \hspace*{0pt}  ~~definition plus\_int :: "int => int => int"\\
-  \hspace*{0pt}  ~~where\\
-  \hspace*{0pt}  ~~~~"plus\_int = (op +)"   \\
-  instance ..\\
-  end
-  \\
-  \\
-  fun summ :: "('a :: Monoid) list => ('a :: Monoid)"\\
-  where\\
-  \hspace*{0pt}  ~~"summ Nil = nothing"\\
-  |~~"summ (x \# xs) = plus x (summ xs)"
-  \\
-  \\
-  class Group = Monoid +\\
-  \hspace*{0pt}  ~~fixes inverse :: "'a => 'a"
-  \\
-  \\
-  instantiation int :: Group\\
-  begin     \\
-  \hspace*{0pt}  ~~definition inverse\_int :: "int => int"\\
-  \hspace*{0pt}  ~~where\\
-  \hspace*{0pt}  ~~~~"inverse\_int = uminus"   \\
-  instance ..\\
-  end
-  \\
-  \\
-  fun sub :: "('a :: Group) => ('a :: Group) => ('a :: Group)"\\
-  where\\
-  \hspace*{0pt}  ~~"sub a b = plus a (inverse b)"\\
-  \\
-  end
+text %quote %typewriter{*
+theory Classes\\
+imports Nats Prelude\\
+begin
+\\ 
+class Monoid = type +\\
+\hspace*{0pt}  ~~fixes nothing :: 'a\\
+\hspace*{0pt}  ~~fixes plus :: "'a => 'a => 'a"
+\\
+\\
+instantiation int :: Monoid\\
+begin\\
+\hspace*{0pt}  ~~definition nothing\_int :: "int"\\
+\hspace*{0pt}  ~~where\\
+\hspace*{0pt}  ~~~~"nothing\_int = 0"     \\
+\hspace*{0pt}  ~~definition plus\_int :: "int => int => int"\\
+\hspace*{0pt}  ~~where\\
+\hspace*{0pt}  ~~~~"plus\_int = (op +)"   \\
+instance ..\\
+end
+\\
+\\
+fun summ :: "('a :: Monoid) list => ('a :: Monoid)"\\
+where\\
+\hspace*{0pt}  ~~"summ Nil = nothing"\\
+|~~"summ (x \# xs) = plus x (summ xs)"
+\\
+\\
+class Group = Monoid +\\
+\hspace*{0pt}  ~~fixes inverse :: "'a => 'a"
+\\
+\\
+instantiation int :: Group\\
+begin     \\
+\hspace*{0pt}  ~~definition inverse\_int :: "int => int"\\
+\hspace*{0pt}  ~~where\\
+\hspace*{0pt}  ~~~~"inverse\_int = uminus"   \\
+instance ..\\
+end
+\\
+\\
+fun sub :: "('a :: Group) => ('a :: Group) => ('a :: Group)"\\
+where\\
+\hspace*{0pt}  ~~"sub a b = plus a (inverse b)"\\
+\\
+end
 *}
 
 text {*
