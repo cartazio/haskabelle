@@ -48,4 +48,4 @@ ACTUAL_CMD="val prelude_loc = \"$PRELUDE_LOC\"; \
   val ml_cmd = \"ML_Context.eval_file mk_adapt_path; Mk_Adapt.run prelude_name src_loc dst_loc\"; \
   $FORMAL_CMD"
 
-"$HASKABELLE_HOME/bin/isabelle-process" -r -q -e "$ACTUAL_CMD" HOL || fail "Building adaptation table FAILED." 
+"$HASKABELLE_HOME/bin/isabelle-process" -r -q -e "$ACTUAL_CMD" HOL || fail "Building adaptation table failed." 
