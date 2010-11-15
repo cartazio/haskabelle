@@ -96,7 +96,7 @@ fun adapt thy = (
   || consts thy) >> (space_implode ",\n  " #> enclose "[" "]");
 
 fun convert thy pos = Source.of_string
-  #> Symbol.source { do_recover = false }
+  #> Symbol.source
   #> Token.source { do_recover = NONE } (fn () => (adapt_lexicon, Scan.empty_lexicon)) pos
   #> Token.source_proper
   #> Source.source Token.stopper (Scan.single (Scan.error (Parse.!!! (adapt thy)))) NONE
