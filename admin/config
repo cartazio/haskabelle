@@ -11,8 +11,6 @@ ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"
 SHORT=at-poly
 GHC=/usr/local/ldist/bin/ghc
 
-REPOSITORY=/home/isabelle-repository/repos/haskabelle
-
 TEST_HOME=/home/isatest
 
-NOTIFY='kleing@cse.unsw.edu.au haftmann@in.tum.de'
+NOTIFY='kleing@cse.unsw.edu.au noschinl@in.tum.de'
