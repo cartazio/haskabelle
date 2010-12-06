@@ -11,7 +11,7 @@ ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"
 SHORT=at-poly
 GHC=/usr/local/ldist/bin/ghc
 
-REPOSITORY=/home/haftmann/shared/haskabelle
+REPOSITORY=/home/isabelle-repository/repos/haskabelle
 
 TEST_HOME=/home/isatest
 
