@@ -25,6 +25,4 @@ def Haskabelle(env, case, paths, dep_paths, playground):
         ISABELLE_TOOL = path.join(loc_isabelle, 'bin', 'isabelle'),
         DIST_HOME = playground)
 
-    attachments = { 'log': lambda: log }
-
     return (return_code == 0, isabelle.extract_isabelle_run_summary(log), {}, {'log': log}, None)
