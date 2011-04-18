@@ -37,7 +37,7 @@ PRELUDE_LOC="$DIR/$PRELUDE_NAME"
 ## convert
 
 FORMAL_CMD="Toplevel.program (fn () => (use_thy prelude_loc; ML_Context.eval_text_in \
-  (SOME (ProofContext.init_global (Thy_Info.get_theory prelude_name))) false Position.none ml_cmd)) \
+  (SOME (Proof_Context.init_global (Thy_Info.get_theory prelude_name))) false Position.none ml_cmd)) \
   handle _ => OS.Process.exit OS.Process.failure;"
 
 ACTUAL_CMD="val prelude_loc = \"$PRELUDE_LOC\"; \

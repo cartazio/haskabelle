@@ -16,7 +16,7 @@ struct
 fun used_constants thy = []
   |> Symtab.fold (fn (c, (_, NONE)) => cons c | _ => I)
        ((snd o #constants o Consts.dest o #consts o Sign.rep_sg) thy)
-  |> map (Sign.extern_const thy)
+  |> map (Proof_Context.extern_const (Proof_Context.init_global thy))
   |> filter_out Long_Name.is_qualified;
 
 
