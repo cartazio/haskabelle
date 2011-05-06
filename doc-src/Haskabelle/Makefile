@@ -17,7 +17,9 @@ NAME = haskabelle
 
 FILES = $(NAME).tex Thy/document/Haskabelle.tex \
   style.sty ../iman.sty ../extra.sty ../isar.sty \
-  ../isabelle.sty ../isabellesym.sty ../pdfsetup.sty \
+  ../../lib/texinputs/isabelle.sty \
+  ../../lib/texinputs/isabellesym.sty \
+  ../pdfsetup.sty \
   ../manual.bib ../proof.sty
 
 dvi: $(NAME).dvi

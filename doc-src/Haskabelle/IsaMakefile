@@ -37,10 +37,12 @@ $(THY): Thy/ROOT.ML Thy/Setup.thy Thy/Haskabelle.thy
 
 ../Makefile.in: $(ISABELLE_DOC_SRC)/Makefile.in
 	( cd .. && for NAME in $(ISABELLE_DOC_SRC)/*; do ln -s $$NAME $$(basename $$NAME); done )
+	ln -s $(ISABELLE_HOME)/lib/texinputs ../../lib
 
 
 ## clean
 
 clean:
 	@( cd .. && for NAME in *; do if [ -L $$NAME ]; then rm -v $$NAME; fi; done )
+	@ rm -fv ../../lib/texinputs
 	@rm -f $(THY)

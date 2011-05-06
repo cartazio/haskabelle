@@ -12,6 +12,8 @@ doc/haskabelle.pdf
 ex/dst_hs
 ex/dst_thy
 
+lib/texinputs
+
 .*
 *~
 \#*\#
