@@ -459,8 +459,8 @@ splitIdentifiers ids
   other and an environment entity that can be translated into each other.
 -}
 class Hsk2Env a b where
-    fromHsk :: (Show a, Hsk2Env a b) => a -> b
-    toHsk   :: (Show b, Hsk2Env a b) => b -> a
+    fromHsk :: Show a => a -> b
+    toHsk   :: Show b => b -> a
     toHsk b = error ("(toHsk) Internal Error: Don't know how to convert: " ++ show b)
 
 
@@ -588,8 +588,8 @@ instance Hsk2Env Hsx.ImportDecl Import where
   hand side environment entities, that can be converted into each other.
 -}
 class Isa2Env a b where
-    fromIsa :: (Show a, Isa2Env a b) => a -> b
-    toIsa   :: (Show b, Isa2Env a b) => b -> a
+    fromIsa :: Show a => a -> b
+    toIsa   :: Show b => b -> a
     toIsa b = error ("(toIsa) Internal Error: Don't know how to lift " ++ show b)
 
 instance Isa2Env Isa.ThyName ModuleID where
