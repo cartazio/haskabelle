@@ -31,8 +31,8 @@ else
   BUILDDIR="$HASKABELLE_HOME/build"
   if [ -d "$BUILDDIR" ]
   then
-    "$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -odir $BUILDDIR -hidir $BUILDDIR -stubdir $BUILDDIR -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
+    "$GHC" -package haskell-src-exts-0.4.8 -fglasgow-exts -i -i"$HASKABELLE_HOME" -odir $BUILDDIR -hidir $BUILDDIR -stubdir $BUILDDIR -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
   else
-    "$GHC" -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
+    "$GHC" -package haskell-src-exts-0.4.8  -fglasgow-exts -i -i"$HASKABELLE_HOME" -e "mainInterface [$ARGS]" "$HASKABELLE_HOME/Main.hs" || exit $?
   fi
 fi
