@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fglasgow-exts -O -o bin/haskabelle_bin -odir build -hidir build -stubdir build #-}
+{-# OPTIONS_GHC -O -o bin/haskabelle_bin -odir build -hidir build -stubdir build #-}
 
 {-  Author: Florian Haftmann, TU Muenchen
 

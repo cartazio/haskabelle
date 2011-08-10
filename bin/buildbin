@@ -26,4 +26,4 @@ function fail()
 BUILDDIR=build
 cd "$HASKABELLE_HOME"
 mkdir -p "$BUILDDIR" || fail "Cannot create directory $BUILDDIR"
-"$GHC" -package haskell-src-exts-0.4.8 -fglasgow-exts --make -O -o bin/haskabelle_bin -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" "Main.hs" || fail "Cannot build source"
+"$GHC" -package haskell-src-exts-0.4.8 --make -O -o bin/haskabelle_bin -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" "Main.hs" || fail "Cannot build source"

@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-  Author: Tobias C. Rittweiler and Florian Haftmann, TU Muenchen
 
 Adaption tables and their application.
