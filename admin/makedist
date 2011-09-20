@@ -82,7 +82,7 @@ fi
 ## building generated files
 
 admin/builddoc > /dev/null || fail "Could not build documentation"
-bin/mk_adapt > /dev/null || fail "Could not build adaption table"
+lib/mk_adapt > /dev/null || fail "Could not build adaption table"
 
 ## include manual
 

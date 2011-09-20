@@ -85,7 +85,7 @@ shift $(($OPTIND - 1))
 HASKABELLE_BIN="$HASKABELLE_HOME/bin/haskabelle_bin"
 
 if [ -n "$ISABELLE_GHC" ]; then
-  GHC="$ISABELLE_GHC" "$HASKABELLE_HOME/bin/buildbin" || exit $?
+  GHC="$ISABELLE_GHC" "$HASKABELLE_HOME/lib/buildbin" || exit $?
 elif [ ! -e "$HASKABELLE_BIN" ]; then
   fail "Cannot build haskabelle_bin as ISABELLE_GHC is not set"
 fi
@@ -94,7 +94,7 @@ fi
 # adaptation table
 
 if [ "$BUILD_ADAPT" = true ]; then
-  "$HASKABELLE_HOME/bin/mk_adapt" $ADAPT_DIR || exit $?
+  "$HASKABELLE_HOME/lib/mk_adapt" $ADAPT_DIR || exit $?
 fi
 
 ## main

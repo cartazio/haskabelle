@@ -55,7 +55,7 @@ function fail_or_warn()
 ## building
 
 cd "$HASKABELLE_HOME"
-bin/buildbin || fail "Could not build source"
+lib/buildbin || fail "Could not build source"
 
 ## testing
 
