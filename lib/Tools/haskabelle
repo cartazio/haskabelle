@@ -97,12 +97,13 @@ if [ "$BUILD_ADAPT" = true ]; then
   "$HASKABELLE_HOME/lib/mk_adapt" $ADAPT_DIR || exit $?
 fi
 
+
 ## main
 
 if [ "$SHOW_VERSION" = true ]; then
-  "$HASKABELLE_BIN" --internal --version
+  "$HASKABELLE_BIN" --version
 elif [ "$CONFIG_FILE" != "" ]; then
-  "$HASKABELLE_BIN" --internal "$DEFAULT_ADAPT_DIR" --config "$CONFIG_FILE" || exit $?
+  "$HASKABELLE_BIN" --internal "$ADAPT_DIR" --config "$CONFIG_FILE" || exit $?
 elif [ "$#" -ge 2 ]; then
   "$HASKABELLE_BIN" --internal "$ADAPT_DIR" "$@" || exit $?
 elif [ "$BUILD_ADAPT" = false ]; then

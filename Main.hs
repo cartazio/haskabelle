@@ -18,7 +18,9 @@ import Importer.Version (version)
 {-
   Usage of the haskabelle binary:
 
-  haskabelle_bin [--adapt <ADAPT>] <SRC1> .. <SRCn> <DST> | --config <CONFIG>
+  haskabelle_bin --internal <ADAPT> <SRC1> .. <SRCn> <DST>
+  haskabelle_bin --internal <ADAPT> --config <CONFIG>
+  haskabelle_bin --version
 
   Import Haskell files <SRC1> .. <SRCn> into Isabelle theories in directory
   <DST>, optionally using customary adaption in directory <ADAPT> OR import
@@ -26,19 +28,18 @@ import Importer.Version (version)
 -}
 
 mainInterface :: [String] -> IO ()
-mainInterface ["--internal", defaultAdaptDir, "--config", configFile] = do
+mainInterface ["--internal", adaptDir, "--config", configFile] = do
   config <- readConfig configFile
-  importProject config defaultAdaptDir
-mainInterface ("--internal" : _ : "--adapt" : adaptDir : srcs_dst @ (_ : _ : _)) =
+  importProject config adaptDir
+mainInterface ("--internal" : adaptDir : srcs_dst @ (_ : _ : _)) =
   importFiles adaptDir (init srcs_dst) (last srcs_dst)
-mainInterface ("--internal" : defaultAdaptDir : srcs_dst @ (_ : _ : _)) =
-  importFiles defaultAdaptDir (init srcs_dst) (last srcs_dst)
-mainInterface ("--internal" : "--version" : _) = do
-  putStrLn (version ++ ".")
 
 mainInterface ("--internal" : args) = do
   putStrLn "Error calling internal haskabelle binary. Wrong parameters:"
   putStrLn ("  " ++ show args)
+
+mainInterface ("--version" : _) = do
+  putStrLn (version ++ ".")
 
 mainInterface _ = do
   putStrLn "Do not invoke linked Haskabelle binary directly"
