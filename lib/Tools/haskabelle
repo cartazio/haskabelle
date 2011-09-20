@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+#
+# Author: Lars Noschinski
+#
+# DESCRIPTION: Haskabelle interface wrapper
+
+## diagnostics
+
+PRG="$(basename "$0")"
+
+DEFAULT_ADAPT_DIR="$HASKABELLE_HOME/default"
+
+function usage()
+{
+  echo
+  echo "Usage: isabelle $PRG [OPTIONS] [SRC... DST]"
+  echo
+  echo "  Options are:"
+  echo "    SRC...     list of haskell source files"
+  echo "    DST        destination directory"
+  echo "    -a DIR     custom adaptation table (default $DEFAULT_ADAPT_DIR)"
+  echo "    -c CONFIG  configuration file"
+  echo "    -r         rebuild adaptation table"
+  echo "    -v         show haskabell version"
+  echo
+  echo "At least one of SRC... DST, -c or -r must be given. Not both of"
+  echo "[SRC... DST] and -c may be used at the same time."
+  echo
+  echo "Given SRC... DST, import Haskell files SRC... into Isabelle theories"
+  echo "in directory DST. Given -c, import files according to the"
+  echo "configuration file."
+  echo
+  exit 1
+}
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+
+## process command line
+
+# options
+
+BUILD_ADAPT=false
+ADAPT_DIR="$DEFAULT_ADAPT_DIR"
+CONFIG_FILE=""
+SHOW_VERSION=false
+
+function getoptions()
+{
+  OPTIND=1
+  while getopts "a:bc:rv" OPT
+  do
+    case "$OPT" in
+      a)
+        ADAPT_DIR="$OPTARG"
+        ;;
+      c)
+        CONFIG_FILE="$OPTARG"
+        ;;
+      r)
+        BUILD_ADAPT=true
+        ;;
+      v)
+        SHOW_VERSION=true
+        ;;
+      \?)
+        usage
+        ;;
+    esac
+  done
+}
+
+getoptions "$@"
+shift $(($OPTIND - 1))
+
+
+## build
+
+if [ "$BUILD_ADAPT" = true ]; then
+  "$HASKABELLE_HOME/bin/mk_adapt" $ADAPT_DIR || exit $?
+fi
+
+
+## main
+
+HASKABELLE_BIN="$HASKABELLE_HOME/bin/haskabelle_bin"
+
+if [ "$SHOW_VERSION" = true ]; then
+  "$HASKABELLE_BIN" --internal --version
+elif [ "$CONFIG_FILE" != "" ]; then
+  "$HASKABELLE_BIN" --internal "$DEFAULT_ADAPT_DIR" --config "$CONFIG_FILE" || exit $?
+elif [ "$#" -ge 2 ]; then
+  "$HASKABELLE_BIN" --internal "$ADAPT_DIR" "$@" || exit $?
+elif [ "$BUILD_ADAPT" = false ]; then
+  usage
+fi
