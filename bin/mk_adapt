@@ -3,6 +3,8 @@
 # Author: Florian Haftmann, TU Muenchen
 #
 # Shell interface for adaption table builder.
+#
+# Must be run in an isabelle environment (e.g. via "isabelle env")
 
 ## environment
 
@@ -49,4 +51,4 @@ ACTUAL_CMD="val prelude_loc = \"$PRELUDE_LOC\"; \
   val ml_cmd = \"eval_file mk_adapt_path; Mk_Adapt.run prelude_name src_loc dst_loc\"; \
   $FORMAL_CMD"
 
-"$HASKABELLE_HOME/bin/isabelle-process" -r -q -e "$ACTUAL_CMD" HOL || fail "Building adaptation table failed." 
+"$ISABELLE_PROCESS" -r -q -e "$ACTUAL_CMD" HOL || fail "Building adaptation table failed."

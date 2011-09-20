@@ -3,6 +3,8 @@
 # Author: Florian Haftmann, TU Muenchen
 #
 # Building the Haskabelle documentation
+#
+# Must be run in an isabelle environment (e.g. via "isabelle env")
 
 ## environment
 
@@ -20,6 +22,6 @@ function fail()
 ## building
 
 cd "$HASKABELLE_HOME/doc-src/Haskabelle"
-"$HASKABELLE_HOME/bin/isabelle" make clean || fail "building documentation sources failed"
-"$HASKABELLE_HOME/bin/isabelle" make || fail "building documentation sources failed"
+$ISABELLE_TOOL make clean || fail "building documentation sources failed"
+$ISABELLE_TOOL make || fail "building documentation sources failed"
 make doc || fail "building documentation pdf failed"

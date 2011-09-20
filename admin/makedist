@@ -3,6 +3,8 @@
 # Author: Florian Haftmann, TU Muenchen
 #
 # Building a Haskabelle distribution from repository.
+#
+# Must be run in an isabelle environment (e.g. via "isabelle env")
 
 ## diagnostics
 
