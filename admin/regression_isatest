@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+# Author: Florian Haftmann, TU Muenchen
+#
+# Run regression with logging and mail failures
+# Supposed to be run in isatest environment
+
+## environment
+
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+cd "$HASKABELLE_HOME"
+
+MAIL=admin/mail-attach
+
+. admin/config
+export ISABELLE_TOOL
+export ISABELLE_PROCESS
+export ISABELLE_DOC_SRC
+export GHC
+
+ERRORDIR="$TEST_HOME/var"
+RUNNING="$TEST_HOME/var/running"
+
+## log
+
+mkdir -p log
+LOG=log/haskabelle-$(date +'%Y-%m-%d_%H:%M:%S').log
+
+## selecting isatest Isabelle settings
+
+SETTINGS=~/settings/$SHORT
+cat $SETTINGS >> $ISABELLE_HOME/etc/settings
+
+## check whether Isabelle works
+
+if [ -f "$RUNNING/$SHORT.running" -o -e $ERRORDIR/$SHORT*.log ]; then
+  echo "Skipped test. Isabelle devel version broken." > $LOG
+  exit 1
+fi
+
+## run regression
+
+admin/makedist --regression > "$LOG" 2>&1
+EXIT=$?
+echo "Exited with $EXIT." >> "$LOG"
+
+if [ $EXIT -ne 0 ]
+then
+
+  MAILTEXT=/tmp/haskabelle-$(date +'%Y-%m-%d_%H:%M:%S').mail
+
+  cat > "$MAILTEXT" <<EOF
+Haskabelle test failed.  See attached log.
+
+Have a nice day,
+  isatest
+
+EOF
+
+  for RECEIVER in $NOTIFY
+  do
+    "$MAIL" 'test failed (Haskabelle)' "$RECEIVER" "$MAILTEXT" "$LOG"
+  done
+  rm "$MAILTEXT"
+  
+fi
