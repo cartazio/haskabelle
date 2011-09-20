@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# Run haskabelle, without being registered as an component.
+# Give this script as a parameter to "isabelle env".
+
+HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+
+"$HASKABELLE_HOME/lib/Tools/haskabelle" $@
