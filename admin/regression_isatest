@@ -38,6 +38,11 @@ if [ -f "$RUNNING/$SHORT.running" -o -e $ERRORDIR/$SHORT*.log ]; then
   exit 1
 fi
 
+## clean regression dir
+
+export DIST_HOME="${DIST_HOME:-$HOME/tmp/haskabelle-dist}"
+rm -rf "$DIST_HOME"
+
 ## run regression
 
 admin/makedist --regression > "$LOG" 2>&1
