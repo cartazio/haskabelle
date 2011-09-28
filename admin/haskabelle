@@ -4,5 +4,6 @@
 # Give this script as a parameter to "isabelle env".
 
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+export HASKABELLE_HOME
 
 "$HASKABELLE_HOME/lib/Tools/haskabelle" $@
