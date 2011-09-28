@@ -16,7 +16,7 @@ MAIL=admin/mail-attach
 export ISABELLE_TOOL
 export ISABELLE_PROCESS
 export ISABELLE_DOC_SRC
-export GHC
+export ISABELLE_GHC
 
 ERRORDIR="$TEST_HOME/var"
 RUNNING="$TEST_HOME/var/running"
