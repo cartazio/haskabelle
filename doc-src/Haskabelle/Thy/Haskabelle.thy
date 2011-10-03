@@ -277,8 +277,6 @@ text {*
 text %quote {*
   \begin{description}
 
-    \item [\shell{bin/}]  Shell interfaces of @{text Haskabelle}
- 
     \item [\shell{doc/}]  Documentation
 
     \item [\shell{default/}]  Default adaption files (see
@@ -289,15 +287,24 @@ text %quote {*
   \end{description}
 *}
 
+subsubsection {* Configuring Isabelle *}
+
+text {*
+  @{text Haskabelle} needs to be registered as a component.
+  For this, add the line \shell{init_component DIR} to your Isabelle
+  settings file, where \shell{DIR} refers to the root directory of the
+  @{text Haskabelle} distribution.
+*}
 
 subsubsection {* Converting theories *}
 
 text {*
-  @{text Haskabelle} is invoked using the following command line:
+  @{text Haskabelle} is invoked using the following command line
+  (\shell{isabelle} is the binary of your isabelle distribution):
 *}
 
 text %quote {*
-  \shell{bin/haskabelle <SRC1> .. <SRCn> <DST>}
+  \shell{isabelle haskabelle <SRC1> .. <SRCn> <DST>}
 *}
 
 text {*
@@ -312,20 +319,6 @@ text {*
 
 *}
 
-
-subsubsection {* Compiling *}
-
-text {*
-
-  @{text Haskabelle} can be run directly from source; for efficient use
-  it is recommended to build a binary from the sources, which is
-  accomplished by invoking
-
-*}
-
-text %quote {*
-  \shell{bin/buildbin}
-*}
 
 
 section {* A bluffer's glance at Haskabelle \label{sec:Haskabelle-what-is-supported}*}
@@ -628,19 +621,12 @@ text {*
 *}
 
 text %quote {*
-  \shell{bin/mk\_adapt <ADAPT>} 
+  \shell{isabelle haskabelle -r  -a <ADAPT>}
 *}
 
 text {*
 
   \noindent This also includes some basic consistency checking.
-
-  If you have multiple @{text Isabelle} versions on your machine, you
-  can select one particular by setting the shell variable
-  \shell{ISABELLE\_PROCESS} (usually
-  \shell{ISABELLE\_HOME/bin/isabelle-process}) to the process wrapper
-  of the desired @{text Isabelle}.
-
 *}
 
 subsubsection {* Use this adaption during conversion *}
@@ -648,12 +634,12 @@ subsubsection {* Use this adaption during conversion *}
 text {*
 
   A particular adaption other than default is selected using the
-  \shell{--adapt} command line switch:
+  \shell{-a} command line switch:
 
 *}
 
 text %quote {*
-  \shell{bin/haskabelle --adapt <ADAPT> <SRC1> .. <SRCn> <DST>}
+  \shell{isabelle haskabelle -a <ADAPT> <SRC1> .. <SRCn> <DST>}
 *}
 
 
