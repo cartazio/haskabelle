@@ -93,7 +93,7 @@ rm -rf doc-src
 
 if [ "$REGRESSION" ]
 then
-  admin/regression || fail "Could not carry out regression test"
+  lib/regression || fail "Could not carry out regression test"
 fi
 
 ## remove admin, build

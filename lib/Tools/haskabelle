@@ -20,6 +20,7 @@ function usage()
   echo "    DST        destination directory"
   echo "    -a DIR     custom adaptation table (default $DEFAULT_ADAPT_DIR)"
   echo "    -c CONFIG  configuration file"
+  echo "    -e         runs the haskabelle examples"
   echo "    -r         rebuild adaptation table"
   echo "    -v         show haskabell version"
   echo
@@ -44,15 +45,16 @@ function fail()
 
 # options
 
-BUILD_ADAPT=false
 ADAPT_DIR="$DEFAULT_ADAPT_DIR"
+BUILD_ADAPT=false
 CONFIG_FILE=""
+RUN_EXAMPLES=false
 SHOW_VERSION=false
 
 function getoptions()
 {
   OPTIND=1
-  while getopts "a:bc:rv" OPT
+  while getopts "a:bc:erv" OPT
   do
     case "$OPT" in
       a)
@@ -60,6 +62,9 @@ function getoptions()
         ;;
       c)
         CONFIG_FILE="$OPTARG"
+        ;;
+      e)
+        RUN_EXAMPLES=true
         ;;
       r)
         BUILD_ADAPT=true
@@ -107,6 +112,8 @@ fi
 
 if [ "$SHOW_VERSION" = true ]; then
   "$HASKABELLE_BIN" --version
+elif [ "$RUN_EXAMPLES" = true ]; then
+  "$HASKABELLE_HOME/lib/regression" "$@"
 elif [ "$CONFIG_FILE" != "" ]; then
   "$HASKABELLE_BIN" --internal "$ADAPT_DIR" --config "$CONFIG_FILE" || exit $?
 elif [ "$#" -ge 2 ]; then

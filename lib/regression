@@ -6,11 +6,6 @@
 #
 # Must be run in an isabelle environment (e.g. via "isabelle env")
 
-## environment
-
-PRG="$(basename "$0")"
-HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
-
 ## diagnostics
 
 function fail()
@@ -55,11 +50,13 @@ function fail_or_warn()
 
 ## testing
 
+export HASKABELLE_HOME
+
 for SRC in ex/src_hs/*.hs
 do
   DST=ex/dst_thy/
   echo "importing $SRC..."
-  "$HASKABELLE_HOME/admin/haskabelle" "$SRC" "$DST" || fail "Could not import $SRC"
+  "$HASKABELLE_HOME/lib/Tools/haskabelle" "$SRC" "$DST" || fail "Could not import $SRC"
 done
 
 ## re-importing

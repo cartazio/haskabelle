@@ -654,16 +654,13 @@ text {*
 *}
 
 text %quote {*
-  \shell{bin/regression}
+  \shell{isabelle haskabelle -e}
 *}
 
 text {*
 
   \noindent Each generated theory then is re-imported into @{text
-  Isabelle}.  If you have multiple @{text Isabelle} versions on your
-  machine, you can select one particular by setting the shell variable
-  \shell{ISABELLE\_TOOL} (usually \shell{ISABELLE\_HOME/bin/isabelle})
-  to the tool wrapper of the desired @{text Isabelle}.
+  Isabelle}.
 
 *}
 
