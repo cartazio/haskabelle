@@ -20,9 +20,9 @@ function usage()
   echo "    DST        destination directory"
   echo "    -a DIR     custom adaptation table (default $DEFAULT_ADAPT_DIR)"
   echo "    -c CONFIG  configuration file"
-  echo "    -e         runs the haskabelle examples"
+  echo "    -e         runs the Haskabelle examples"
   echo "    -r         rebuild adaptation table"
-  echo "    -v         show haskabell version"
+  echo "    -v         show Haskabelle version"
   echo
   echo "At least one of SRC... DST, -c or -r must be given. Not both of"
   echo "[SRC... DST] and -c may be used at the same time."
