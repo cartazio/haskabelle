@@ -335,8 +335,10 @@ instance Printer Isa.Stmt where
         renameFunctionStmt thy (Isa.Function_Stmt kind tysigs clauses) =
           Isa.Function_Stmt kind (map renameTypeSign tysigs) (map renameClause clauses)
 
-    pprint' adapt reserved (Isa.TypeSynonym aliases) = blankline $ text "types" <+> vcat (map pp aliases)
-        where pp (spec, typ) = pprint' adapt reserved spec <+> equals <+> pprint' adapt reserved typ
+    pprint' adapt reserved (Isa.TypeSynonym aliases) = blankline $ foldl ($+$) empty (map pp aliases)
+        where
+          pp (spec, typ) = text "type_synonym" <+> pprint' adapt reserved spec
+            <+> equals <+> pprint' adapt reserved typ
 
 instance Printer Isa.ThyName where
     pprint' adapt reserved (Isa.ThyName name) =
