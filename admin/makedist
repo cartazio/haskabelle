@@ -17,6 +17,7 @@ function fail()
 ## environment
 
 HASKABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+export HASKABELLE_HOME
 
 if [ -z "$HG" ]
 then

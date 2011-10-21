@@ -50,8 +50,6 @@ function fail_or_warn()
 
 ## testing
 
-export HASKABELLE_HOME
-
 for SRC in ex/src_hs/*.hs
 do
   DST=ex/dst_thy/
