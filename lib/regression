@@ -14,11 +14,12 @@ function fail()
   exit 2
 }
 
+cd "$HASKABELLE_HOME"
+
 ## cleaning
 
 if [ "$1" == "clean" ]
 then
-  cd "$HASKABELLE_HOME"
   rm -v ex/dst_thy/* ex/dst_hs/*
   exit 0
 fi
