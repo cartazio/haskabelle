@@ -177,7 +177,7 @@ instance ..
 
 end
 
-class num = number_ring + abs + sgn + eq + print
+class num = comm_ring_1 + abs + sgn + eq + print
 
 instance int :: num ..
 
