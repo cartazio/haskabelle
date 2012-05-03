@@ -207,7 +207,7 @@ text {*
   \begin{description}
 
     \item[GHC] Glasgow Haskell Compiler \url{http://www.haskell.org/ghc/}
-       (version 6.12.1)
+       (version 7.4.1)
 
   \end{description}
   
@@ -216,19 +216,19 @@ text {*
   \begin{description}
 
     \item[mtl] Monad transformer library. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/mtl-1.1.0.2}
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/mtl-2.1.1}
 
     \item[xml] A simple XML library. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/xml-1.3.5}
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/xml-1.3.12}
 
     \item[uniplate] Uniform type generic traversals. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/uniplate-1.3}
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/uniplate-1.6.7}
 
     \item[cpphs] A liberalised re-implementation of cpp, the C pre-processor. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/cpphs-1.9} 
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/cpphs-1.13.3}
 
     \item[Happy] Happy is a parser generator for Haskell. \\
-       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/happy-1.17}
+       \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/happy-1.18.9}
 
        The installation process provides a binary \shell{happy}
        which must be accessible on your \shell{PATH} to
@@ -236,6 +236,7 @@ text {*
 
     \item[haskell-src-exts] Manipulating Haskell source: abstract syntax, lexer, parser, and pretty-printer. \\
        \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/haskell-src-exts-0.4.8}
+       (newer versions won't work)
 
   \end{description}
 *}
