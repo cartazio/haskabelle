@@ -6,14 +6,14 @@ module Importer.DeclDependencyGraph
 
 import Importer.Library
 
-import Maybe
-import List (groupBy, sortBy, intersect)
+import Data.Maybe
+import Data.List (groupBy, sortBy, intersect)
 import Data.Graph as Graph
 import Data.Set (Set)
 import qualified Data.Set as Set hiding (Set)
 import qualified Data.Tree as Tree
 
-import Monad
+import Control.Monad
 
 import qualified Importer.Msg as Msg
 import qualified Importer.Ident_Env as Ident_Env

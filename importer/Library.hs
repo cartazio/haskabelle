@@ -19,9 +19,9 @@ module Importer.Library (
   liftM, filterM, mapsM, when
 ) where
 
-import qualified List
-import qualified Maybe
-import qualified Monad
+import qualified Data.List as List
+import qualified Data.Maybe as Maybe
+import qualified Control.Monad as Monad
 import qualified Control.Exception as Exception
 import qualified Debug.Trace as Debug
 

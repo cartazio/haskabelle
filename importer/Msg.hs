@@ -5,8 +5,8 @@ Messages.
 
 module Importer.Msg where
 
-import List (intersperse)
-import Maybe (fromMaybe)
+import Data.List (intersperse)
+import Data.Maybe (fromMaybe)
 
 import qualified Language.Haskell.Exts as Hsx
 import qualified Importer.Hsx as Hsx

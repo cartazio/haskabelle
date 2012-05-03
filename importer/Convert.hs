@@ -16,8 +16,8 @@ module Importer.Convert (convertHskUnit, Conversion, runConversion, parseHskFile
 
 import Importer.Library
 import qualified Importer.AList as AList
-import List (nub, unzip4, partition)
-import Maybe
+import Data.List (nub, unzip4, partition)
+import Data.Maybe
 import qualified Data.Set as Set hiding (Set)
 import Data.Set (Set)
 import qualified Data.Map as Map hiding (Map)
@@ -33,7 +33,7 @@ import Control.Monad.Writer (WriterT, MonadWriter, runWriterT, tell)
 
 import System.FilePath
 import System.Directory
-import IO
+import System.IO
 
 import qualified Importer.Msg as Msg
 import qualified Importer.Gensym as Gensym

@@ -12,7 +12,7 @@ module Importer.Adapt (Adaption(..), AdaptionTable(AdaptionTable),
 import Importer.Library
 import qualified Importer.AList as AList
 import Data.Maybe (mapMaybe, fromMaybe, catMaybes, isJust)
-import List (partition, sort, group)
+import Data.List (partition, sort, group)
 
 import Control.Monad.State (State, get, put, foldM, evalState, runState, liftM2)
 

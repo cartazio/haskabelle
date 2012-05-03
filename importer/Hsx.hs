@@ -12,14 +12,14 @@ module Importer.Hsx where
 
 import Importer.Library
 import qualified Importer.AList as AList
-import Maybe
-import List (sort, sortBy)
+import Data.Maybe
+import Data.List (sort, sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)
 import Data.Set (Set)
 import qualified Data.Set as Set hiding (Set)
-import qualified Array (inRange)
-import qualified Char (toLower)
+import qualified Data.Array as Array (inRange)
+import qualified Data.Char as Char (toLower)
 
 import Data.Generics
 import Data.Generics.Basics

@@ -7,8 +7,8 @@
 module Importer.Preprocess (preprocessModule) where
 
 import Importer.Library
-import Maybe
-import List
+import Data.Maybe
+import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)
 import Data.Set (Set)

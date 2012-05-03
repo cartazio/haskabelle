@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, TypeSynonymInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, FlexibleInstances, TypeSynonymInstances, GeneralizedNewtypeDeriving #-}
 
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 
@@ -64,8 +64,8 @@ module Importer.Ident_Env
 
 import Importer.Library
 import qualified Importer.AList as AList
-import Maybe
-import List (partition, nub)
+import Data.Maybe
+import Data.List (partition, nub)
 import qualified Data.Map as Map
 
 import Control.Monad.Reader
