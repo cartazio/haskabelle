@@ -234,7 +234,7 @@ text {*
        which must be accessible on your \shell{PATH} to
        proceed!
 
-    \item[haskell-src-ext] Manipulating Haskell source: abstract syntax, lexer, parser, and pretty-printer. \\
+    \item[haskell-src-exts] Manipulating Haskell source: abstract syntax, lexer, parser, and pretty-printer. \\
        \url{http://hackage.haskell.org/cgi-bin/hackage-scripts/package/haskell-src-exts-0.4.8}
 
   \end{description}
