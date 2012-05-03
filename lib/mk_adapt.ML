@@ -15,7 +15,7 @@ struct
 
 fun used_constants thy = []
   |> Symtab.fold (fn (c, (_, NONE)) => cons c | _ => I)
-       ((snd o #constants o Consts.dest o #consts o Sign.rep_sg) thy)
+       ((snd o #constants o Consts.dest o Sign.consts_of) thy)
   |> map (Proof_Context.extern_const (Proof_Context.init_global thy))
   |> filter_out Long_Name.is_qualified;
 
@@ -121,7 +121,7 @@ fun run thy_name src_loc dst_loc =
     val adaptions = convert thy (Position.file src_loc) src;
     val enumerate_sorted = sort string_ord #> map prep_string #> map single
       #> separate [Pretty.str ",", Pretty.fbrk] #> flat #> Pretty.enclose "[" "]";
-    val keywords = enumerate_sorted (Keyword.dest_commands () @ Keyword.dest_keywords ());
+    val keywords = enumerate_sorted (op @ (Keyword.dest ()));
     val const_names = enumerate_sorted (used_constants thy);
     val thy_names = enumerate_sorted (Thy_Info.get_names ());
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
