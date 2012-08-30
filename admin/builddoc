@@ -21,7 +21,26 @@ function fail()
 
 ## building
 
-cd "$HASKABELLE_HOME/doc-src/Haskabelle"
-$ISABELLE_TOOL make clean || fail "building documentation sources failed"
-$ISABELLE_TOOL make || fail "building documentation sources failed"
-make doc || fail "building documentation pdf failed"
+FORMATS="false dvi pdf"
+
+OUTPUT="$ISABELLE_TMP_PREFIX$$"
+mkdir -p "$OUTPUT" || fail "Bad directory: \"$OUTPUT\""
+
+RC=0
+for FORMAT in $FORMATS
+do
+  if [ "$RC" = 0 ]; then
+    $ISABELLE_TOOL build -D "$HASKABELLE_HOME/doc-src" -c \
+        -o browser_info=false -o "document=$FORMAT" \
+        -o "document_output=$OUTPUT"
+    RC=$?
+  fi
+done
+
+if [ "$RC" = 0 ]; then
+  cp -f "$OUTPUT"/*.dvi "$OUTPUT"/*.pdf "$HASKABELLE_HOME/doc/"
+fi
+
+rm -r "$OUTPUT"
+
+[ $RC -eq 0 ] || fail "building documentation sources failed"
