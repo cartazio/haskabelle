@@ -101,7 +101,7 @@ fun convert thy pos = Source.of_string
   #> Token.source_proper
   #> Source.source Token.stopper (Scan.single (Scan.error (Parse.!!! (adapt thy)))) NONE
   #> Source.exhaust
-  #> (fn [dst] => dst | _ => error ("Extra input " ^ Position.str_of pos))
+  #> (fn [dst] => dst | _ => error ("Extra input " ^ Position.here pos))
 
 
 (* glueing it together *)
