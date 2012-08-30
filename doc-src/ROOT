@@ -1,0 +1,15 @@
+session Haskabelle (doc) in "Haskabelle" = HOL +
+  options [document_variants = "haskabelle"]
+  theories [document = false] Setup
+  theories Haskabelle
+  files
+    "$ISABELLE_HOME/src/Doc/prepare_document"
+    "$ISABELLE_HOME/src/Doc/pdfsetup.sty"
+    "$ISABELLE_HOME/src/Doc/iman.sty"
+    "$ISABELLE_HOME/src/Doc/extra.sty"
+    "$ISABELLE_HOME/src/Doc/isar.sty"
+    "$ISABELLE_HOME/src/Doc/proof.sty"
+    "$ISABELLE_HOME/src/Doc/manual.bib"
+    "document/build"
+    "document/root.tex"
+    "document/style.sty"

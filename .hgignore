@@ -2,11 +2,6 @@ syntax: glob
 
 bin/haskabelle_bin
 
-doc-src/Haskabelle/Thy/document
-doc-src/Haskabelle/haskabelle.pdf
-doc-src/Haskabelle/isabelle_isar.eps
-doc-src/Haskabelle/isabelle_isar.pdf
-
 doc/haskabelle.pdf
 
 ex/dst_hs
@@ -19,20 +14,3 @@ lib/texinputs
 \#*\#
 build/
 log/
-
-syntax: regexp
-
-^doc-src/(?!Haskabelle$).+$
-
-^doc-src/.*\.aux$
-^doc-src/.*\.bbl$
-^doc-src/.*\.blg$
-^doc-src/.*\.dvi$
-^doc-src/.*\.idx$
-^doc-src/.*\.ind$
-^doc-src/.*\.log$
-^doc-src/.*\.out$
-^doc-src/.*\.rai$
-^doc-src/.*\.rao$
-^doc-src/.*\.toc$
-
