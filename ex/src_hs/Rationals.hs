@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fglasgow-exts #-}
 
-module Rat where {
+module Rationals where {
 
 
 data Nat = Zero | Suc Nat;

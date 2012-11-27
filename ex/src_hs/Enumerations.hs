@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fglasgow-exts #-}
 
-module Enum where {
+module Enumerations where {
 
 
 data Nat = Zero | Suc Nat;
