@@ -18,10 +18,10 @@ function usage()
   echo "  Options are:"
   echo "    SRC...     list of haskell source files"
   echo "    DST        destination directory"
-  echo "    -a DIR     custom adaptation table (default $DEFAULT_ADAPT_DIR)"
+  echo "    -a DIR     custom adaptation table"
   echo "    -c CONFIG  configuration file"
   echo "    -e         runs the Haskabelle examples"
-  echo "    -r         rebuild adaptation table"
+  echo "    -r         rebuild adaptation table (requires -a)"
   echo "    -v         show Haskabelle version"
   echo
   echo "At least one of SRC... DST, -c or -r must be given. Not both of"
@@ -45,7 +45,7 @@ function fail()
 
 # options
 
-ADAPT_DIR="$DEFAULT_ADAPT_DIR"
+ADAPT_DIR=""
 BUILD_ADAPT=false
 CONFIG_FILE=""
 RUN_EXAMPLES=false
@@ -77,6 +77,13 @@ function getoptions()
         ;;
     esac
   done
+
+  if [[ $BUILD_ADAPT = true && $ADAPT_DIR = "" ]]; then
+    echo "-r requires -a!"
+    exit 1
+  fi
+
+  ADAPT_DIR=${ADAPT_DIR:-$DEFAULT_ADAPT_DIR}
 }
 
 getoptions "$@"
