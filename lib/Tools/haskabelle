@@ -8,7 +8,7 @@
 
 PRG="$(basename "$0")"
 
-DEFAULT_ADAPT_DIR="$ISABELLE_HOME_USER/Haskabelle/default"
+DEFAULT_ADAPT_DIR="$HASKABELLE_HOME_USER/default"
 DEFAULT_ADAPT_SRC="$HASKABELLE_HOME/default"
 
 function usage()
@@ -115,9 +115,9 @@ if [ -n "$ISABELLE_GHC" ]; then
   mkdir -p bin || fail "Cannot create directory bin"
   $ISABELLE_GHC -package haskell-src-exts-0.4.8 --make -O -o bin/haskabelle_bin \
       -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" "Main.hs"
-  ) || fail "Cannot build source"
+  ) || fail "Cannot build source. See documentation"
 elif [ ! -e "$HASKABELLE_BIN" ]; then
-  fail "Cannot build haskabelle_bin as ISABELLE_GHC is not set"
+  fail "Cannot build haskabelle_bin as ISABELLE_GHC is not set. See documentation."
 fi
 
 
