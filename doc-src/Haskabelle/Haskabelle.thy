@@ -288,13 +288,13 @@ text %quote {*
   \end{description}
 *}
 
-subsubsection {* Configuring Isabelle *}
+subsubsection {* Installing and configuring Haskabelle *}
 
 text {*
-  @{text Haskabelle} needs to be registered as a component.
-  For this, add the line \shell{init_component DIR} to your Isabelle
-  settings file, where \shell{DIR} refers to the root directory of the
-  @{text Haskabelle} distribution.
+  If you are using the Haskabelle component shipping with Isabelle,
+  you only need to make sure that \shell{ISABELLE_GHC} is set in
+  your Isabelle settings file and points to your GHC binary. Also
+  the right GHC libraries must be installed.
 *}
 
 subsubsection {* Converting theories *}

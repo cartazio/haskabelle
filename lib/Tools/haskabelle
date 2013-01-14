@@ -115,9 +115,9 @@ if [ -n "$ISABELLE_GHC" ]; then
   mkdir -p bin || fail "Cannot create directory bin"
   $ISABELLE_GHC -package haskell-src-exts-0.4.8 --make -O -o bin/haskabelle_bin \
       -odir "$BUILDDIR" -hidir "$BUILDDIR" -stubdir "$BUILDDIR" "Main.hs"
-  ) || fail "Cannot build source. See documentation"
+  ) || fail "Cannot build source. See Haskabelle documentation."
 elif [ ! -e "$HASKABELLE_BIN" ]; then
-  fail "Cannot build haskabelle_bin as ISABELLE_GHC is not set. See documentation."
+  fail "ISABELLE_GHC must be set to build Haskabelle. See Haskabelle documentation."
 fi
 
 
