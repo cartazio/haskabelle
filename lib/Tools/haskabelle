@@ -8,7 +8,8 @@
 
 PRG="$(basename "$0")"
 
-DEFAULT_ADAPT_DIR="$HASKABELLE_HOME/default"
+DEFAULT_ADAPT_DIR="$ISABELLE_HOME_USER/Haskabelle/default"
+DEFAULT_ADAPT_SRC="$HASKABELLE_HOME/default"
 
 function usage()
 {
@@ -18,10 +19,10 @@ function usage()
   echo "  Options are:"
   echo "    SRC...     list of haskell source files"
   echo "    DST        destination directory"
-  echo "    -a DIR     custom adaptation table"
+  echo "    -a DIR     custom adaptation table (default $DEFAULT_ADAPT_DIR)"
   echo "    -c CONFIG  configuration file"
   echo "    -e         runs the Haskabelle examples"
-  echo "    -r         rebuild adaptation table (requires -a)"
+  echo "    -r         rebuild adaptation table"
   echo "    -v         show Haskabelle version"
   echo
   echo "At least one of SRC... DST, -c or -r must be given. Not both of"
@@ -31,6 +32,12 @@ function usage()
   echo "in directory DST. Given -c, import files according to the"
   echo "configuration file."
   echo
+  exit 1
+}
+
+function die()
+{
+  echo "$1" >&2
   exit 1
 }
 
@@ -78,9 +85,13 @@ function getoptions()
     esac
   done
 
-  if [[ $BUILD_ADAPT = true && $ADAPT_DIR = "" ]]; then
-    echo "-r requires -a!"
-    exit 1
+  if [[ "$ADAPT_DIR" = "" &&
+      ( ! -f "$DEFAULT_ADAPT_DIR"/Generated_Adapt.hs || "$BUILD_ADAPT" = true ) ]]; then
+    echo "Prepare (re)building the default adaptation table ..."
+    mkdir -p "$DEFAULT_ADAPT_DIR" &&
+    cp "$DEFAULT_ADAPT_SRC"/* "$DEFAULT_ADAPT_DIR" &&
+    BUILD_ADAPT=true ||
+    die "Rebuilding preparations for default adaptation table failed."
   fi
 
   ADAPT_DIR=${ADAPT_DIR:-$DEFAULT_ADAPT_DIR}
@@ -113,6 +124,7 @@ fi
 # adaptation table
 
 if [ "$BUILD_ADAPT" = true ]; then
+  echo "$HASKABELLE_HOME/lib/mk_adapt" $ADAPT_DIR
   "$HASKABELLE_HOME/lib/mk_adapt" $ADAPT_DIR || exit $?
 fi
 

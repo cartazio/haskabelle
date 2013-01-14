@@ -1,0 +1,3 @@
+All files in this directory are generated and will be replaced
+everytime the default adaptation table is rebuild (e.g. by
+"isabelle haskabelle -r").
