@@ -1,7 +1,8 @@
 {-# LANGUAGE
   UndecidableInstances,
   FlexibleInstances,
-  GeneralizedNewtypeDeriving #-}
+  GeneralizedNewtypeDeriving, 
+  RankNTypes #-}
 
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 
@@ -23,7 +24,7 @@ import qualified Data.Char as Char (toLower)
 
 import Data.Generics
 import Data.Generics.Basics
-import Data.Generics.PlateData
+import Data.Generics.Uniplate.Data
 
 import Control.Monad.Reader
 
