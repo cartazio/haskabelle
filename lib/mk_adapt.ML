@@ -14,19 +14,16 @@ struct
 (* used constant symbols *)
 
 fun used_constants thy = []
-  |> Symtab.fold (fn (c, (_, NONE)) => cons c | _ => I)
-       ((snd o #constants o Consts.dest o Sign.consts_of) thy)
+  |> fold (fn (c, (_, NONE)) => cons c | _ => I) ((#constants o Consts.dest o Sign.consts_of) thy)
   |> map (Proof_Context.extern_const (Proof_Context.init_global thy))
   |> filter_out Long_Name.is_qualified;
 
 
-(* concrete output syntax *)
-
 fun assert_class thy class = Sign.certify_class thy class
   handle TYPE _ => error ("Not a class: " ^ quote class);
-fun assert_type thy tyco = if Symtab.defined ((snd o #types o Type.rep_tsig o Sign.tsig_of) thy) tyco
+fun assert_type thy tyco = if Name_Space.defined_entry ((Type.type_space o Sign.tsig_of) thy) tyco
   then tyco else error ("Not a type constructor: " ^ quote tyco);
-fun assert_const thy const = if Symtab.defined ((snd o #constants o Consts.dest o Sign.consts_of) thy) const
+fun assert_const thy const = if Name_Space.defined_entry ((Consts.space_of o Sign.consts_of) thy) const
   then const else error ("Not a constant: " ^ quote const);
   
 fun check_class thy = assert_class thy o Sign.intern_class thy;

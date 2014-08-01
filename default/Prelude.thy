@@ -130,7 +130,7 @@ definition the_default :: "'a \<Rightarrow> 'a option \<Rightarrow> 'a" where
   "the_default x y = (case y of Some z \<Rightarrow> z | None \<Rightarrow> x)"
 
 abbreviation (input) maybe :: "'b \<Rightarrow> ('a \<Rightarrow> 'b) \<Rightarrow> 'a option \<Rightarrow> 'b" where
-  "maybe x f y \<equiv> the_default x (Option.map f y)"
+  "maybe x f y \<equiv> the_default x (map_option f y)"
 
 
 subsection {* Lists *}
