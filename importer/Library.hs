@@ -16,7 +16,8 @@ module Importer.Library (
   separate, slice,
   perhaps, perhaps_map, ultimately,
   combl, combr, uncombl, uncombr,
-  liftM, filterM, mapsM, when
+  liftM, filterM, mapsM, when,
+  catchIO
 ) where
 
 import qualified Data.List as List
@@ -239,3 +240,8 @@ mapsM f (x : xs) = do
 
 when :: Monad m => Bool -> m () -> m ()
 when = Monad.when
+
+
+{- exceptions -}
+catchIO :: IO a -> (IOError -> IO a) -> IO a
+catchIO = Exception.catch

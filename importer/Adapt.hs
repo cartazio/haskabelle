@@ -15,7 +15,6 @@ import Data.Maybe (mapMaybe, fromMaybe, catMaybes, isJust)
 import Data.List (partition, sort, group)
 
 import Control.Monad.State (State, get, put, foldM, evalState, runState, liftM2)
-import Control.Exception (catch, SomeException)
 
 import System.FilePath (combine)
 
@@ -104,7 +103,7 @@ readError file msg =
 parseAdapt :: FilePath -> IO [Hsx.Decl]
 parseAdapt file = do
   result <- Hsx.parseFile file
-    `catch` (\ ioError -> readError file (show (ioError :: SomeException)))
+    `catchIO` (\ioError-> readError file (show ioError))
   case result of
     Hsx.ParseFailed loc msg ->
       readError file (Msg.failed_parsing loc msg)

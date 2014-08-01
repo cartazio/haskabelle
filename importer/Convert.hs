@@ -31,7 +31,6 @@ import Control.Monad.State (StateT, MonadState, get, put, modify, execStateT, ru
 import Control.Monad.Error (MonadError)
 import Control.Monad.Reader (ReaderT, MonadReader, MonadIO, liftIO, ask, lift, runReaderT, local)
 import Control.Monad.Writer (WriterT, MonadWriter, runWriterT, tell)
-import Control.Exception (catch, SomeException)
 
 import System.FilePath
 import System.Directory
@@ -1216,7 +1215,7 @@ getFilesRecursively dir = traverseDir dir action
 -}
 traverseDir :: FilePath -> (FilePath -> IO a) -> IO [a]
 traverseDir dirpath op = do
-  fps <- getDirectoryContents dirpath `catch` (const (return []) :: SomeException -> IO [a])
+  fps <- getDirectoryContents dirpath `catchIO` const (return [])
   let fps' = map (combine dirpath) . filter (`notElem` [".", ".."]) $ fps
   fmap concat $ mapM work fps'
       where work f = do
@@ -1400,8 +1399,8 @@ shrinkPath = joinPath . shrinkPath' . splitPath
     
 parseHskFile :: ModuleImport -> GrovelM Hsx.Module
 parseHskFile (file, mbMod)  = 
-    do result <- liftIO $ Hsx.parseFile file `catch`
-                (\ioError -> fail $ "An error occurred while reading module file \"" ++ file ++ "\": " ++ show (ioError :: SomeException))
+    do result <- liftIO $ Hsx.parseFile file `catchIO`
+                (\ioError -> fail $ "An error occurred while reading module file \"" ++ file ++ "\": " ++ show ioError)
        case result of
          (Hsx.ParseFailed loc msg) ->
              fail $ "An error occurred while parsing module file: " ++ Msg.failed_parsing loc msg
