@@ -4,8 +4,8 @@
   FlexibleContexts,
   FlexibleInstances,
   TypeSynonymInstances,
-  GeneralizedNewtypeDeriving, 
-  RankNTypes #-}
+  GeneralizedNewtypeDeriving,
+  Rank2Types #-}
 
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 

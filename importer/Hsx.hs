@@ -1,8 +1,8 @@
 {-# LANGUAGE
   UndecidableInstances,
   FlexibleInstances,
-  GeneralizedNewtypeDeriving, 
-  RankNTypes #-}
+  GeneralizedNewtypeDeriving,
+  Rank2Types #-}
 
 {-| Author: Tobias C. Rittweiler, TU Muenchen
 
