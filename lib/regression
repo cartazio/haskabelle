@@ -69,7 +69,8 @@ then
   do
     THY_NAME="$(basename $THY .thy)"
     echo "re-importing $THY_NAME..."
-    "$ISABELLE_TOOL" codegen -q HOL "$THY_NAME" "\"$THY_NAME._\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail_or_warn "Could not re-import $THY"
+    #"$ISABELLE_TOOL" codegen -q HOL "$THY_NAME" "\"$THY_NAME._\" in Haskell module_name "$THY_NAME" file \"$DST\"" > /dev/zero 2> /dev/zero || fail_or_warn "Could not re-import $THY"
+    "$ISABELLE_TOOL" codegen -q HOL "$THY_NAME" "\"$THY_NAME._\" in Haskell module_name "$THY_NAME" file \"$DST\"" || fail_or_warn "Could not re-import $THY"
     HS_FILE="$DST$THY_NAME.hs"
     if [ ! -e "$HS_FILE" ]
     then

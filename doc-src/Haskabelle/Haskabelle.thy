@@ -207,7 +207,7 @@ text {*
   \begin{description}
 
     \item[GHC] Glasgow Haskell Compiler \url{http://www.haskell.org/ghc/}
-       (version 7.4.1)
+       (version 7.6.3)
 
   \end{description}
   
