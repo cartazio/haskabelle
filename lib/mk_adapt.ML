@@ -21,11 +21,15 @@ fun used_constants thy = []
 
 fun assert_class thy class = Sign.certify_class thy class
   handle TYPE _ => error ("Not a class: " ^ quote class);
-fun assert_type thy tyco = (Name_Space.the_entry (Sign.type_space thy) tyco; tyco)
-  handle ERROR _ => error ("Not a type constructor: " ^ quote tyco);
-fun assert_const thy const = (Name_Space.the_entry (Sign.const_space thy) const; const)
-  handle ERROR _ => error ("Not a constant: " ^ quote const);
-  
+fun assert_type thy c =
+  case try (Type.the_decl (Sign.tsig_of thy)) (c, Position.none) of
+    NONE => error ("Not a type constructor: " ^ quote c)
+  | _ => c;
+fun assert_const thy c =
+  case try (Consts.type_scheme (Sign.consts_of thy)) c of
+    NONE => error ("Not a constant: " ^ quote c)
+  | _ => c;
+
 fun check_class thy = assert_class thy o Sign.intern_class thy;
 fun check_type thy = assert_type thy o Sign.intern_type thy;
 fun check_const thy = assert_const thy o Sign.intern_const thy;
