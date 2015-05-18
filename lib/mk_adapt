@@ -41,7 +41,7 @@ PRELUDE_LOC="$DIR/$PRELUDE_NAME"
 FORMAL_CMD="Runtime.toplevel_program (fn () => (use_thy prelude_loc; ML_Context.eval_source_in \
     (SOME (Proof_Context.init_global (Thy_Info.get_theory prelude_name))) \
     ML_Compiler.flags \
-    {delimited=true, text=ml_cmd, pos=Position.none})) \
+    (Input.source true ml_cmd Position.no_range))) \
   handle _ => OS.Process.exit OS.Process.failure;"
 
 ACTUAL_CMD="val prelude_loc = \"$PRELUDE_LOC\"; \
@@ -49,9 +49,8 @@ ACTUAL_CMD="val prelude_loc = \"$PRELUDE_LOC\"; \
   val src_loc = \"$SRC_LOC\"; \
   val dst_loc = \"$DST_LOC\"; \
   val mk_adapt_path = Path.explode \"$MK_ADAPT_LOC\"; \
-  fun eval_file path = ML_Context.eval_source \
-    (ML_Compiler.verbose true ML_Compiler.flags) \
-    {delimited=true, text=File.read path, pos=Path.position path}; \
+  fun eval_file path = ML_Context.eval_file \
+    (ML_Compiler.verbose true ML_Compiler.flags) path; \
   val ml_cmd = \"eval_file mk_adapt_path; Mk_Adapt.run prelude_name src_loc dst_loc\"; \
   $FORMAL_CMD"
 

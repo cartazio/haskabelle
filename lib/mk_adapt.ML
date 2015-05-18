@@ -21,10 +21,10 @@ fun used_constants thy = []
 
 fun assert_class thy class = Sign.certify_class thy class
   handle TYPE _ => error ("Not a class: " ^ quote class);
-fun assert_type thy tyco = if Name_Space.defined_entry ((Type.type_space o Sign.tsig_of) thy) tyco
-  then tyco else error ("Not a type constructor: " ^ quote tyco);
-fun assert_const thy const = if Name_Space.defined_entry ((Consts.space_of o Sign.consts_of) thy) const
-  then const else error ("Not a constant: " ^ quote const);
+fun assert_type thy tyco = (Name_Space.the_entry (Sign.type_space thy) tyco; tyco)
+  handle ERROR _ => error ("Not a type constructor: " ^ quote tyco);
+fun assert_const thy const = (Name_Space.the_entry (Sign.const_space thy) const; const)
+  handle ERROR _ => error ("Not a constant: " ^ quote const);
   
 fun check_class thy = assert_class thy o Sign.intern_class thy;
 fun check_type thy = assert_type thy o Sign.intern_type thy;
@@ -74,8 +74,11 @@ val parameterN = "parameter";
 val typesN = "types";
 val constsN = "consts";
 
-val adapt_lexicon = Scan.make_lexicon (map Symbol.explode
-  [classesN, superclassN, parameterN, typesN, constsN]);
+val adapt_keywords =
+  let
+    val entries = map (fn s => ((s, Position.none), NONE))
+      [classesN, superclassN, parameterN, typesN, constsN];
+  in Keyword.add_keywords entries Keyword.empty_keywords end;
 
 fun classes thy = Parse.$$$ classesN |--
   Scan.repeat1 (Parse.name -- Parse.name
@@ -94,9 +97,9 @@ fun adapt thy = (
 
 fun convert thy pos = Source.of_string
   #> Symbol.source
-  #> Token.source { do_recover = NONE } (fn () => (adapt_lexicon, Scan.empty_lexicon)) pos
+  #> Token.source adapt_keywords pos
   #> Token.source_proper
-  #> Source.source Token.stopper (Scan.single (Scan.error (Parse.!!! (adapt thy)))) NONE
+  #> Source.source Token.stopper (Scan.single (Scan.error (Parse.!!! (adapt thy))))
   #> Source.exhaust
   #> (fn [dst] => dst | _ => error ("Extra input " ^ Position.here pos))
 
@@ -118,7 +121,9 @@ fun run thy_name src_loc dst_loc =
     val adaptions = convert thy (Position.file src_loc) src;
     val enumerate_sorted = sort string_ord #> map prep_string #> map single
       #> separate [Pretty.str ",", Pretty.fbrk] #> flat #> Pretty.enclose "[" "]";
-    val keywords = enumerate_sorted (op @ (Keyword.dest ()));
+    val keywords =
+      let fun dest kw = apply2 Scan.dest_lexicon (Keyword.major_keywords kw, Keyword.minor_keywords kw)
+      in enumerate_sorted (op @ (dest (Thy_Header.get_keywords thy))) end
     val const_names = enumerate_sorted (used_constants thy);
     val thy_names = enumerate_sorted (Thy_Info.get_names ());
     val dsts = ["-- THIS IS A GENERATED FILE - DO NOT EDIT!",
